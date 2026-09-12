@@ -6,4 +6,5 @@ import java.util.Optional;
 public interface PermissionRepository {
     Permission save(Permission permission);
     Optional<Permission> findByCode(String code);
+    long count();
 }

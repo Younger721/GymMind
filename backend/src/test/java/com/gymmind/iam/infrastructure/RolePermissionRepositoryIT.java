@@ -35,7 +35,7 @@ class RolePermissionRepositoryIT extends MySqlIntegrationTest {
 
     @Test
     void persistsRolePermissionAndUserRoleAssociations() {
-        Role role = roleRepository.save(Role.of(RoleCode.COACH, "Coach"));
+        Role role = roleRepository.findByCode(RoleCode.COACH).orElseThrow();
         Permission permission = permissionRepository.save(Permission.of("workout:read", "Read workouts"));
         Long tenantId = tenantRepository.save(Tenant.create("role-gym", "Role Gym")).getId();
         UserAccount user = userRepository.save(UserAccount.tenantUser(tenantId, "coach@example.com", "$hash", "Coach"));
@@ -61,7 +61,7 @@ class RolePermissionRepositoryIT extends MySqlIntegrationTest {
 
     @Test
     void associationPairsAreUnique() {
-        Role role = roleRepository.save(Role.of(RoleCode.MEMBER, "Member"));
+        Role role = roleRepository.findByCode(RoleCode.MEMBER).orElseThrow();
         Permission permission = permissionRepository.save(Permission.of("profile:read", "Read profile"));
         entityManager.flush();
 

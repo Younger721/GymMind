@@ -7,4 +7,5 @@ import java.util.Optional;
 public interface RoleRepository {
     Role save(Role role);
     Optional<Role> findByCode(RoleCode code);
+    long count();
 }

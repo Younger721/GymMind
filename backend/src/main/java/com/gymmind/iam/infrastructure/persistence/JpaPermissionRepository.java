@@ -11,4 +11,5 @@ class JpaPermissionRepository implements PermissionRepository {
     JpaPermissionRepository(SpringDataPermissionRepository delegate) { this.delegate = delegate; }
     public Permission save(Permission permission) { return delegate.save(permission); }
     public Optional<Permission> findByCode(String code) { return delegate.findByCode(code); }
+    public long count() { return delegate.count(); }
 }
