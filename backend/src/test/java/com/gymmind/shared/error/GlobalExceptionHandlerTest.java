@@ -6,6 +6,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.concurrent.Callable;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
@@ -25,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
     private MockMvc mockMvc;
@@ -64,7 +69,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void unexpectedErrorsReturnSanitizedInternalError() throws Exception {
+    void unexpectedErrorsReturnSanitizedInternalErrorWithSafeDiagnostics(CapturedOutput output) throws Exception {
         mockMvc.perform(post("/api/v1/test-failure")
                         .header(TraceIdFilter.HEADER_NAME, "failure_trace_01"))
                 .andExpect(status().isInternalServerError())
@@ -77,6 +82,13 @@ class GlobalExceptionHandlerTest {
                 .andExpect(contentDoesNotContain("stackTrace"))
                 .andExpect(contentDoesNotContain("exception"))
                 .andExpect(contentDoesNotContain("cause"));
+
+        assertThat(output.getOut()).contains("traceId=failure_trace_01")
+                .contains("java.lang.IllegalStateException")
+                .contains("java.lang.IllegalArgumentException")
+                .contains("GlobalExceptionHandlerTest$TestController.fail")
+                .doesNotContain("SELECT token, password")
+                .doesNotContain("cause password=hidden-secret");
     }
 
     @Test
@@ -125,7 +137,11 @@ class GlobalExceptionHandlerTest {
 
         @PostMapping("/api/v1/test-failure")
         void fail() {
-            throw new IllegalStateException("SELECT token, password FROM credentials WHERE secret='hidden'");
+            IllegalArgumentException cause = new IllegalArgumentException("cause password=hidden-secret");
+            throw new IllegalStateException(
+                    "SELECT token, password FROM credentials WHERE secret='hidden'",
+                    cause
+            );
         }
 
         @PostMapping("/api/v1/test-async")
