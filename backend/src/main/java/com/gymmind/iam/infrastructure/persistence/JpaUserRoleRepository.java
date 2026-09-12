@@ -1,8 +1,11 @@
 package com.gymmind.iam.infrastructure.persistence;
 
+import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.iam.domain.model.UserRole;
 import com.gymmind.iam.domain.repository.UserRoleRepository;
 import org.springframework.stereotype.Repository;
+
+import java.util.Set;
 
 @Repository
 class JpaUserRoleRepository implements UserRoleRepository {
@@ -25,5 +28,15 @@ class JpaUserRoleRepository implements UserRoleRepository {
     @Override
     public long countByUserId(Long userId) {
         return delegate.countByUser_Id(userId);
+    }
+
+    @Override
+    public Set<RoleCode> findRoleCodesByUserId(Long userId) {
+        return delegate.findRoleCodesByUserId(userId);
+    }
+
+    @Override
+    public Set<String> findPermissionCodesByUserId(Long userId) {
+        return delegate.findPermissionCodesByUserId(userId);
     }
 }

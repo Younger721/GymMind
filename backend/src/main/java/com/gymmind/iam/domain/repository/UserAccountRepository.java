@@ -7,6 +7,7 @@ import java.util.Optional;
 
 public interface UserAccountRepository {
     UserAccount save(UserAccount user);
+    Optional<UserAccount> findById(Long id);
     Optional<UserAccount> findByNormalizedEmail(String normalizedEmail);
     Optional<UserAccount> findByTenantIdAndId(Long tenantId, Long id);
     Page<UserAccount> findAllByTenantId(Long tenantId, Pageable pageable);
