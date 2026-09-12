@@ -15,5 +15,5 @@ class PackageLayoutTest {
                     "com.gymmind.controller..", "com.gymmind.service..",
                     "com.gymmind.entity..", "com.gymmind.repository..",
                     "com.gymmind.security..", "com.gymmind.common..",
-                    "com.gymmind.dto..");
+                    "com.gymmind.dto..", "com.gymmind.config..");
 }
