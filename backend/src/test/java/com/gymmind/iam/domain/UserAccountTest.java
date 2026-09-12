@@ -3,6 +3,8 @@ package com.gymmind.iam.domain;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.iam.domain.model.UserAccount;
 import com.gymmind.iam.domain.model.UserStatus;
+import com.gymmind.iam.domain.model.Role;
+import com.gymmind.iam.domain.model.UserRole;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,5 +53,30 @@ class UserAccountTest {
         user.changeRole(RoleCode.COACH);
         assertThat(user.getRoleCode()).isEqualTo(RoleCode.COACH);
         assertThat(user.getTokenVersion()).isOne();
+    }
+
+    @Test
+    void tenantUserRejectsNullRoleCodeImmediately() {
+        assertThatThrownBy(() -> UserAccount.tenantUser(7L, "admin@example.com", HASH, "Admin", null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void changingRoleRejectsNullImmediately() {
+        UserAccount user = UserAccount.tenantUser(7L, "admin@example.com", HASH, "Admin");
+
+        assertThatThrownBy(() -> user.changeRole(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void assigningRoleIncrementsTokenVersion() {
+        UserAccount user = UserAccount.tenantUser(7L, "admin@example.com", HASH, "Admin");
+        Role role = Role.of(RoleCode.COACH, "Coach");
+
+        UserRole.assign(user, role);
+
+        assertThat(user.getTokenVersion()).isOne();
+        assertThat(user.getRoleCode()).isEqualTo(RoleCode.COACH);
     }
 }

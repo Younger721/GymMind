@@ -27,6 +27,7 @@ public class UserRole {
     protected UserRole() {}
     private UserRole(UserAccount user, Role role) {
         if (user == null || role == null) throw new IllegalArgumentException("User and role are required");
+        user.changeRole(role.getCode());
         this.user = user;
         this.role = role;
         this.id = new Key(user.getId(), role.getId());

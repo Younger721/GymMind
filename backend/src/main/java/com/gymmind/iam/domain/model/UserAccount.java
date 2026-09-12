@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -39,8 +40,11 @@ public class UserAccount extends AuditableEntity {
     @Column(nullable = false, length = 16)
     private UserStatus status;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "role_code", nullable = false, length = 32)
+    /**
+     * Convenience state for domain operations. Persistent role membership is
+     * represented exclusively by the UserRole join entity.
+     */
+    @Transient
     private RoleCode roleCode;
 
     @Column(name = "token_version", nullable = false)
@@ -50,6 +54,9 @@ public class UserAccount extends AuditableEntity {
     }
 
     private UserAccount(Long tenantId, String email, String passwordHash, String displayName, RoleCode roleCode) {
+        if (roleCode == null) {
+            throw new IllegalArgumentException("Role code must not be null");
+        }
         if (roleCode == RoleCode.PLATFORM_ADMIN && tenantId != null) {
             throw new IllegalArgumentException("Platform admin must not have a tenant");
         }
@@ -97,7 +104,10 @@ public class UserAccount extends AuditableEntity {
     }
 
     public void changeRole(RoleCode newRoleCode) {
-        if (newRoleCode == null || newRoleCode == roleCode) {
+        if (newRoleCode == null) {
+            throw new IllegalArgumentException("Role code must not be null");
+        }
+        if (newRoleCode == roleCode) {
             return;
         }
         if (newRoleCode == RoleCode.PLATFORM_ADMIN && tenantId != null) {

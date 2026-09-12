@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.hibernate.exception.ConstraintViolationException;
+import jakarta.persistence.metamodel.Attribute;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,6 +50,13 @@ class RolePermissionRepositoryIT extends MySqlIntegrationTest {
                 .isNotNull();
         assertThat(entityManager.find(UserRole.class, new UserRole.Key(user.getId(), role.getId())))
                 .isNotNull();
+    }
+
+    @Test
+    void userRoleIsTheOnlyPersistedRoleSourceForUserAccount() {
+        assertThat(entityManager.getMetamodel().entity(UserAccount.class).getAttributes())
+                .extracting(Attribute::getName)
+                .doesNotContain("roleCode");
     }
 
     @Test
