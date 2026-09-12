@@ -323,5 +323,15 @@ class AuthApplicationServiceTest {
         public void deleteRefresh(String namespacedTokenId) {
             refreshSessions.remove(namespacedTokenId);
         }
+
+        @Override
+        public void revokeAccessAndDeleteRefresh(
+                String namespacedAccessTokenId,
+                Duration accessTtl,
+                String namespacedRefreshTokenId) {
+            revokedTokenId = namespacedAccessTokenId;
+            revokeTtl = accessTtl;
+            refreshSessions.remove(namespacedRefreshTokenId);
+        }
     }
 }

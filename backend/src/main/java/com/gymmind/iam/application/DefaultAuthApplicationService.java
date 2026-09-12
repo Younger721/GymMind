@@ -23,6 +23,7 @@ import com.gymmind.tenancy.domain.model.Tenant;
 import com.gymmind.tenancy.domain.repository.TenantRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 import java.util.Set;
@@ -57,6 +58,7 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
     }
 
     @Override
+    @Transactional
     public AuthResult registerTenant(RegisterTenantCommand command) {
         TenantProvisioningService.ProvisionedTenant provisioned = registrationService.register(command);
         UserAccount administrator = provisioned.administrator();
@@ -121,11 +123,9 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
             throw unauthenticated();
         }
 
-        sessionService.revokeAccess(
+        sessionService.logout(
                 accessClaims.tenantId(), accessClaims.userId(),
-                accessClaims.tokenId(), accessClaims.expiresAt());
-        sessionService.deleteRefresh(sessionService.refreshTokenId(
-                refreshClaims.tenantId(), refreshClaims.userId(), refreshClaims.tokenId()));
+                accessClaims.tokenId(), accessClaims.expiresAt(), refreshClaims.tokenId());
     }
 
     private AuthenticatedAccount loadActiveAccount(

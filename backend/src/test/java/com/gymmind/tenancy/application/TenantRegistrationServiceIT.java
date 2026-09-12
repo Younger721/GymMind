@@ -2,6 +2,7 @@ package com.gymmind.tenancy.application;
 
 import com.gymmind.iam.application.AuthApplicationService;
 import com.gymmind.iam.application.command.RegisterTenantCommand;
+import com.gymmind.iam.application.port.SessionStore;
 import com.gymmind.iam.domain.model.Permission;
 import com.gymmind.iam.domain.model.Role;
 import com.gymmind.iam.domain.model.RoleCode;
@@ -11,6 +12,8 @@ import com.gymmind.iam.domain.repository.RoleRepository;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
 import com.gymmind.iam.domain.repository.UserRoleRepository;
 import com.gymmind.support.MySqlIntegrationTest;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.tenancy.application.port.TenantProvisioningContributor;
 import com.gymmind.tenancy.domain.repository.TenantSettingsRepository;
 import jakarta.persistence.EntityManager;
@@ -23,9 +26,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 
 @Import(TenantRegistrationServiceIT.FailingContributorConfiguration.class)
 class TenantRegistrationServiceIT extends MySqlIntegrationTest {
@@ -36,6 +42,7 @@ class TenantRegistrationServiceIT extends MySqlIntegrationTest {
     @Autowired private UserRoleRepository userRoleRepository;
     @Autowired private RoleRepository roleRepository;
     @Autowired private PermissionRepository permissionRepository;
+    @MockitoBean private SessionStore sessionStore;
     @PersistenceContext private EntityManager entityManager;
 
     @Test
@@ -66,6 +73,24 @@ class TenantRegistrationServiceIT extends MySqlIntegrationTest {
                 "registration-rollback", "Rollback Gym", "owner@example.com", "password", "Owner")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("registration contributor failed");
+
+        assertThat(count("Tenant")).isZero();
+        assertThat(count("UserAccount")).isZero();
+        assertThat(count("UserRole")).isZero();
+        assertThat(count("TenantSettings")).isZero();
+    }
+
+    @Test
+    void refreshSessionFailureRollsBackPublicRegistrationTenantUserRoleAndSettings() {
+        doThrow(new IllegalStateException("redis unavailable"))
+                .when(sessionStore).storeRefresh(any(), any());
+
+        assertThatThrownBy(() -> authService.registerTenant(new RegisterTenantCommand(
+                "session-rollback", "Session Rollback Gym", "session@example.com",
+                "password", "Owner")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE));
 
         assertThat(count("Tenant")).isZero();
         assertThat(count("UserAccount")).isZero();

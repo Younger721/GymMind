@@ -23,6 +23,11 @@ public class RedisSessionStore implements SessionStore {
                     + "if value and value == ARGV[1] then return redis.call('DEL', KEYS[1]); end; "
                     + "return 0;",
             Long.class);
+    private static final DefaultRedisScript<Long> REVOKE_ACCESS_AND_DELETE_REFRESH =
+            new DefaultRedisScript<>(
+                    "redis.call('PSETEX', KEYS[1], ARGV[1], 'revoked'); "
+                            + "return redis.call('DEL', KEYS[2]);",
+                    Long.class);
 
     private final StringRedisTemplate redis;
 
@@ -60,6 +65,23 @@ public class RedisSessionStore implements SessionStore {
         redis.delete(requireKey(namespacedTokenId, "refresh"));
     }
 
+    @Override
+    public void revokeAccessAndDeleteRefresh(
+            String namespacedAccessTokenId,
+            Duration accessTtl,
+            String namespacedRefreshTokenId) {
+        String accessKey = requireKey(namespacedAccessTokenId, "access");
+        String refreshKey = requireKey(namespacedRefreshTokenId, "refresh");
+        long ttlMillis = requirePositiveMillis(accessTtl);
+        Long result = redis.execute(
+                REVOKE_ACCESS_AND_DELETE_REFRESH,
+                List.of(accessKey, refreshKey),
+                Long.toString(ttlMillis));
+        if (result == null) {
+            throw new IllegalStateException("Redis logout script returned no result");
+        }
+    }
+
     private static String requireKey(String value, String kind) {
         if (value == null || !KEY.matcher(value).matches() || !value.contains(':' + kind + ':')) {
             throw new IllegalArgumentException("Invalid " + kind + " token key");
@@ -79,5 +101,18 @@ public class RedisSessionStore implements SessionStore {
             throw new IllegalArgumentException("Redis TTL must be positive");
         }
         return value;
+    }
+
+    private static long requirePositiveMillis(Duration value) {
+        Duration duration = requirePositive(value);
+        try {
+            long millis = duration.toMillis();
+            if (millis <= 0) {
+                throw new IllegalArgumentException("Redis TTL must be at least one millisecond");
+            }
+            return millis;
+        } catch (ArithmeticException exception) {
+            throw new IllegalArgumentException("Redis TTL is too large", exception);
+        }
     }
 }

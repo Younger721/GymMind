@@ -79,6 +79,34 @@ class SessionServiceTest {
     }
 
     @Test
+    void atomicallyRevokesAccessAndDeletesRefreshUsingAccessExpiry() {
+        service.store(session, RAW_REFRESH);
+
+        service.logout(7L, 42L, "access-jti", NOW.plusSeconds(30), "refresh-jti");
+
+        assertThat(store.revokedTokenId)
+                .isEqualTo("gymmind:test:v1:auth:7:42:access:access-jti");
+        assertThat(store.revokeTtl).isEqualTo(Duration.ofSeconds(30));
+        assertThat(store.refreshSessions).isEmpty();
+        assertThat(store.atomicLogoutCalls).isEqualTo(1);
+    }
+
+    @Test
+    void atomicLogoutFailureLeavesNoPartialState() {
+        service.store(session, RAW_REFRESH);
+        store.failure = new IllegalStateException("redis unavailable");
+
+        assertThatThrownBy(() -> service.logout(
+                7L, 42L, "access-jti", NOW.plusSeconds(30), "refresh-jti"))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode())
+                                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE));
+
+        assertThat(store.revokedTokenId).isNull();
+        assertThat(store.refreshSessions).containsKey(session.tokenId());
+    }
+
+    @Test
     void rejectsExpiredSessionsAndInvalidKeyParts() {
         RefreshSession expired = service.refreshSession(7L, 42L, "expired", NOW);
 
@@ -113,6 +141,7 @@ class SessionServiceTest {
         private Duration refreshTtl;
         private String revokedTokenId;
         private Duration revokeTtl;
+        private int atomicLogoutCalls;
         private RuntimeException failure;
 
         @Override
@@ -150,6 +179,18 @@ class SessionServiceTest {
         public void deleteRefresh(String namespacedTokenId) {
             failIfConfigured();
             refreshSessions.remove(namespacedTokenId);
+        }
+
+        @Override
+        public void revokeAccessAndDeleteRefresh(
+                String namespacedAccessTokenId,
+                Duration accessTtl,
+                String namespacedRefreshTokenId) {
+            failIfConfigured();
+            revokedTokenId = namespacedAccessTokenId;
+            revokeTtl = accessTtl;
+            refreshSessions.remove(namespacedRefreshTokenId);
+            atomicLogoutCalls++;
         }
 
         private void failIfConfigured() {

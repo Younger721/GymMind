@@ -15,4 +15,9 @@ public interface SessionStore {
     boolean isAccessRevoked(String namespacedTokenId);
 
     void deleteRefresh(String namespacedTokenId);
+
+    void revokeAccessAndDeleteRefresh(
+            String namespacedAccessTokenId,
+            Duration accessTtl,
+            String namespacedRefreshTokenId);
 }

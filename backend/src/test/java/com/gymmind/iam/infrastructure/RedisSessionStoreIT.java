@@ -86,18 +86,16 @@ class RedisSessionStoreIT {
     }
 
     @Test
-    void revokesAccessWithTtlAndDeletesRefreshSession() {
+    void atomicallyRevokesAccessWithTtlAndDeletesRefreshSession() {
         String accessKey = "gymmind:test:v1:auth:platform:1:access:access-jti";
         String refreshKey = "gymmind:test:v1:auth:platform:1:refresh:refresh-jti";
         String hash = "a".repeat(64);
         store.storeRefresh(RefreshSession.stored(refreshKey, hash, Instant.now().plusSeconds(30)),
                 Duration.ofSeconds(30));
 
-        store.revokeAccess(accessKey, Duration.ofSeconds(30));
+        store.revokeAccessAndDeleteRefresh(accessKey, Duration.ofSeconds(30), refreshKey);
         assertThat(store.isAccessRevoked(accessKey)).isTrue();
         assertThat(redis.getExpire(accessKey, TimeUnit.SECONDS)).isBetween(1L, 30L);
-
-        store.deleteRefresh(refreshKey);
         assertThat(redis.hasKey(refreshKey)).isFalse();
     }
 }

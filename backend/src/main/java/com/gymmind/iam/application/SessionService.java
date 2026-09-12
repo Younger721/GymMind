@@ -71,6 +71,19 @@ public class SessionService {
         return callStore(() -> store.isAccessRevoked(namespacedTokenId));
     }
 
+    public void logout(
+            Long tenantId,
+            Long userId,
+            String accessTokenId,
+            Instant accessExpiresAt,
+            String refreshTokenId) {
+        String namespacedAccessTokenId = accessTokenId(tenantId, userId, accessTokenId);
+        String namespacedRefreshTokenId = refreshTokenId(tenantId, userId, refreshTokenId);
+        Duration accessTtl = remainingTtl(accessExpiresAt);
+        runStore(() -> store.revokeAccessAndDeleteRefresh(
+                namespacedAccessTokenId, accessTtl, namespacedRefreshTokenId));
+    }
+
     public String refreshTokenId(Long tenantId, Long userId, String tokenId) {
         return namespacedTokenId(tenantId, userId, "refresh", tokenId);
     }
