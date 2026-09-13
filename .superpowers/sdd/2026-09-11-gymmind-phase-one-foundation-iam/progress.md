@@ -84,3 +84,4 @@ Database status:
 - Database reset remains Task 17 and still requires a fresh exact-target read-only check before execution.
 
 Main roadmap Task 4: complete (audit persistence and tenant-scoped query; commit `feat: 建立租户级操作审计能力`).
+Main roadmap Task 5: complete (member, coach, and assignment services; commits `52c28aa`, `1969877`, `2f3564b`, `683fccb`).
