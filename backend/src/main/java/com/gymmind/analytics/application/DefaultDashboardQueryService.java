@@ -1,0 +1,8 @@
+package com.gymmind.analytics.application;
+import com.gymmind.analytics.domain.*; import com.gymmind.shared.security.CurrentActor; import org.springframework.stereotype.Service; import java.math.*; import java.time.LocalDate;
+@Service public class DefaultDashboardQueryService implements DashboardQueryService {
+ private final MemberMetricsPort members; private final BookingMetricsPort bookings; private final PaymentMetricsPort payments; private final MembershipMetricsPort memberships;
+ public DefaultDashboardQueryService(MemberMetricsPort m, BookingMetricsPort b, PaymentMetricsPort p, MembershipMetricsPort mm){members=m;bookings=b;payments=p;memberships=mm;}
+ public DashboardMetrics dashboard(CurrentActor actor, LocalDate from, LocalDate to){ if(actor==null||actor.isPlatformAdmin()||actor.tenantId()==null) throw new IllegalArgumentException("Tenant dashboard requires tenant actor"); if(from==null||to==null||to.isBefore(from)) throw new IllegalArgumentException("Invalid date range"); Long t=actor.tenantId(); long total=members.total(t), active=members.active(t), book=bookings.total(t,from,to), check=bookings.checkedIn(t,from,to), cand=memberships.renewalCandidates(t,from,to), renew=memberships.renewals(t,from,to); return new DashboardMetrics(from,to,total,active,ratio(active,total),book,ratio(check,book),check,ratio(check,book),nz(payments.amount(t,from,to)),ratio(renew,cand)); }
+ private static BigDecimal ratio(long n,long d){return d==0?BigDecimal.ZERO:BigDecimal.valueOf(n).divide(BigDecimal.valueOf(d),4,RoundingMode.HALF_UP);} private static BigDecimal nz(BigDecimal v){return v==null?BigDecimal.ZERO:v;}
+}

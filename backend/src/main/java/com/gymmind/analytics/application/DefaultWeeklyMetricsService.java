@@ -1,0 +1,3 @@
+package com.gymmind.analytics.application;
+import com.gymmind.analytics.domain.*; import com.gymmind.shared.security.CurrentActor; import org.springframework.stereotype.Service; import java.time.*;
+@Service public class DefaultWeeklyMetricsService implements WeeklyMetricsService { private final DashboardQueryService dashboard; public DefaultWeeklyMetricsService(DashboardQueryService d){dashboard=d;} public WeeklyMetrics weekly(CurrentActor actor, LocalDate start){ if(start==null) throw new IllegalArgumentException("weekStart required"); LocalDate end=start.plusDays(6); return new WeeklyMetrics(start,end,dashboard.dashboard(actor,start,end)); } }

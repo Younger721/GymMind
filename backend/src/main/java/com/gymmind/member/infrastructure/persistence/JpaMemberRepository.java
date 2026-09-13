@@ -17,4 +17,6 @@ class JpaMemberRepository implements MemberRepository {
     public Optional<Member> findByTenantIdAndMemberNumber(Long tenantId, String number) { return delegate.findByTenantIdAndMemberNumber(tenantId, number); }
     public boolean existsByTenantIdAndPhone(Long tenantId, String phone) { return delegate.existsByTenantIdAndPhone(tenantId, phone); }
     public Page<Member> findAllByTenantId(Long tenantId, Pageable pageable) { return delegate.findAllByTenantId(tenantId, pageable); }
+    public long countByTenantId(Long tenantId) { return delegate.countByTenantId(tenantId); }
+    public long countByTenantIdAndStatus(Long tenantId, com.gymmind.member.domain.model.MemberStatus status) { return delegate.countByTenantIdAndStatus(tenantId,status); }
 }
