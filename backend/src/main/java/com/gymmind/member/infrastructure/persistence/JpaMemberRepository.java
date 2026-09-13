@@ -1,0 +1,20 @@
+package com.gymmind.member.infrastructure.persistence;
+
+import com.gymmind.member.domain.model.Member;
+import com.gymmind.member.domain.repository.MemberRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Repository;
+import java.util.Optional;
+
+@Repository
+class JpaMemberRepository implements MemberRepository {
+    private final SpringDataMemberRepository delegate;
+    JpaMemberRepository(SpringDataMemberRepository delegate) { this.delegate = delegate; }
+    public Member save(Member member) { return delegate.save(member); }
+    public Optional<Member> findByTenantIdAndId(Long tenantId, Long id) { return delegate.findByTenantIdAndId(tenantId, id); }
+    public Optional<Member> findByTenantIdAndUserId(Long tenantId, Long userId) { return delegate.findByTenantIdAndUserId(tenantId, userId); }
+    public Optional<Member> findByTenantIdAndMemberNumber(Long tenantId, String number) { return delegate.findByTenantIdAndMemberNumber(tenantId, number); }
+    public boolean existsByTenantIdAndPhone(Long tenantId, String phone) { return delegate.existsByTenantIdAndPhone(tenantId, phone); }
+    public Page<Member> findAllByTenantId(Long tenantId, Pageable pageable) { return delegate.findAllByTenantId(tenantId, pageable); }
+}

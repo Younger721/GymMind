@@ -11,7 +11,12 @@ public final class PermissionCatalog {
             new Entry("user:read", "Read users"),
             new Entry("user:write", "Manage users"),
             new Entry("role:read", "Read roles"),
-            new Entry("role:assign", "Assign roles"));
+            new Entry("role:assign", "Assign roles"),
+            new Entry("member:read", "Read members"),
+            new Entry("member:write", "Manage members"),
+            new Entry("coach:read", "Read coaches"),
+            new Entry("coach:write", "Manage coaches"),
+            new Entry("coach:assign", "Assign coaches"));
 
     private PermissionCatalog() {}
 
