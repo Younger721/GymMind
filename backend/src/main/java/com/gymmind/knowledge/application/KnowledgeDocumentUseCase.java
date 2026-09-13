@@ -1,0 +1,5 @@
+package com.gymmind.knowledge.application;
+import com.gymmind.knowledge.domain.model.*;
+import com.gymmind.shared.error.*;
+import com.gymmind.shared.security.CurrentActor;
+public interface KnowledgeDocumentUseCase { KnowledgeDocumentView upload(CurrentActor actor, UploadKnowledgeDocumentCommand command); KnowledgeDocumentView reindex(CurrentActor actor, Long id); KnowledgeDocumentView delete(CurrentActor actor, Long id); boolean canRead(CurrentActor actor, Long id); }

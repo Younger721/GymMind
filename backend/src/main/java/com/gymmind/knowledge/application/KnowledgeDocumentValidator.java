@@ -1,0 +1,4 @@
+package com.gymmind.knowledge.application;
+import com.gymmind.shared.error.*;
+import com.gymmind.knowledge.domain.model.DocumentVisibility;
+public final class KnowledgeDocumentValidator { public static final int MAX_BYTES=10*1024*1024; private KnowledgeDocumentValidator(){} public static void validate(UploadKnowledgeDocumentCommand c){ if(c==null||c.fileName()==null||c.fileName().isBlank()||c.contentType()==null||c.content()==null||c.content().length>MAX_BYTES||c.visibility()==null) throw new BusinessException(ErrorCode.VALIDATION_FAILED); String n=c.fileName().toLowerCase(); byte[] b=c.content(); if(n.endsWith(".pdf") && !(b.length>=4 && b[0]=='%'&&b[1]=='P'&&b[2]=='D'&&b[3]=='F')) throw new BusinessException(ErrorCode.VALIDATION_FAILED); if(c.visibility()==DocumentVisibility.PRIVATE_USER && c.fileName().isBlank()) throw new BusinessException(ErrorCode.VALIDATION_FAILED); } }
