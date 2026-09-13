@@ -59,7 +59,11 @@ Task 11: fix round 1/5 (2 addressed, 0 open - registerTenant 完整事务与 Red
 Task 11: complete (commits 92aa52a..14ebfcb, review clean with 2 deferred minors)
 Task 12: minor (deferred): SecurityConfig permits conventional Swagger UI wildcard paths in addition to health/OpenAPI endpoints.
 Task 12: complete (commits 14ebfcb..0398e8c, review clean with 1 deferred minor)
-Task 13: in progress
+Task 13: fix round 1/1 (addressed permission bootstrap, tenant token invalidation on disable, duplicate admin email conflict; commit b078519)
+Task 13: complete (commits 36dd43d..b078519, review findings addressed; MySQL IT remains environment-blocked by unavailable Docker)
+Task 14: complete (commit 7e4b0f4, tenant user management and role assignment)
+Task 15: complete (pending commit in this turn; tenant user invitation flow implemented, ordinary tests green; MySQL IT blocked by unavailable Docker)
+Task 16: in progress
 
 Environment note (2026-09-12): Docker Desktop 4.87 was recovered without deleting images or volumes. Stale Unix-socket runtime directories were moved to timestamped `.stale-*` backups, WSL was shut down, and IntelliJ/Cursor working sets were trimmed after HCS reported `0x800705aa` with under 0.5 GB free physical memory. Docker server 29.7.2 reached `running`, and the Redis 7 Testcontainers verification passed. If HCS resource exhaustion recurs, check free physical memory before retrying Docker.
 
