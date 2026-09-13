@@ -82,3 +82,5 @@ Database status:
 - The local MySQL 8 service was observed running on port 3306.
 - The gymmind database has NOT been dropped, cleared, or recreated.
 - Database reset remains Task 17 and still requires a fresh exact-target read-only check before execution.
+
+Main roadmap Task 4: complete (audit persistence and tenant-scoped query; commit `feat: 建立租户级操作审计能力`).
