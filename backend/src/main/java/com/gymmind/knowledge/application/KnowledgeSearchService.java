@@ -1,0 +1,1 @@
+package com.gymmind.knowledge.application; import com.gymmind.ai.domain.ContextSegment; import com.gymmind.shared.security.CurrentActor; import java.util.List; public interface KnowledgeSearchService { List<ContextSegment> search(CurrentActor actor,String query); }
