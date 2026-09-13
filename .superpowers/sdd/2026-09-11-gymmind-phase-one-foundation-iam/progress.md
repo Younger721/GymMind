@@ -92,3 +92,4 @@ Main roadmap Task 9: complete (tenant-scoped exercise library and exercise video
 Main roadmap Task 10: complete (normalized workout plans/items, validated draft entry point, tenant-scoped exercise checks, member-owned workout records/sets; commits `3db1b47`, `5ef5a58`).
 Main roadmap Task 11: complete (deterministic nutrition calculation, tenant-scoped nutrition plans/records, and nutrition food database; commits `1fe2d22`, `640c520`, and current food database commit).
 Main roadmap Task 12: complete (tenant-scoped dashboard and weekly metrics aggregation; commit `abd6b3c`).
+Main roadmap Task 13: in progress (knowledge document visibility model and upload lifecycle `7702b22`; tenant-scoped persistence/storage adapters `52e06a2`, `1453feb`; persistent ingestion queue remains).
