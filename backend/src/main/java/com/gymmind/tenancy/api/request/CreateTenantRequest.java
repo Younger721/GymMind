@@ -9,7 +9,7 @@ public record CreateTenantRequest(
         @NotBlank @Size(max = 64) String tenantCode,
         @NotBlank @Size(max = 128) String tenantName,
         @NotBlank @Email @Size(max = 320) String adminEmail,
-        @NotBlank @Size(min = 8, max = 128) String adminPassword,
+        @NotBlank @Size(min = 8, max = 72) String adminPassword,
         @NotBlank @Size(max = 128) String adminDisplayName) {
 
     public CreateTenantCommand toCommand() {

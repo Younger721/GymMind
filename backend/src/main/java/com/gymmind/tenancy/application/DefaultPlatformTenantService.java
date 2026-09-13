@@ -9,6 +9,7 @@ import com.gymmind.tenancy.api.response.TenantView;
 import com.gymmind.tenancy.application.command.CreateTenantCommand;
 import com.gymmind.tenancy.domain.model.Tenant;
 import com.gymmind.tenancy.domain.repository.TenantRepository;
+import com.gymmind.iam.domain.repository.UserAccountRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -23,11 +24,14 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
     private final TenantRepository tenantRepository;
     private final TenantProvisioningService provisioningService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final UserAccountRepository userRepository;
 
     public DefaultPlatformTenantService(TenantRepository tenantRepository,
-                                        TenantProvisioningService provisioningService) {
+                                        TenantProvisioningService provisioningService,
+                                        UserAccountRepository userRepository) {
         this.tenantRepository = Objects.requireNonNull(tenantRepository, "tenantRepository");
         this.provisioningService = Objects.requireNonNull(provisioningService, "provisioningService");
+        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
     }
 
     @Override
@@ -41,6 +45,9 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
         String password = required(command.adminPassword(), "Admin password");
         String displayName = required(command.adminDisplayName(), "Admin display name");
         if (tenantRepository.existsByCode(code.trim().toLowerCase(java.util.Locale.ROOT))) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+        if (userRepository.findByNormalizedEmail(email).isPresent()) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
         TenantProvisioningService.ProvisionedTenant result = provisioningService.provision(
@@ -80,6 +87,10 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
             tenant.activate();
         } else {
             tenant.disable();
+            userRepository.findAllByTenantId(tenant.getId(), Pageable.unpaged()).forEach(user -> {
+                user.incrementTokenVersion();
+                userRepository.save(user);
+            });
         }
         return TenantView.from(tenantRepository.save(tenant));
     }

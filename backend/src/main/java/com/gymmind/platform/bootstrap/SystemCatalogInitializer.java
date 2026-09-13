@@ -3,8 +3,10 @@ package com.gymmind.platform.bootstrap;
 import com.gymmind.iam.domain.model.Permission;
 import com.gymmind.iam.domain.model.Role;
 import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.iam.domain.model.RolePermission;
 import com.gymmind.iam.domain.repository.PermissionRepository;
 import com.gymmind.iam.domain.repository.RoleRepository;
+import com.gymmind.iam.domain.repository.RolePermissionRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -16,12 +18,15 @@ public class SystemCatalogInitializer implements ApplicationRunner {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final DatabaseInitializationLock initializationLock;
+    private final RolePermissionRepository rolePermissionRepository;
 
     public SystemCatalogInitializer(RoleRepository roleRepository, PermissionRepository permissionRepository,
-                                    DatabaseInitializationLock initializationLock) {
+                                    DatabaseInitializationLock initializationLock,
+                                    RolePermissionRepository rolePermissionRepository) {
         this.roleRepository = roleRepository;
         this.permissionRepository = permissionRepository;
         this.initializationLock = initializationLock;
+        this.rolePermissionRepository = rolePermissionRepository;
     }
 
     public void run() {
@@ -40,6 +45,22 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         for (PermissionCatalog.Entry entry : PermissionCatalog.entries()) {
             permissionRepository.findByCode(entry.code())
                     .orElseGet(() -> permissionRepository.save(Permission.of(entry.code(), entry.name())));
+        }
+        link(RoleCode.PLATFORM_ADMIN, "platform:tenant:read");
+        link(RoleCode.PLATFORM_ADMIN, "platform:tenant:write");
+        link(RoleCode.GYM_ADMIN, "tenant:settings:read");
+        link(RoleCode.GYM_ADMIN, "tenant:settings:write");
+        link(RoleCode.GYM_ADMIN, "user:read");
+        link(RoleCode.GYM_ADMIN, "user:write");
+        link(RoleCode.GYM_ADMIN, "role:read");
+        link(RoleCode.GYM_ADMIN, "role:assign");
+    }
+
+    private void link(RoleCode roleCode, String permissionCode) {
+        Role role = roleRepository.findByCode(roleCode).orElseThrow();
+        Permission permission = permissionRepository.findByCode(permissionCode).orElseThrow();
+        if (!rolePermissionRepository.exists(role.getId(), permission.getId())) {
+            rolePermissionRepository.save(RolePermission.link(role, permission));
         }
     }
 
