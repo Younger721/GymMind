@@ -5,6 +5,7 @@ import com.gymmind.iam.api.response.InvitationResponse;
 import com.gymmind.iam.application.UserInvitationService;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,6 +18,7 @@ import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/v1/users/invitations")
+@SecurityRequirement(name = "bearerAuth")
 public class UserInvitationController {
     private final UserInvitationService service;
     private final CurrentActorProvider actors;

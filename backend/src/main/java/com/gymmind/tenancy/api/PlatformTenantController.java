@@ -9,6 +9,7 @@ import com.gymmind.shared.security.CurrentActorProvider;
 import com.gymmind.tenancy.api.request.CreateTenantRequest;
 import com.gymmind.tenancy.api.response.TenantView;
 import com.gymmind.tenancy.application.PlatformTenantService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/v1/platform/tenants")
+@SecurityRequirement(name = "bearerAuth")
 public class PlatformTenantController {
 
     private final PlatformTenantService service;

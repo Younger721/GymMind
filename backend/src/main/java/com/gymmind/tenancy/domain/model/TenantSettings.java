@@ -5,6 +5,10 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 
 @Entity
 @Table(name = "sys_tenant_settings",
@@ -19,6 +23,11 @@ public class TenantSettings extends TenantScopedEntity {
 
     @Column(nullable = false, length = 64)
     private String timezone = "UTC";
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_sys_tenant_settings_tenant"))
+    private Tenant tenant;
 
     protected TenantSettings() {
     }

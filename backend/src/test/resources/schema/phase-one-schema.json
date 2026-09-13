@@ -1,0 +1,59 @@
+{
+  "database": "gymmind",
+  "tables": {
+    "sys_tenant": {
+      "columns": ["id", "version", "created_at", "updated_at", "code", "name", "status"],
+      "required": ["id", "version", "created_at", "updated_at", "code", "name", "status"],
+      "unique": [["code"]],
+      "foreignKeys": []
+    },
+    "sys_tenant_settings": {
+      "columns": ["id", "version", "created_at", "updated_at", "tenant_id", "reservation_enabled", "check_in_enabled", "timezone"],
+      "required": ["id", "version", "created_at", "updated_at", "tenant_id", "reservation_enabled", "check_in_enabled", "timezone"],
+      "unique": [["tenant_id"]],
+      "foreignKeys": [{"column": "tenant_id", "table": "sys_tenant", "target": "id"}]
+    },
+    "sys_user": {
+      "columns": ["id", "version", "created_at", "updated_at", "tenant_id", "normalized_email", "password_hash", "display_name", "status", "token_version"],
+      "required": ["id", "version", "created_at", "updated_at", "normalized_email", "password_hash", "display_name", "status", "token_version"],
+      "unique": [["normalized_email"]],
+      "foreignKeys": [{"column": "tenant_id", "table": "sys_tenant", "target": "id"}]
+    },
+    "sys_role": {
+      "columns": ["id", "version", "created_at", "updated_at", "code", "name"],
+      "required": ["id", "version", "created_at", "updated_at", "code", "name"],
+      "unique": [["code"]],
+      "foreignKeys": []
+    },
+    "sys_permission": {
+      "columns": ["id", "version", "created_at", "updated_at", "code", "name"],
+      "required": ["id", "version", "created_at", "updated_at", "code", "name"],
+      "unique": [["code"]],
+      "foreignKeys": []
+    },
+    "sys_user_role": {
+      "columns": ["user_id", "role_id"],
+      "required": ["user_id", "role_id"],
+      "unique": [["user_id", "role_id"]],
+      "foreignKeys": [
+        {"column": "user_id", "table": "sys_user", "target": "id"},
+        {"column": "role_id", "table": "sys_role", "target": "id"}
+      ]
+    },
+    "sys_role_permission": {
+      "columns": ["role_id", "permission_id"],
+      "required": ["role_id", "permission_id"],
+      "unique": [["role_id", "permission_id"]],
+      "foreignKeys": [
+        {"column": "role_id", "table": "sys_role", "target": "id"},
+        {"column": "permission_id", "table": "sys_permission", "target": "id"}
+      ]
+    },
+    "sys_user_invitation": {
+      "columns": ["id", "version", "created_at", "updated_at", "tenant_id", "email", "role_code", "token_hash", "expires_at", "status", "accepted_at"],
+      "required": ["id", "version", "created_at", "updated_at", "tenant_id", "email", "role_code", "token_hash", "expires_at", "status"],
+      "unique": [["token_hash"]],
+      "foreignKeys": [{"column": "tenant_id", "table": "sys_tenant", "target": "id"}]
+    }
+  }
+}

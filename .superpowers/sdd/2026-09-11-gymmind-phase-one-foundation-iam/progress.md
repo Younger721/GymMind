@@ -63,9 +63,9 @@ Task 13: fix round 1/1 (addressed permission bootstrap, tenant token invalidatio
 Task 13: complete (commits 36dd43d..b078519, review findings addressed; MySQL IT remains environment-blocked by unavailable Docker)
 Task 14: complete (commit 7e4b0f4, tenant user management and role assignment)
 Task 15: complete (commit 1bb2986, tenant user invitation flow implemented, ordinary tests green; MySQL IT blocked by unavailable Docker)
-Task 16: complete (pending commit in this turn; ArchUnit tenant-isolation guards green; IDOR MySQL IT blocked by unavailable Docker)
-Task 17: complete (pending commit in this turn; exact-target reset guard/scripts implemented; real reset blocked by missing MySQL credentials and unavailable Docker for IT)
-Task 18: in progress
+Task 16: complete (commit c835cc6; ArchUnit tenant-isolation guards green; IDOR MySQL IT blocked by unavailable Docker)
+Task 17: complete (commit c90b083; exact-target reset guard/scripts implemented; real reset blocked by missing MySQL credentials and unavailable Docker for IT)
+Task 18: complete (latest Task 18 commit; OpenAPI contract and ordinary tests green; schema/smoke ITs blocked by unavailable Docker)
 
 Environment note (2026-09-12): Docker Desktop 4.87 was recovered without deleting images or volumes. Stale Unix-socket runtime directories were moved to timestamped `.stale-*` backups, WSL was shut down, and IntelliJ/Cursor working sets were trimmed after HCS reported `0x800705aa` with under 0.5 GB free physical memory. Docker server 29.7.2 reached `running`, and the Redis 7 Testcontainers verification passed. If HCS resource exhaustion recurs, check free physical memory before retrying Docker.
 

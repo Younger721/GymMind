@@ -9,6 +9,7 @@ import com.gymmind.shared.security.CurrentActorProvider;
 import com.gymmind.tenancy.api.request.UpdateTenantSettingsRequest;
 import com.gymmind.tenancy.api.response.TenantSettingsView;
 import com.gymmind.tenancy.application.TenantSettingsService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,6 +21,7 @@ import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/v1/tenant/settings")
+@SecurityRequirement(name = "bearerAuth")
 public class TenantSettingsController {
 
     private final TenantSettingsService service;

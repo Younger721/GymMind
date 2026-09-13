@@ -1,12 +1,17 @@
 package com.gymmind.iam.domain.model;
 
 import com.gymmind.shared.persistence.TenantScopedEntity;
+import com.gymmind.tenancy.domain.model.Tenant;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -40,6 +45,11 @@ public class UserInvitation extends TenantScopedEntity {
 
     @Column(name = "accepted_at")
     private Instant acceptedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(name = "fk_sys_user_invitation_tenant"))
+    private Tenant tenant;
 
     protected UserInvitation() {
     }
