@@ -1,0 +1,1 @@
+package com.gymmind.membership.infrastructure.persistence; import com.gymmind.membership.domain.model.MembershipPackage; import org.springframework.data.jpa.repository.JpaRepository; import java.util.Optional; interface SpringDataMembershipPackageRepository extends JpaRepository<MembershipPackage,Long>{Optional<MembershipPackage> findByTenantIdAndId(Long t,Long id);}

@@ -18,7 +18,9 @@ public final class PermissionCatalog {
             new Entry("coach:write", "Manage coaches"),
             new Entry("coach:assign", "Assign coaches"),
             new Entry("course:read", "Read courses"),
-            new Entry("course:write", "Manage courses"));
+            new Entry("course:write", "Manage courses"),
+            new Entry("membership:read", "Read membership packages"),
+            new Entry("membership:write", "Manage membership packages"));
 
     private PermissionCatalog() {}
 

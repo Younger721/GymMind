@@ -1,0 +1,1 @@
+package com.gymmind.membership.application; import com.gymmind.shared.security.CurrentActor; public interface MembershipPackageService{MembershipPackageView create(CurrentActor a,CreateMembershipPackageCommand c); MembershipPackageView find(CurrentActor a,Long id);}

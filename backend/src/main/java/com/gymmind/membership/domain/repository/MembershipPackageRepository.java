@@ -1,0 +1,1 @@
+package com.gymmind.membership.domain.repository; import com.gymmind.membership.domain.model.MembershipPackage; import java.util.Optional; public interface MembershipPackageRepository{MembershipPackage save(MembershipPackage p); Optional<MembershipPackage> findByTenantIdAndId(Long t,Long id);}

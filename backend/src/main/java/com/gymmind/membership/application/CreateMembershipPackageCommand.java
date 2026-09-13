@@ -1,0 +1,1 @@
+package com.gymmind.membership.application; import java.math.BigDecimal; public record CreateMembershipPackageCommand(Long tenantId,String name,String entitlementType,Integer entitlementCount,Integer validDays,BigDecimal price,String currency){}
