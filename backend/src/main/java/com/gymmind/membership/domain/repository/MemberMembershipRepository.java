@@ -1,0 +1,1 @@
+package com.gymmind.membership.domain.repository; import com.gymmind.membership.domain.model.MemberMembership; import org.springframework.data.domain.Page; import org.springframework.data.domain.Pageable; public interface MemberMembershipRepository{MemberMembership save(MemberMembership m);Page<MemberMembership> findAllByTenantIdAndMemberId(Long t,Long m,Pageable p);}

@@ -1,0 +1,1 @@
+package com.gymmind.membership.application; import com.gymmind.shared.security.CurrentActor; public interface MemberMembershipService{MemberMembershipView grant(CurrentActor a,GrantMembershipCommand c);}
