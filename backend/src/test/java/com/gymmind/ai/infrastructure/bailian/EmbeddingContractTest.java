@@ -1,0 +1,3 @@
+package com.gymmind.ai.infrastructure.bailian;
+import org.junit.jupiter.api.Test; import java.util.*; import static org.assertj.core.api.Assertions.*;
+class EmbeddingContractTest { @Test void validatesExactly1024Dimensions(){var v=new ArrayList<float[]>();v.add(new float[1024]);assertThat(EmbeddingDimension.validate(v,1)).isTrue();assertThatThrownBy(()->EmbeddingDimension.validate(List.of(new float[3]),1)).isInstanceOf(IllegalArgumentException.class);} @Test void rejectsMismatchedBatch(){assertThatThrownBy(()->EmbeddingDimension.validate(List.of(new float[1024]),2)).isInstanceOf(IllegalArgumentException.class);} }
