@@ -1,0 +1,1 @@
+package com.gymmind.membership.application; import com.gymmind.membership.domain.model.*; import java.math.BigDecimal; public record OrderView(Long id,Long tenantId,Long memberId,BigDecimal total,String currency,OrderStatus status){static OrderView from(Order o){return new OrderView(o.getId(),o.getTenantId(),o.getMemberId(),o.getTotal(),o.getCurrency(),o.getStatus());}}
