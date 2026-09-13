@@ -1,0 +1,1 @@
+package com.gymmind.nutrition.infrastructure.persistence; import com.gymmind.nutrition.domain.model.NutritionFood; import org.springframework.data.jpa.repository.JpaRepository; interface SpringDataNutritionFoodRepository extends JpaRepository<NutritionFood,Long> {}
