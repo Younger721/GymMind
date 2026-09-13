@@ -39,6 +39,6 @@ class SystemCatalogInitializerTest {
 
         new SystemCatalogInitializer(roles, permissions, lock, links).run();
 
-        verify(links, org.mockito.Mockito.times(24)).save(any());
+        verify(links, org.mockito.Mockito.times(26)).save(any());
     }
 }
