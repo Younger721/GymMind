@@ -1,0 +1,3 @@
+package com.gymmind.ai.domain;
+import org.junit.jupiter.api.Test; import java.util.*; import static org.assertj.core.api.Assertions.*;
+class ContextBudgeterTest { @Test void limitsFiveToEightSegmentsAndTwoPerDocument(){var xs=new ArrayList<ContextSegment>();for(int i=0;i<12;i++)xs.add(new ContextSegment("c"+i,"d"+(i%4),"text"));assertThat(ContextBudgeter.select(xs,100)).hasSize(8);assertThat(ContextBudgeter.select(xs,100).stream().collect(java.util.stream.Collectors.groupingBy(ContextSegment::documentId,java.util.stream.Collectors.counting())).values()).allMatch(n->n<=2);} @Test void respectsCharacterBudget(){var xs=List.of(new ContextSegment("a","d","12345"),new ContextSegment("b","e","67890"));assertThat(ContextBudgeter.select(xs,5)).hasSize(1);} }
