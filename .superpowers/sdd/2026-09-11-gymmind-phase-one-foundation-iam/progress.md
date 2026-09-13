@@ -86,3 +86,5 @@ Database status:
 Main roadmap Task 4: complete (audit persistence and tenant-scoped query; commit `feat: 建立租户级操作审计能力`).
 Main roadmap Task 5: complete (member, coach, and assignment services; commits `52c28aa`, `1969877`, `2f3564b`, `683fccb`).
 Main roadmap Task 6: complete (course scheduling and capacity rules; commit `760d9ef`).
+Main roadmap Task 7: in progress (membership packages, order state model, and offline payment facts; commits `bc68d84`, `1f2d9ce`, `201dc4d`).
+Main roadmap Task 7: complete (package, order state, offline payment API; commits `bc68d84`, `1f2d9ce`, `201dc4d`, `7ec86fe`).
