@@ -1,0 +1,3 @@
+package com.gymmind.knowledge.infrastructure.parser;
+import org.junit.jupiter.api.Test; import static org.assertj.core.api.Assertions.*;
+class DeterministicChunkerTest { @Test void chunksWithStableIdsAndOverlap(){var c=new DeterministicChunker(10,2);var out=c.chunk("0123456789ABCDEFGHIJ", "doc-1");assertThat(out).hasSize(3);assertThat(out.get(0).text()).isEqualTo("0123456789");assertThat(out.get(1).text()).startsWith("89");assertThat(out.get(0).id()).isEqualTo(c.chunk("0123456789ABCDEFGHIJ","doc-1").get(0).id());} @Test void rejectsEmpty(){assertThatThrownBy(()->new DeterministicChunker(10,2).chunk("", "d")).isInstanceOf(IllegalArgumentException.class);} }
