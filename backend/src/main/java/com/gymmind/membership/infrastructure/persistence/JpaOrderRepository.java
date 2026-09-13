@@ -1,0 +1,1 @@
+package com.gymmind.membership.infrastructure.persistence; import com.gymmind.membership.domain.repository.OrderRepository; import org.springframework.stereotype.Repository; @Repository class JpaOrderRepository implements OrderRepository{}

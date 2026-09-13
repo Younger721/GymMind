@@ -1,0 +1,1 @@
+package com.gymmind.membership.infrastructure.persistence; import com.gymmind.membership.domain.model.PaymentRecord; import org.springframework.data.jpa.repository.JpaRepository; import java.util.Optional; interface SpringDataPaymentRecordRepository extends JpaRepository<PaymentRecord,Long>{Optional<PaymentRecord> findByTenantIdAndReference(Long t,String r);}

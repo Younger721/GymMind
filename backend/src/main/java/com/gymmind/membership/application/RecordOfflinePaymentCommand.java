@@ -1,0 +1,1 @@
+package com.gymmind.membership.application; import java.math.BigDecimal; public record RecordOfflinePaymentCommand(Long tenantId,Long orderId,BigDecimal amount,String currency,String reference,String paymentMethod){}

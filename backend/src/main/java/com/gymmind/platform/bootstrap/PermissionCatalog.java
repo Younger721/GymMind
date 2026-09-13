@@ -20,7 +20,8 @@ public final class PermissionCatalog {
             new Entry("course:read", "Read courses"),
             new Entry("course:write", "Manage courses"),
             new Entry("membership:read", "Read membership packages"),
-            new Entry("membership:write", "Manage membership packages"));
+            new Entry("membership:write", "Manage membership packages"),
+            new Entry("payment:write", "Record offline payments"));
 
     private PermissionCatalog() {}
 

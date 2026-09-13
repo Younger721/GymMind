@@ -1,0 +1,1 @@
+package com.gymmind.membership.domain.repository; import com.gymmind.membership.domain.model.PaymentRecord; import java.util.Optional; public interface PaymentRecordRepository{PaymentRecord save(PaymentRecord p);Optional<PaymentRecord> findByTenantIdAndReference(Long t,String r);}
