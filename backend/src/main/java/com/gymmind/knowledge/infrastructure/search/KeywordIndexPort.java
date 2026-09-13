@@ -1,0 +1,1 @@
+package com.gymmind.knowledge.infrastructure.search; import java.util.List; public interface KeywordIndexPort { void upsert(IndexedChunk chunk); List<IndexedChunk> search(String query,Long tenantId); void delete(String id,Long tenantId); }

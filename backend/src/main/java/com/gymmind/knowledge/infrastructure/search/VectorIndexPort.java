@@ -1,0 +1,1 @@
+package com.gymmind.knowledge.infrastructure.search; import java.util.List; public interface VectorIndexPort { void upsert(IndexedChunk chunk); List<IndexedChunk> search(float[] vector,Long tenantId); void delete(String id,Long tenantId); }
