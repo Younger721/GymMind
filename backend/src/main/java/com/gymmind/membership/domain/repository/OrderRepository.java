@@ -1,1 +1,1 @@
-package com.gymmind.membership.domain.repository; public interface OrderRepository{}
+package com.gymmind.membership.domain.repository; import com.gymmind.membership.domain.model.Order; import java.util.Optional; public interface OrderRepository{Order save(Order o);Optional<Order> findByTenantIdAndId(Long t,Long id);}
