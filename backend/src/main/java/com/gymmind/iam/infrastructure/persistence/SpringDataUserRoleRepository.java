@@ -11,6 +11,7 @@ import java.util.Set;
 interface SpringDataUserRoleRepository extends JpaRepository<UserRole, UserRole.Key> {
     boolean existsByUser_IdAndRole_Id(Long userId, Long roleId);
     long countByUser_Id(Long userId);
+    void deleteByUser_Id(Long userId);
 
     @Query("""
             select distinct userRole.role.code

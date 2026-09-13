@@ -88,7 +88,10 @@ public class UserAccount extends AuditableEntity {
     }
 
     public void activate() {
-        status = UserStatus.ACTIVE;
+        if (status != UserStatus.ACTIVE) {
+            status = UserStatus.ACTIVE;
+            incrementTokenVersion();
+        }
     }
 
     public void disable() {

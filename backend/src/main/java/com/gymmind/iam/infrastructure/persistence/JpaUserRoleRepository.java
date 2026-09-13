@@ -21,6 +21,11 @@ class JpaUserRoleRepository implements UserRoleRepository {
     }
 
     @Override
+    public void deleteByUserId(Long userId) {
+        delegate.deleteByUser_Id(userId);
+    }
+
+    @Override
     public boolean existsByUserIdAndRoleId(Long userId, Long roleId) {
         return delegate.existsByUser_IdAndRole_Id(userId, roleId);
     }

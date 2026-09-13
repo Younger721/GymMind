@@ -7,6 +7,7 @@ import java.util.Set;
 
 public interface UserRoleRepository {
     UserRole save(UserRole userRole);
+    void deleteByUserId(Long userId);
     boolean existsByUserIdAndRoleId(Long userId, Long roleId);
     long countByUserId(Long userId);
     Set<RoleCode> findRoleCodesByUserId(Long userId);
