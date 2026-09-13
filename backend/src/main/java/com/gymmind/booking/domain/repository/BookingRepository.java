@@ -1,0 +1,1 @@
+package com.gymmind.booking.domain.repository; import com.gymmind.booking.domain.model.Booking; import java.util.Optional; public interface BookingRepository{Booking save(Booking b);Optional<Booking> findByTenantIdAndMemberIdAndCourseId(Long t,Long m,Long c);}

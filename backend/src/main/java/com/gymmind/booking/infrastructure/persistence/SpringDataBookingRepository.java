@@ -1,0 +1,1 @@
+package com.gymmind.booking.infrastructure.persistence; import com.gymmind.booking.domain.model.Booking; import org.springframework.data.jpa.repository.JpaRepository; import java.util.Optional; interface SpringDataBookingRepository extends JpaRepository<Booking,Long>{Optional<Booking> findByTenantIdAndMemberIdAndCourseId(Long t,Long m,Long c);}
