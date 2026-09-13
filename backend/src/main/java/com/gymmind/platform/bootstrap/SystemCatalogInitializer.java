@@ -58,6 +58,8 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         link(RoleCode.GYM_ADMIN, "member:write");
         link(RoleCode.COACH, "coach:read");
         link(RoleCode.MEMBER, "member:read");
+        link(RoleCode.GYM_ADMIN, "course:read");
+        link(RoleCode.GYM_ADMIN, "course:write");
     }
 
     private void link(RoleCode roleCode, String permissionCode) {
