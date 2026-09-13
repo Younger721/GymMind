@@ -1,0 +1,1 @@
+package com.gymmind.nutrition.domain.repository; import com.gymmind.nutrition.domain.model.NutritionRecord; public interface NutritionRecordRepository { NutritionRecord save(NutritionRecord record); }

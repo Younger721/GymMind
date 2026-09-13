@@ -1,0 +1,1 @@
+package com.gymmind.nutrition.application; import java.time.LocalDate; public record CreateNutritionRecordCommand(Long tenantId,LocalDate recordDate,double calories,double protein,double carbohydrate,double fat,String notes) {}

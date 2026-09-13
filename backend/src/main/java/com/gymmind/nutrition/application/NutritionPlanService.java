@@ -1,0 +1,1 @@
+package com.gymmind.nutrition.application; import com.gymmind.shared.security.CurrentActor; public interface NutritionPlanService { NutritionPlanView create(CurrentActor actor,CreateNutritionPlanCommand command); }
