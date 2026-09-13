@@ -1,0 +1,1 @@
+package com.gymmind.workout.application; import java.time.LocalDate; import java.util.List; public record CreateWorkoutRecordCommand(Long tenantId,Long planId,LocalDate workoutDate,int duration,int calories,String notes,List<WorkoutSetCommand> sets) {}

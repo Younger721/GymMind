@@ -1,0 +1,1 @@
+package com.gymmind.workout.application; import com.gymmind.shared.security.CurrentActor; public interface WorkoutRecordService { WorkoutRecordView create(CurrentActor actor,CreateWorkoutRecordCommand command); }

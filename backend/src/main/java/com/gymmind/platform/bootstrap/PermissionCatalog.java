@@ -30,7 +30,9 @@ public final class PermissionCatalog {
             new Entry("video:read", "Read exercise videos"),
             new Entry("video:write", "Manage exercise videos"),
             new Entry("workout:read", "Read workout plans"),
-            new Entry("workout:write", "Manage workout plans"));
+            new Entry("workout:write", "Manage workout plans"),
+            new Entry("workout-record:read", "Read workout records"),
+            new Entry("workout-record:write", "Create workout records"));
 
     private PermissionCatalog() {}
 

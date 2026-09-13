@@ -1,0 +1,1 @@
+package com.gymmind.workout.application; import com.gymmind.workout.domain.model.WorkoutRecordStatus; import java.time.LocalDate; public record WorkoutRecordView(Long id,Long tenantId,Long memberId,Long planId,LocalDate workoutDate,int duration,int calories,String notes,WorkoutRecordStatus status) {}

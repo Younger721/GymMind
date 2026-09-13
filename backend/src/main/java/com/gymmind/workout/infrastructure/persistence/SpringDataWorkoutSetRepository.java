@@ -1,0 +1,1 @@
+package com.gymmind.workout.infrastructure.persistence; import com.gymmind.workout.domain.model.WorkoutSet; import org.springframework.data.jpa.repository.JpaRepository; interface SpringDataWorkoutSetRepository extends JpaRepository<WorkoutSet,Long> {}
