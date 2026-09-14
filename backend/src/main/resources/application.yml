@@ -21,6 +21,7 @@ gymmind:
   security:
     jwt:
       issuer: GymMind
-      secret: ${JWT_SECRET:}
+      # Development fallback only; production deployments must override JWT_SECRET.
+      secret: ${JWT_SECRET:GymMind-local-dev-secret-change-me-please-32bytes}
       access-ttl: PT15M
       refresh-ttl: P7D
