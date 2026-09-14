@@ -3,6 +3,10 @@ package com.gymmind.knowledge.infrastructure.parser;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.io.ByteArrayInputStream;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
 
 public final class DocumentParserRegistry {
     private static final Pattern TAG = Pattern.compile("<[^>]+>");
@@ -19,6 +23,8 @@ public final class DocumentParserRegistry {
         if (type.contains("text/plain") || name.endsWith(".txt")) return text(bytes);
         if (type.contains("markdown") || name.endsWith(".md")) return markdown(bytes);
         if (type.contains("text/html") || name.endsWith(".html") || name.endsWith(".htm")) return html(bytes);
+        if (type.contains("pdf") || name.endsWith(".pdf")) return pdf(bytes);
+        if (type.contains("wordprocessingml") || name.endsWith(".docx")) return docx(bytes);
         throw new IllegalArgumentException("unsupported document type");
     }
 
@@ -30,5 +36,15 @@ public final class DocumentParserRegistry {
         String value = new String(bytes, StandardCharsets.UTF_8);
         value = SCRIPT.matcher(value).replaceAll(" ");
         return TAG.matcher(value).replaceAll(" ").replaceAll("\\s+", " ").trim();
+    }
+    private static String pdf(byte[] bytes) {
+        try (var doc = Loader.loadPDF(bytes)) {
+            return new PDFTextStripper().getText(doc).trim();
+        } catch (Exception e) { throw new IllegalArgumentException("invalid PDF", e); }
+    }
+    private static String docx(byte[] bytes) {
+        try (var doc = new XWPFDocument(new ByteArrayInputStream(bytes))) {
+            return doc.getParagraphs().stream().map(p -> p.getText()).filter(s -> !s.isBlank()).reduce((a,b) -> a + "\n" + b).orElse("").trim();
+        } catch (Exception e) { throw new IllegalArgumentException("invalid DOCX", e); }
     }
 }
