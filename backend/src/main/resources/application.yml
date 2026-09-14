@@ -19,6 +19,7 @@ gymmind:
     milvus-url: ${GYMMIND_MILVUS_URL:http://localhost:19530}
     elasticsearch-url: ${GYMMIND_ES_URL:http://localhost:9200}
   job-queue: ${GYMMIND_JOB_QUEUE:memory}
+  object-store: ${GYMMIND_OBJECT_STORE:local}
   security:
     jwt:
       issuer: GymMind
