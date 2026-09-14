@@ -3,6 +3,8 @@ package com.gymmind.audit.application;
 import com.gymmind.audit.domain.OperationAudit;
 import com.gymmind.audit.domain.repository.OperationAuditRepository;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,8 +22,8 @@ public class DefaultAuditQueryService implements AuditQueryService {
     @Override
     @Transactional(readOnly = true)
     public List<OperationAudit> list(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null) {
-            throw new IllegalArgumentException("Tenant actor is required");
+        if (actor == null || actor.tenantId() == null || !actor.hasPermission("audit:read")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return repository.findAllByTenantId(actor.tenantId());
     }
