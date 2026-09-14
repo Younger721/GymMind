@@ -2,8 +2,10 @@ package com.gymmind.search.domain;
 
 import java.net.InetAddress;
 import java.net.URI;
+import org.springframework.stereotype.Component;
 
 /** Validates outbound import targets before any HTTP client follows them. */
+@Component
 public final class PublicUrlValidator {
     public boolean isAllowed(String rawUrl) {
         try {
