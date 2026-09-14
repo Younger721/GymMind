@@ -1,1 +1,1 @@
-package com.gymmind.ai.application; import java.util.List; public record AiChatView(String answer,List<String> sources) {}
+package com.gymmind.ai.application; import java.util.List; public record AiChatView(String answer,List<String> sources,List<SourceCitation> citations) { public AiChatView(String answer,List<String> sources){this(answer,sources,List.of());} }
