@@ -15,6 +15,7 @@ class MilvusVectorIndexTest {
 
         assertThat(body).containsEntry("collectionName", "gymmind_knowledge");
         assertThat(body.get("indexParams").toString()).contains("COSINE", "HNSW", "vector");
+        assertThat(body.get("schema")).isInstanceOf(Map.class);
         assertThat(body.get("schema").toString())
                 .contains("id", "tenantId", "ownerUserId", "text", "vector", "1024");
     }
@@ -43,5 +44,23 @@ class MilvusVectorIndexTest {
         assertThat(body).containsEntry("filter", "tenantId == 7 && (ownerUserId == 0 || ownerUserId == 11)");
         assertThat(body).containsEntry("limit", 30);
         assertThat(body.get("outputFields")).isEqualTo(List.of("id", "tenantId", "ownerUserId", "text"));
+    }
+
+    @Test
+    void mapsMilvusSearchRowsBackToChunks() {
+        String response = """
+                {"code":0,"data":[{"id":"chunk-1","tenantId":7,"ownerUserId":11,"text":"private text","distance":0.91}]}
+                """;
+
+        assertThat(MilvusVectorIndex.parseSearchResponse(response)).containsExactly(
+                new IndexedChunk("chunk-1", 7L, 11L, "private text", null));
+    }
+
+    @Test
+    void readsCollectionExistenceResponse() {
+        assertThat(MilvusVectorIndex.collectionExists("{\"code\":0,\"data\":{\"has\":true}}"))
+                .isTrue();
+        assertThat(MilvusVectorIndex.collectionExists("{\"code\":0,\"data\":{\"has\":false}}"))
+                .isFalse();
     }
 }
