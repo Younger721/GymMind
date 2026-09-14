@@ -1,11 +1,19 @@
 package com.gymmind.knowledge.infrastructure.search;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.http.HttpMethod.POST;
 
 class MilvusVectorIndexTest {
 
@@ -62,5 +70,27 @@ class MilvusVectorIndexTest {
                 .isTrue();
         assertThat(MilvusVectorIndex.collectionExists("{\"code\":0,\"data\":{\"has\":false}}"))
                 .isFalse();
+    }
+
+    @Test
+    void createsCollectionBeforeFirstInsert() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MilvusVectorIndex index = new MilvusVectorIndex(builder);
+        float[] vector = new float[1024];
+
+        server.expect(once(), requestTo("http://localhost:19530/v2/vectordb/collections/has"))
+                .andExpect(method(POST))
+                .andRespond(withSuccess("{\"code\":0,\"data\":{\"has\":false}}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://localhost:19530/v2/vectordb/collections/create"))
+                .andExpect(method(POST))
+                .andRespond(withSuccess("{\"code\":0}", MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo("http://localhost:19530/v2/vectordb/entities/insert"))
+                .andExpect(method(POST))
+                .andRespond(withSuccess("{\"code\":0}", MediaType.APPLICATION_JSON));
+
+        index.upsert(new IndexedChunk("chunk-1", 7L, 11L, "private text", vector));
+
+        server.verify();
     }
 }

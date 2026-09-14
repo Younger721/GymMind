@@ -17,6 +17,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final RestClient client;
     private final String collection;
+    private volatile boolean collectionReady;
 
     public MilvusVectorIndex(RestClient.Builder builder) {
         client = builder.baseUrl(Optional.ofNullable(System.getenv("GYMMIND_MILVUS_URL"))
@@ -83,8 +84,23 @@ public class MilvusVectorIndex implements VectorIndexPort {
     @Override
     public void upsert(IndexedChunk chunk) {
         requireVector(chunk.vector());
+        ensureCollection();
         client.post().uri("/v2/vectordb/entities/insert").body(insertBody(collection, chunk))
                 .retrieve().toBodilessEntity();
+    }
+
+    private void ensureCollection() {
+        if (collectionReady) return;
+        synchronized (this) {
+            if (collectionReady) return;
+            String raw = client.post().uri("/v2/vectordb/collections/has")
+                    .body(Map.of("collectionName", collection)).retrieve().body(String.class);
+            if (!collectionExists(raw)) {
+                client.post().uri("/v2/vectordb/collections/create").body(collectionBody(collection))
+                        .retrieve().toBodilessEntity();
+            }
+            collectionReady = true;
+        }
     }
 
     @Override
