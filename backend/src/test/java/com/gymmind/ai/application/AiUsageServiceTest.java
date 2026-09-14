@@ -18,5 +18,11 @@ class AiUsageServiceTest {
         });
     }
     private CurrentActor actor(Long tenant){return new CurrentActor(1L,tenant,Set.of(RoleCode.MEMBER),Set.of("ai:chat"),0,"t");}
-    static class InMemoryAiUsageRepository implements AiUsageRepository { java.util.List<AiUsageRecord> items=new java.util.ArrayList<>(); public AiUsageRecord save(AiUsageRecord r){items.add(r);return r;} }
+    static class InMemoryAiUsageRepository implements AiUsageRepository {
+        java.util.List<AiUsageRecord> items=new java.util.ArrayList<>();
+        public AiUsageRecord save(AiUsageRecord r){items.add(r);return r;}
+        public java.util.List<AiUsageRecord> findAllByTenantId(Long tenantId) {
+            return items.stream().filter(item -> tenantId.equals(item.tenantId())).toList();
+        }
+    }
 }

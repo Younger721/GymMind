@@ -1,10 +1,33 @@
 package com.gymmind.ai.infrastructure;
-import com.gymmind.ai.application.*;
-import org.springframework.stereotype.Component;
+
+import com.gymmind.ai.application.AiUsageRecord;
+import com.gymmind.ai.application.AiUsageRepository;
+import org.springframework.stereotype.Repository;
+
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-@Component public class JpaAiUsageRepository implements AiUsageRepository {
-    private final List<AiUsageRecord> records = new CopyOnWriteArrayList<>();
-    public AiUsageRecord save(AiUsageRecord record){ records.add(record); return record; }
-    public List<AiUsageRecord> findByTenant(Long tenantId){ return records.stream().filter(r -> tenantId.equals(r.tenantId())).toList(); }
+
+@Repository
+public class JpaAiUsageRepository implements AiUsageRepository {
+    private final SpringDataAiUsageRepository delegate;
+
+    public JpaAiUsageRepository(SpringDataAiUsageRepository delegate) {
+        this.delegate = delegate;
+    }
+
+    @Override
+    public AiUsageRecord save(AiUsageRecord record) {
+        if (record == null || record.tenantId() == null) {
+            throw new IllegalArgumentException("tenant-scoped usage record required");
+        }
+        return delegate.save(AiUsageEntity.from(record)).toRecord();
+    }
+
+    @Override
+    public List<AiUsageRecord> findAllByTenantId(Long tenantId) {
+        if (tenantId == null || tenantId <= 0) {
+            throw new IllegalArgumentException("tenantId must be positive");
+        }
+        return delegate.findAllByTenantIdOrderByCreatedAtDesc(tenantId).stream()
+                .map(AiUsageEntity::toRecord).toList();
+    }
 }
