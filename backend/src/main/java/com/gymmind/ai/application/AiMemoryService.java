@@ -13,6 +13,10 @@ public interface AiMemoryService {
 
     List<AiMemoryEntry> list(CurrentActor actor);
 
+    default List<AiMemoryEntry> context(CurrentActor actor) {
+        return list(actor);
+    }
+
     void delete(CurrentActor actor, AiMemoryType type, String key);
 
     default void delete(CurrentActor actor, String key) {
