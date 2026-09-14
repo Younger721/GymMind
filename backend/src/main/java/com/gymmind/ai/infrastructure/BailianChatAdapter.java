@@ -5,8 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gymmind.ai.application.ChatModelGateway;
 import com.gymmind.ai.domain.ContextSegment;
 import org.springframework.stereotype.Component;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -17,12 +20,17 @@ public class BailianChatAdapter implements ChatModelGateway {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String apiKey;
     private final String model;
+    private final BailianCallRetrier retrier;
 
     public BailianChatAdapter(RestClient.Builder builder) {
         String baseUrl = env("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1");
-        this.client = builder.baseUrl(baseUrl).build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(3)).build());
+        requestFactory.setReadTimeout(Duration.ofSeconds(30));
+        this.client = builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
         this.apiKey = env("DASHSCOPE_API_KEY", "");
         this.model = env("DASHSCOPE_CHAT_MODEL", "qwen-plus");
+        this.retrier = new BailianCallRetrier(3, BailianChatAdapter::sleep);
     }
 
     @Override
@@ -36,9 +44,9 @@ public class BailianChatAdapter implements ChatModelGateway {
                 "messages", List.of(
                         Map.of("role", "system", "content", "你是GymMind智能健身助手，请基于参考资料回答。"),
                         Map.of("role", "user", "content", prompt + "\n参考资料：" + contextText)));
-        String raw = client.post().uri("/chat/completions")
+        String raw = retrier.execute(() -> client.post().uri("/chat/completions")
                 .header("Authorization", "Bearer " + apiKey)
-                .body(body).retrieve().body(String.class);
+                .body(body).retrieve().body(String.class));
         try {
             JsonNode root = mapper.readTree(raw);
             return root.path("choices").path(0).path("message").path("content").asText(raw);
@@ -50,5 +58,14 @@ public class BailianChatAdapter implements ChatModelGateway {
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Bailian retry interrupted", interrupted);
+        }
     }
 }
