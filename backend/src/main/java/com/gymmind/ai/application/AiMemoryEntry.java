@@ -1,4 +1,4 @@
 package com.gymmind.ai.application;
 
-public record AiMemoryEntry(String key, String value) {
+public record AiMemoryEntry(AiMemoryType type, String key, String value) {
 }
