@@ -34,7 +34,9 @@ public final class PermissionCatalog {
             new Entry("workout-record:read", "Read workout records"),
             new Entry("workout-record:write", "Create workout records"),
             new Entry("nutrition:read", "Read nutrition data"),
-            new Entry("nutrition:write", "Manage nutrition data"));
+            new Entry("nutrition:write", "Manage nutrition data"),
+            new Entry("ai:chat", "Use the AI assistant"),
+            new Entry("ai:memory", "Manage personal AI memory"));
 
     private PermissionCatalog() {}
 
