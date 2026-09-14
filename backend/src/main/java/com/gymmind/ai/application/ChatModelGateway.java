@@ -1,0 +1,1 @@
+package com.gymmind.ai.application; import java.util.List; import com.gymmind.ai.domain.ContextSegment; public interface ChatModelGateway { String complete(String prompt,List<ContextSegment> context); }
