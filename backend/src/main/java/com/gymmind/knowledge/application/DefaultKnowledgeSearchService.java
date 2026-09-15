@@ -1,9 +1,9 @@
 package com.gymmind.knowledge.application;
-import com.gymmind.ai.domain.*; import com.gymmind.knowledge.infrastructure.search.*; import com.gymmind.shared.error.*; import com.gymmind.shared.security.CurrentActor; import java.util.*; import org.springframework.stereotype.Service;
+import com.gymmind.ai.domain.*; import com.gymmind.knowledge.infrastructure.search.*; import com.gymmind.shared.error.*; import com.gymmind.shared.security.CurrentActor; import java.util.*; import org.springframework.stereotype.Service; import org.springframework.beans.factory.annotation.Autowired;
 @Service public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
  private final KeywordIndexPort keyword; private final VectorIndexPort vector; private final EmbeddingGateway embedding; private final RerankGateway rerank;
  public DefaultKnowledgeSearchService(KeywordIndexPort k,VectorIndexPort v,EmbeddingGateway e){this(k,v,e,null);}
- public DefaultKnowledgeSearchService(KeywordIndexPort k,VectorIndexPort v,EmbeddingGateway e,RerankGateway r){keyword=k;vector=v;embedding=e;rerank=r;}
+ @Autowired public DefaultKnowledgeSearchService(KeywordIndexPort k,VectorIndexPort v,EmbeddingGateway e,RerankGateway r){keyword=k;vector=v;embedding=e;rerank=r;}
  public List<ContextSegment> search(CurrentActor a,String q){
   if(a==null||a.tenantId()==null||a.isPlatformAdmin()||!a.hasPermission("knowledge:read"))throw new BusinessException(ErrorCode.FORBIDDEN);
   if(q==null||q.isBlank())throw new BusinessException(ErrorCode.VALIDATION_FAILED);
