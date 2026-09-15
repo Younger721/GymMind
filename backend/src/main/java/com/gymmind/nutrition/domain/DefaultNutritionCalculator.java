@@ -1,5 +1,8 @@
 package com.gymmind.nutrition.domain;
 
+import org.springframework.stereotype.Component;
+
+@Component
 public class DefaultNutritionCalculator implements NutritionCalculator {
     @Override public double calculateBmi(double weightKg, double heightCm) {
         if (weightKg <= 0 || heightCm <= 0) throw new IllegalArgumentException("Weight and height must be positive");
