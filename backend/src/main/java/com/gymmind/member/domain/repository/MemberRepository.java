@@ -12,6 +12,7 @@ public interface MemberRepository {
     Optional<Member> findByTenantIdAndMemberNumber(Long tenantId, String memberNumber);
     boolean existsByTenantIdAndPhone(Long tenantId, String phone);
     Page<Member> findAllByTenantId(Long tenantId, Pageable pageable);
+    Page<Member> searchByTenantId(Long tenantId, String query, Pageable pageable);
     long countByTenantId(Long tenantId);
     long countByTenantIdAndStatus(Long tenantId, com.gymmind.member.domain.model.MemberStatus status);
 }

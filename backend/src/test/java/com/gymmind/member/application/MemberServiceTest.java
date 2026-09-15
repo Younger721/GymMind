@@ -11,6 +11,8 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,6 +61,20 @@ class MemberServiceTest {
 
         assertThat(member.getStatus()).isEqualTo(MemberStatus.SUSPENDED);
         verify(repository).findByTenantIdAndId(11L, 5L);
+    }
+
+    @Test
+    void listSearchUsesActorTenantAndMapsPage() {
+        MemberRepository repository = mock(MemberRepository.class);
+        Member member = Member.create(11L, 21L, "M-001", "Alice", "13800000000");
+        when(repository.searchByTenantId(11L, "Ali", Pageable.ofSize(20)))
+                .thenReturn(new PageImpl<>(java.util.List.of(member), Pageable.ofSize(20), 1));
+        DefaultMemberService service = new DefaultMemberService(repository, mock(AuditRecorder.class));
+
+        var page = service.list(admin(11L), "Ali", Pageable.ofSize(20));
+
+        assertThat(page.content()).extracting(MemberView::fullName).containsExactly("Alice");
+        verify(repository).searchByTenantId(11L, "Ali", Pageable.ofSize(20));
     }
 
     private static CurrentActor admin(long tenantId) {

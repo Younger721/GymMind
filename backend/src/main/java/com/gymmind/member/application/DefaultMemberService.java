@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.Objects;
+import org.springframework.data.domain.Pageable;
+import com.gymmind.shared.api.PageResponse;
 
 @Service
 public class DefaultMemberService implements MemberService {
@@ -77,6 +79,17 @@ public class DefaultMemberService implements MemberService {
         member.suspend();
         members.save(member);
         audit.record(new AuditEvent("MEMBER_SUSPENDED", "MEMBER", memberId, AuditResult.SUCCESS, "member-service", Map.of()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<MemberView> list(CurrentActor actor, String query, Pageable pageable) {
+        requireAdmin(actor, "member:read");
+        Pageable effective = pageable == null ? Pageable.ofSize(20) : pageable;
+        var page = (query == null || query.isBlank())
+                ? members.findAllByTenantId(actor.tenantId(), effective)
+                : members.searchByTenantId(actor.tenantId(), query.trim(), effective);
+        return new PageResponse<>(page.map(DefaultMemberService::view).getContent(), page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
     private Member findTenant(CurrentActor actor, Long id) { return members.findByTenantIdAndId(actor.tenantId(), id).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)); }

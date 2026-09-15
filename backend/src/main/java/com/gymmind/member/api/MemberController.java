@@ -12,6 +12,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import com.gymmind.shared.api.PageResponse;
+import org.springframework.data.domain.Pageable;
 
 @RestController
 @RequestMapping("/api/v1/members")
@@ -37,6 +39,11 @@ public class MemberController {
 
     @GetMapping("/me")
     public ApiResponse<MemberView> me() { return ApiResponse.success(service.findSelf(actors.requireCurrent())); }
+
+    @GetMapping
+    public ApiResponse<PageResponse<MemberView>> list(@RequestParam(required = false) String q, Pageable pageable) {
+        return ApiResponse.success(service.list(actors.requireCurrent(), q, pageable));
+    }
 
     @PatchMapping("/{memberId}")
     public ApiResponse<Void> update(@PathVariable Long memberId, @Valid @RequestBody UpdateRequest request) {
