@@ -5,6 +5,7 @@ import com.gymmind.knowledge.infrastructure.parser.Chunk;
 import com.gymmind.knowledge.infrastructure.parser.DeterministicChunker;
 import com.gymmind.knowledge.infrastructure.parser.DocumentParserRegistry;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /** Parses a stored document and publishes one tenant-scoped generation to ES and Milvus. */
@@ -15,6 +16,7 @@ public class KnowledgeIndexingService {
     private final DocumentParserRegistry parser;
     private final DeterministicChunker chunker;
 
+    @Autowired
     public KnowledgeIndexingService(IndexGenerationService index, EmbeddingGateway embedding) {
         this(index, embedding, DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180));
     }
