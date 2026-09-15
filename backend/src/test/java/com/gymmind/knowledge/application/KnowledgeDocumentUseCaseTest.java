@@ -46,6 +46,15 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
+    void listRequiresReadPermissionAndReturnsTenantDocuments() {
+        useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
+        var reader = new CurrentActor(12L, 7L, Set.of(RoleCode.MEMBER), Set.of("knowledge:read"), 0, "t2");
+        assertThat(useCase.list(reader)).hasSize(1);
+        assertThatThrownBy(() -> useCase.list(otherTenant)).isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
     void uploadRejectsOversizedAndInvalidMagicContent() {
         byte[] oversized = new byte[KnowledgeDocumentValidator.MAX_BYTES + 1];
         assertThatThrownBy(() -> useCase.upload(admin,
@@ -79,5 +88,6 @@ class KnowledgeDocumentUseCaseTest {
         private final java.util.Map<Long, KnowledgeDocument> values = new java.util.HashMap<>();
         public KnowledgeDocument save(KnowledgeDocument document) { if (document.id() == null) document.assignId(++sequence); values.put(document.id(), document); return document; }
         public Optional<KnowledgeDocument> findByTenantIdAndId(Long tenantId, Long id) { return Optional.ofNullable(values.get(id)).filter(d -> tenantId.equals(d.tenantId())); }
+        public List<KnowledgeDocument> findByTenantId(Long tenantId) { return values.values().stream().filter(d -> tenantId.equals(d.tenantId())).toList(); }
     }
 }

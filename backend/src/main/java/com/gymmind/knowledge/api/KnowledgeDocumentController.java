@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/knowledge/documents")
@@ -34,6 +35,11 @@ public class KnowledgeDocumentController {
         return ApiResponse.success(useCase.upload(actors.requireCurrent(),
                 new UploadKnowledgeDocumentCommand(file.getOriginalFilename(), file.getContentType(),
                         file.getBytes(), visibility)));
+    }
+
+    @GetMapping
+    public ApiResponse<List<KnowledgeDocumentView>> list() {
+        return ApiResponse.success(useCase.list(actors.requireCurrent()));
     }
 
     @PostMapping("/{id}/reindex")
