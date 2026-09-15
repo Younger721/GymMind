@@ -92,6 +92,8 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         link(RoleCode.GYM_ADMIN, "ai:plan");
         link(RoleCode.COACH, "ai:plan");
         link(RoleCode.MEMBER, "ai:plan");
+        link(RoleCode.GYM_ADMIN, "ai:analysis");
+        link(RoleCode.COACH, "ai:analysis");
         link(RoleCode.GYM_ADMIN, "analytics:read");
         link(RoleCode.GYM_ADMIN, "knowledge:read");
         link(RoleCode.COACH, "knowledge:read");

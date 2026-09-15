@@ -42,6 +42,7 @@ public final class PermissionCatalog {
             new Entry("audit:read", "Read audit records"),
             new Entry("knowledge:write", "Manage knowledge documents"),
             new Entry("ai:plan", "Generate workout plan drafts"),
+            new Entry("ai:analysis", "Use AI member and operation analysis"),
             new Entry("analytics:read", "Read operational analytics"),
             new Entry("knowledge:read", "Search knowledge documents"));
 
