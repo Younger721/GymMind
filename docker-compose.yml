@@ -35,7 +35,7 @@ services:
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "${ES_HOST_PORT:-9200}:9200"
+      - "${ES_HOST_PORT:-9202}:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
 

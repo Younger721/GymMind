@@ -11,7 +11,7 @@ import java.util.*;
 @ConditionalOnProperty(name="gymmind.search.keyword-backend", havingValue="elasticsearch")
 public class ElasticsearchKeywordIndex implements KeywordIndexPort {
     private final RestClient client; private final String index; private final ObjectMapper mapper=new ObjectMapper(); private volatile boolean indexReady;
-    public ElasticsearchKeywordIndex(RestClient.Builder b){client=b.baseUrl(Optional.ofNullable(System.getenv("GYMMIND_ES_URL")).orElse("http://localhost:9200")).build();index=Optional.ofNullable(System.getenv("GYMMIND_ES_INDEX")).orElse("gymmind-knowledge");}
+    public ElasticsearchKeywordIndex(RestClient.Builder b){client=b.baseUrl(Optional.ofNullable(System.getenv("GYMMIND_ES_URL")).orElse("http://localhost:9202")).build();index=Optional.ofNullable(System.getenv("GYMMIND_ES_INDEX")).orElse("gymmind-knowledge");}
     public static Map<String,Object> indexBody(){return Map.of("settings",Map.of("analysis",Map.of("analyzer",Map.of("gymmind_smartcn",Map.of("type","custom","tokenizer","smartcn_tokenizer")))),"mappings",Map.of("properties",Map.of("tenantId",Map.of("type","long"),"ownerUserId",Map.of("type","long"),"text",Map.of("type","text","analyzer","gymmind_smartcn"))));}
     public static Map<String,Object> documentBody(IndexedChunk c){var m=new HashMap<String,Object>();m.put("tenantId",c.tenantId());m.put("text",c.text());if(c.ownerUserId()!=null)m.put("ownerUserId",c.ownerUserId());return m;}
     private void ensureIndex(){if(indexReady)return;synchronized(this){if(indexReady)return;boolean exists=client.head().uri("/"+index).exchange((request,response)->response.getStatusCode().is2xxSuccessful());if(!exists)client.put().uri("/"+index).body(indexBody()).retrieve().toBodilessEntity();indexReady=true;}}
