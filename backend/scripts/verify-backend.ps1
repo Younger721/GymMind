@@ -11,7 +11,15 @@ $javaHome = $env:JAVA_HOME
 if ([string]::IsNullOrWhiteSpace($javaHome) -or -not (Test-Path (Join-Path $javaHome "bin\java.exe"))) {
     throw "JAVA_HOME must point to a Java 17 installation"
 }
-$javaVersion = (& (Join-Path $javaHome "bin\java.exe") -version 2>&1 | Out-String)
+$previousErrorActionPreference = $ErrorActionPreference
+try {
+    # java -version writes to stderr; avoid PowerShell treating that informational
+    # stream as a terminating NativeCommandError under ErrorActionPreference=Stop.
+    $ErrorActionPreference = "Continue"
+    $javaVersion = (& (Join-Path $javaHome "bin\java.exe") -version 2>&1 | Out-String)
+} finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+}
 if ($javaVersion -notmatch 'version "17\.') {
     throw "Java 17 is required. Detected: $javaVersion"
 }
