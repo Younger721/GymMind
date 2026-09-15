@@ -29,7 +29,7 @@ public class BailianChatAdapter implements ChatModelGateway {
         requestFactory.setReadTimeout(Duration.ofSeconds(30));
         this.client = builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
         this.apiKey = env("DASHSCOPE_API_KEY", "");
-        this.model = env("DASHSCOPE_CHAT_MODEL", "qwen-plus");
+        this.model = env("DASHSCOPE_CHAT_MODEL", "qwen3.7-plus");
         this.retrier = new BailianCallRetrier(3, BailianChatAdapter::sleep);
     }
 
