@@ -25,9 +25,19 @@ if ($javaVersion -notmatch 'version "17\.') {
 }
 
 Push-Location (Join-Path $PSScriptRoot "..")
+$appProcess = $null
 try {
     & .\mvnw.cmd -q clean verify -DskipITs
     if ($LASTEXITCODE -ne 0) { throw "Maven verification failed with exit code $LASTEXITCODE" }
+
+    $jar = Join-Path (Get-Location) "target\gymmind-backend-0.0.1-SNAPSHOT.jar"
+    if (-not (Test-Path $jar)) { throw "Backend jar not found: $jar" }
+    $log = Join-Path (Get-Location) "target\verify-backend.log"
+    $errorLog = Join-Path (Get-Location) "target\verify-backend-error.log"
+    Remove-Item $log,$errorLog -Force -ErrorAction SilentlyContinue
+    $appProcess = Start-Process -FilePath (Join-Path $javaHome "bin\java.exe") `
+        -ArgumentList @("-jar", $jar) -WorkingDirectory (Get-Location) `
+        -RedirectStandardOutput $log -RedirectStandardError $errorLog -PassThru
 } finally { Pop-Location }
 
 $health = "$BaseUrl/actuator/health"
@@ -36,10 +46,18 @@ do {
     try {
         $response = Invoke-RestMethod -Uri $health -Method Get -TimeoutSec 3
         if ($response.status -eq "UP") {
+            if ($appProcess -and -not $appProcess.HasExited) {
+                $appProcess | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
             Write-Output "GymMind backend health: UP"
             exit 0
         }
     } catch { }
     Start-Sleep -Seconds 2
 } while ((Get-Date) -lt $deadline)
-throw "GymMind backend health check timed out: $health"
+if ($appProcess -and -not $appProcess.HasExited) {
+    $appProcess | Stop-Process -Force -ErrorAction SilentlyContinue
+}
+$detail = if (Test-Path $log) { (Get-Content $log -Tail 40 | Out-String) } else { "no startup log" }
+$detail += if (Test-Path $errorLog) { "`n" + (Get-Content $errorLog -Tail 40 | Out-String) } else { "" }
+throw "GymMind backend health check timed out: $health`n$detail"
