@@ -3,6 +3,7 @@ package com.gymmind.knowledge.infrastructure.storage;
 import com.gymmind.knowledge.application.KnowledgeObjectStore;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.GetObjectArgs;
 import io.minio.RemoveObjectArgs;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,11 @@ public class MinioKnowledgeObjectStore implements KnowledgeObjectStore {
         try { client.putObject(PutObjectArgs.builder().bucket(bucket).object(key).contentType(contentType)
                 .stream(new ByteArrayInputStream(content), content.length, -1).build()); }
         catch (Exception e) { throw new IllegalStateException("object storage put failed", e); }
+    }
+    public byte[] read(String key) {
+        try (var stream = client.getObject(GetObjectArgs.builder().bucket(bucket).object(key).build())) {
+            return stream.readAllBytes();
+        } catch (Exception e) { throw new IllegalStateException("object storage read failed", e); }
     }
     public void delete(String key) {
         try { client.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(key).build()); }
