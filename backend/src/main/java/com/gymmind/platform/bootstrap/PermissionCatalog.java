@@ -36,7 +36,11 @@ public final class PermissionCatalog {
             new Entry("nutrition:read", "Read nutrition data"),
             new Entry("nutrition:write", "Manage nutrition data"),
             new Entry("ai:chat", "Use the AI assistant"),
-            new Entry("ai:memory", "Manage personal AI memory"));
+            new Entry("ai:memory", "Manage personal AI memory"),
+            new Entry("ai:recommend", "Use personalized recommendations"),
+            new Entry("ai:report", "View AI generated reports"),
+            new Entry("audit:read", "Read audit records"),
+            new Entry("knowledge:write", "Manage knowledge documents"));
 
     private PermissionCatalog() {}
 

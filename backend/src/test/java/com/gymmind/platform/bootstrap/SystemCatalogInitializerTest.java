@@ -14,8 +14,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class SystemCatalogInitializerTest {
+
+    @Test
+    void catalogContainsPermissionsUsedByTenantScopedAiAndAuditApis() {
+        assertThat(PermissionCatalog.entries()).extracting(PermissionCatalog.Entry::code)
+                .contains("ai:recommend", "ai:report", "audit:read", "knowledge:write");
+    }
 
     @Test
     void initializationLinksPlatformAndGymAdminPermissionsIdempotently() {
@@ -39,6 +46,6 @@ class SystemCatalogInitializerTest {
 
         new SystemCatalogInitializer(roles, permissions, lock, links).run();
 
-        verify(links, org.mockito.Mockito.times(35)).save(any());
+        verify(links, org.mockito.Mockito.times(43)).save(any());
     }
 }
