@@ -89,6 +89,13 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         link(RoleCode.COACH, "ai:recommend");
         link(RoleCode.MEMBER, "ai:recommend");
         link(RoleCode.MEMBER, "ai:report");
+        link(RoleCode.GYM_ADMIN, "ai:plan");
+        link(RoleCode.COACH, "ai:plan");
+        link(RoleCode.MEMBER, "ai:plan");
+        link(RoleCode.GYM_ADMIN, "analytics:read");
+        link(RoleCode.GYM_ADMIN, "knowledge:read");
+        link(RoleCode.COACH, "knowledge:read");
+        link(RoleCode.MEMBER, "knowledge:read");
     }
 
     private void link(RoleCode roleCode, String permissionCode) {

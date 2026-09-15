@@ -40,7 +40,10 @@ public final class PermissionCatalog {
             new Entry("ai:recommend", "Use personalized recommendations"),
             new Entry("ai:report", "View AI generated reports"),
             new Entry("audit:read", "Read audit records"),
-            new Entry("knowledge:write", "Manage knowledge documents"));
+            new Entry("knowledge:write", "Manage knowledge documents"),
+            new Entry("ai:plan", "Generate workout plan drafts"),
+            new Entry("analytics:read", "Read operational analytics"),
+            new Entry("knowledge:read", "Search knowledge documents"));
 
     private PermissionCatalog() {}
 
