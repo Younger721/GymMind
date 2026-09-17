@@ -21,84 +21,39 @@ const router = createRouter({
       component: () => import('@/layouts/MainLayout.vue'),
       meta: { requiresAuth: true },
       children: [
-        {
-          path: '',
-          redirect: '/dashboard'
-        },
-        {
-          path: 'dashboard',
-          name: 'dashboard',
-          component: () => import('@/views/DashboardView.vue')
-        },
-        {
-          path: 'assistant',
-          name: 'assistant',
-          component: () => import('@/views/AssistantView.vue')
-        },
-        {
-          path: 'knowledge',
-          name: 'knowledge',
-          component: () => import('@/views/KnowledgeView.vue')
-        },
-        {
-          path: 'search',
-          name: 'search',
-          component: () => import('@/views/SearchView.vue')
-        },
-        {
-          path: 'workout',
-          name: 'workout',
-          component: () => import('@/views/WorkoutView.vue')
-        },
-        {
-          path: 'nutrition',
-          name: 'nutrition',
-          component: () => import('@/views/NutritionView.vue')
-        },
-        {
-          path: 'progress',
-          name: 'progress',
-          component: () => import('@/views/ProgressView.vue')
-        },
-        {
-          path: 'report',
-          name: 'report',
-          component: () => import('@/views/ReportView.vue')
-        },
-        {
-          path: 'profile',
-          name: 'profile',
-          component: () => import('@/views/ProfileView.vue')
-        },
-        {
-          path: 'plan-generator',
-          name: 'plan-generator',
-          component: () => import('@/views/PlanGeneratorView.vue')
-        },
-        {
-          path: 'social',
-          name: 'social',
-          component: () => import('@/views/SocialView.vue')
-        },
-        {
-          path: 'challenges',
-          name: 'challenges',
-          component: () => import('@/views/ChallengeView.vue')
-        },
-        {
-          path: 'exercise-library',
-          name: 'exercise-library',
-          component: () => import('@/views/ExerciseLibraryView.vue')
-        }
+        { path: '', redirect: '/dashboard' },
+        { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
+        { path: 'assistant', name: 'assistant', component: () => import('@/views/AssistantView.vue') },
+        { path: 'knowledge', name: 'knowledge', component: () => import('@/views/KnowledgeView.vue') },
+        { path: 'plan', name: 'plan', component: () => import('@/views/PlanGeneratorView.vue') },
+        { path: 'agents/manage', name: 'agent-manage', component: () => import('@/views/AgentManageView.vue') },
+        { path: 'ai-tools', name: 'ai-tools', component: () => import('@/views/business/AiToolsView.vue') },
+        { path: 'operations', name: 'operations', component: () => import('@/views/business/OperationsView.vue') },
+        { path: 'membership', name: 'membership', component: () => import('@/views/business/MembershipManageView.vue') },
+        { path: 'training', name: 'training', component: () => import('@/views/business/TrainingView.vue') },
+        { path: 'analytics', name: 'analytics', component: () => import('@/views/business/AnalyticsHubView.vue') },
+        { path: 'search', name: 'search', component: () => import('@/views/business/SearchToolsView.vue') },
+        { path: 'admin', name: 'admin', component: () => import('@/views/business/AdminView.vue') },
+        { path: 'tenant-settings', name: 'tenant-settings', component: () => import('@/views/business/TenantSettingsView.vue') },
+        { path: 'platform', name: 'platform', component: () => import('@/views/business/PlatformView.vue') },
+        { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue') },
+        { path: 'plan-generator', redirect: '/plan' },
+        { path: 'members', redirect: '/operations' },
+        { path: 'courses', redirect: '/operations' },
+        { path: 'bookings', redirect: '/operations' },
+        { path: 'exercises', redirect: '/training' },
+        { path: 'workouts', redirect: '/training' },
+        { path: 'nutrition', redirect: '/training' },
+        { path: 'reports', redirect: '/analytics' },
+        { path: ':pathMatch(.*)*', redirect: '/dashboard' }
       ]
     }
   ]
 })
 
-// Navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+  const requiresAuth = to.matched.some(r => r.meta.requiresAuth)
 
   if (requiresAuth && !authStore.isAuthenticated) {
     next('/login')

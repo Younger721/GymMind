@@ -1,0 +1,21 @@
+# Docker 基础设施 profile：配合 start-infrastructure.bat 使用
+# 激活方式：SPRING_PROFILES_ACTIVE=dev,docker
+spring:
+  config:
+    activate:
+      on-profile: docker
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_HOST_PORT:6379}
+
+gymmind:
+  # 会话 Redis 命名空间只用单段环境名，不能直接用 dev,docker
+  environment: dev
+  search:
+    keyword-backend: ${GYMMIND_SEARCH_KEYWORD_BACKEND:elasticsearch}
+    vector-backend: ${GYMMIND_SEARCH_VECTOR_BACKEND:milvus}
+    elasticsearch-url: ${GYMMIND_ES_URL:http://localhost:9202}
+    milvus-url: ${GYMMIND_MILVUS_URL:http://localhost:19530}
+  object-store: ${GYMMIND_OBJECT_STORE:minio}
+  # MinIO 细项通过环境变量注入（见 .env 中 GYMMIND_OBJECT_STORE_MINIO_*）

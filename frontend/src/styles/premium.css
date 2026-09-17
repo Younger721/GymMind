@@ -1,0 +1,216 @@
+/* GymMind Premium Design System
+   Warm, earthy, editorial — never cold blue */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  /* Warm earthy palette */
+  --bg-cream: #F7F4EF;
+  --surface-warm: #FBF9F5;
+  --surface-white: #FFFFFF;
+  --border-hairline: #E7E1D7;
+
+  /* Ink — never pure black */
+  --ink: #1F2421;
+  --ink-muted: #5C635D;
+  --ink-tertiary: #878C87;
+
+  /* Terracotta accent — used decisively */
+  --terracotta: #C4612F;
+  --terracotta-hover: #A94E22;
+  --terracotta-tint: #F2E3D6;
+
+  /* Typography — editorial serif + humanist sans */
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-sans: 'Inter', -apple-system, system-ui, sans-serif;
+
+  /* Font weights */
+  --fw-light: 300;
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* Spacing */
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius — fully rounded pills */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Shadows — gentle, warm-tinted */
+  --shadow-sm: 0 1px 3px rgba(31, 36, 33, 0.08);
+  --shadow-md: 0 4px 12px rgba(31, 36, 33, 0.10);
+  --shadow-lg: 0 8px 24px rgba(31, 36, 33, 0.12);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition: 220ms var(--ease-out);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: var(--fw-normal);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-cream);
+}
+
+/* Typography */
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  font-weight: var(--fw-normal);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+h1 { font-size: 3rem; }
+h2 { font-size: 2.25rem; }
+h3 { font-size: 1.75rem; }
+
+/* Selection */
+::selection {
+  background: var(--terracotta-tint);
+  color: var(--ink);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-cream);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-hairline);
+  border-radius: var(--radius-pill);
+  border: 3px solid var(--bg-cream);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-tertiary);
+}
+
+/* Focus states */
+:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 3px;
+}
+
+/* Buttons — fully rounded pills */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem;
+  font-weight: var(--fw-medium);
+  border-radius: var(--radius-pill);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: var(--terracotta);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--terracotta-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Input fields */
+input, textarea, select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: var(--fw-normal);
+  color: var(--ink);
+  background: var(--surface-white);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+
+input::placeholder {
+  color: var(--ink-tertiary);
+}
+
+input:hover {
+  border-color: var(--ink-muted);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--terracotta);
+  box-shadow: 0 0 0 3px var(--terracotta-tint);
+}
+
+/* Cards */
+.card {
+  background: var(--surface-white);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  transition: all var(--transition);
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Utility classes */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.text-muted {
+  color: var(--ink-muted);
+}
+
+.text-tertiary {
+  color: var(--ink-tertiary);
+}

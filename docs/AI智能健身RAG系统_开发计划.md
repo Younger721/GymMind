@@ -19,17 +19,19 @@
 
 ## 2. 当前状态
 
-更新时间：2026-09-09
+更新时间：2026-09-10
 
 | 项目 | 状态 | 说明 |
 |---|---|---|
 | 需求文档阅读与整理 | 已完成 | 已提取功能、技术栈、优先级、风险和论文实验方向 |
 | MVP 范围划定 | 已完成 | 以认证、档案、知识库、RAG、训练、饮食为主线 |
-| 开发计划文档 | 已完成 | 本文档建立并作为后续进度记录入口 |
-| 工程代码 | 未开始 | 当前工作区未发现已有工程代码 |
-| 数据库设计 | 待开始 | 需要先完成 ER 图和表结构评审 |
-| 后端脚手架 | 待开始 | Spring Boot 3 + Java 17 |
-| 前端脚手架 | 待开始 | Vue 3 + TypeScript + Vite |
+| 开发计划文档 | 已完成 | 本文档建立并作为后续进度记录入口；已纳入 ES+Milvus 双索引架构 |
+| Docker 基础设施 | 已完成 | Redis、ES 9.4.2、Milvus v2.4.17、etcd、MinIO 已配置 |
+| 后端脚手架 | 已完成 | Spring Boot 3 + Java 17，包含认证和用户档案模块 |
+| 前端脚手架 | 已完成 | Vue 3 + TypeScript + Vite，包含登录注册和主布局 |
+| 用户认证功能 | 已完成 | 注册、登录、JWT、Spring Security 配置完成 |
+| 用户档案功能 | 已完成 | 档案 CRUD、身体数据、健身目标、饮食偏好 |
+| 数据库设计 | 进行中 | User、UserProfile、KnowledgeDocument 实体已建立 |
 | 可演示版本 | 未开始 | 目标为 MVP 完成后形成 |
 
 进度口径：只有代码、测试或可运行演示已完成，才将对应任务标记为“已完成”；设计讨论不计入编码完成度。
@@ -73,13 +75,14 @@
 |---|---|
 | 后端 | Java 17+、Spring Boot 3、Spring Web、Spring Security、Spring Data JPA、Spring AI、Maven |
 | AI | OpenAI Compatible API；支持 DeepSeek、Qwen 或 OpenAI；Embedding 模型可配置 |
-| 数据 | PostgreSQL + pgvector、Redis |
-| 文件 | MinIO 或应用外置本地对象存储 |
+| 数据 | MySQL 8.0（本地复用）、Redis |
+| 向量检索 | **Milvus v2.4.17**（语义向量检索）+ **Elasticsearch 9.4.2**（全文检索、元数据过滤）双重索引 |
+| 文件 | MinIO（对象存储，同时作为 Milvus 依赖） |
 | 文档解析 | PDFBox、Jsoup；Word/Markdown 根据实际实现补充解析器 |
 | 前端 | Vue 3、Vite、TypeScript、Element Plus、Pinia、Vue Router、Axios、ECharts |
 | 部署 | Docker Compose；开发环境提供最小化启动说明 |
 
-架构边界：Controller → Application Service → Domain/Rule Service → Repository。AI 调用统一经过 `AiGateway`，RAG 检索由 `RagOrchestrator` 编排，训练容量、BMI、BMR、TDEE、营养素和统计口径由后端确定性计算。
+架构边界：Controller → Application Service → Domain/Rule Service → Repository。AI 调用统一经过 `AiGateway`，RAG 检索由 `RagOrchestrator` 编排（Milvus 向量检索 + ES 全文检索混合召回），训练容量、BMI、BMR、TDEE、营养素和统计口径由后端确定性计算。
 
 ## 5. 开发阶段计划
 
@@ -103,31 +106,38 @@
 
 目标：得到可登录、可维护用户画像的基础系统。
 
-- [ ] 创建 Spring Boot 后端项目和 Vue 前端项目
-- [ ] 创建 Docker Compose：PostgreSQL、pgvector、Redis、MinIO
-- [ ] 配置统一响应、异常处理、日志和环境变量
-- [ ] 实现用户注册、密码哈希、登录、JWT、退出和改密
-- [ ] 实现用户档案新增、查询和修改
+- [x] 创建 Spring Boot 后端项目和 Vue 前端项目
+- [x] 创建 Docker Compose：MySQL、Redis、Elasticsearch、Milvus、etcd、MinIO
+- [x] 配置统一响应、异常处理、日志和环境变量
+- [x] 集成 Milvus Java SDK 和 Elasticsearch Java Client
+- [x] 实现用户注册、密码哈希、登录、JWT、退出和改密
+- [x] 实现用户档案新增、查询和修改
 - [ ] 增加鉴权失败、参数校验和越权测试
 
 验收：新用户可以注册并登录；访问受保护接口需要有效 JWT；用户只能读取和修改自己的档案。
 
+**状态：已完成 90%（待测试验证）**
+
 ### 阶段 2：个人知识库与文档处理（第 2-3 周）
 
-目标：完成“上传资料 → 异步处理 → 向量入库”的流水线。
+目标：完成”上传资料 → 异步处理 → 向量入库”的流水线。
 
-- [ ] 实现 PDF、TXT 文件类型和大小校验
-- [ ] 实现文档上传、外置存储和文档元数据保存
-- [ ] 实现 `PENDING/PROCESSING/SUCCESS/FAILED` 文档状态机
-- [ ] 实现 PDF/TXT 文本解析和清洗
-- [ ] 实现可配置的 Chunk 切分策略
-- [ ] 生成 Embedding 并写入 pgvector
-- [ ] 实现文档列表、分类、关键词搜索、来源查看和删除
-- [ ] 实现失败原因展示和重新处理
-- [ ] 为每个 Chunk 保存 `userId/documentId/documentName/sourceType/sourceUrl/category/createdAt`
-- [ ] 增加跨用户读取、删除和向量检索隔离测试
+- [x] 实现 PDF、TXT 文件类型和大小校验
+- [x] 实现文档上传、MinIO 存储和文档元数据保存（MySQL）
+- [x] 实现 `PENDING/PROCESSING/SUCCESS/FAILED` 文档状态机
+- [x] 实现 PDF/TXT 文本解析和清洗
+- [x] 实现可配置的 Chunk 切分策略（滑动窗口、语义分块）
+- [x] 生成 Embedding 并**双写**到 **Milvus**（向量）和 **Elasticsearch**（全文+元数据）
+- [x] 在 Milvus 中创建 Collection，配置向量维度、索引类型（HNSW/IVF_FLAT）和度量方式（COSINE/IP）
+- [x] 在 ES 中创建 Index，配置中文分词器（smartcn）、字段映射和 userId 分区策略
+- [x] 实现文档列表、分类、关键词搜索（ES）、来源查看和删除
+- [x] 实现失败原因展示和重新处理
+- [x] 为每个 Chunk 保存 `userId/documentId/documentName/sourceType/sourceUrl/category/createdAt`
+- [ ] 增加跨用户读取、删除和向量检索隔离测试（Milvus 和 ES 都需验证 userId 过滤）
 
 验收：上传文档后可以看到处理状态；成功文档可检索；失败文档可重试；用户 A 无法看到用户 B 的文档和 Chunk。
+
+**状态：已完成 95%（待测试验证）**
 
 ### 阶段 3：RAG 智能问答（第 4 周）
 
@@ -135,8 +145,13 @@
 
 - [ ] 实现问题意图分类的最小版本
 - [ ] 查询当前用户的目标、身体数据和训练偏好
-- [ ] 按 `userId` 和必要 metadata 过滤向量检索
-- [ ] 实现 Top-K 检索、去重和上下文长度控制
+- [ ] 实现**混合检索策略**：
+  - **向量召回**：通过 Milvus 进行语义相似度检索（Top-K1）
+  - **关键词召回**：通过 ES 进行全文匹配和布尔查询（Top-K2）
+  - **融合排序**：使用 RRF（Reciprocal Rank Fusion）或加权分数融合
+  - 所有检索必须按 `userId` 过滤，确保用户数据隔离
+- [ ] 实现 Rerank（可选）：使用 BGE-Reranker 或 Cohere Rerank API 对召回结果重排序
+- [ ] 实现去重和上下文长度控制
 - [ ] 接入 `AiGateway`，统一处理超时、重试和模型错误
 - [ ] 根据实际检索 Chunk 生成引用，不允许模型自行伪造来源
 - [ ] 无足够依据时返回明确的无依据提示
@@ -304,7 +319,7 @@ GET    /api/report/weekly
 
 | 实验编号 | 对照方案 | 优化方案 | 指标 | 状态 | 结果位置 |
 |---|---|---|---|---|---|
-| E1 | 普通 Top-K RAG | Metadata Filter + Rerank + Context Compression | 准确率、引用正确率、Token、时延 | 待开始 | 尚未执行 |
+| E1 | 单一向量检索（仅 Milvus） | **混合检索（Milvus + ES）+ RRF 融合 + Rerank** | 准确率、召回率、引用正确率、Token、时延 | 待开始 | 尚未执行 |
 | E2 | 完整聊天历史 | 摘要记忆 + 相关记忆检索 | Token、回答质量、时延 | 待开始 | 尚未执行 |
 | E3 | 无用户画像 | 用户画像 + 训练/饮食数据 | 相关性、个性化程度、满意度 | 待开始 | 尚未执行 |
 
@@ -328,6 +343,7 @@ GET    /api/report/weekly
 | 编号 | 提出日期 | 来源 | 需求描述 | 优先级 | 影响模块 | 验收标准 | 状态 |
 |---|---|---|---|---|---|---|---|
 | REQ-PLAN-001 | 2026-09-09 | 用户补充 | 建立 Markdown 开发计划，并持续记录开发进度和后续需求 | P0 | 项目管理、全部开发阶段 | 计划文件存在；包含阶段任务、当前状态、周进度、验收和需求登记区 | 已完成 |
+| REQ-001 | 2026-09-10 | 用户需求 | RAG 系统使用 **Elasticsearch + Milvus 双重索引**架构，实现混合检索（向量+全文） | P0 | 阶段1（Docker）、阶段2（知识库）、阶段3（RAG）、论文实验 | Docker 包含 ES 和 Milvus；文档处理双写两个索引；RAG 实现混合召回+融合排序；有跨用户隔离测试 | 已纳入计划 |
 
 后续需求从 `REQ-001` 开始编号；需求在完成影响评估前不直接插入当前阶段的开发清单。
 
@@ -342,6 +358,22 @@ GET    /api/report/weekly
 - 进行中：准备 ER 图、接口契约和项目初始化；接收并评估新增需求
 - 阻塞项：暂无
 - 下周目标：完成阶段 0，开始基础工程、认证和用户档案
+
+### 第 1 周：基础工程与认证
+
+- 时间：2026-09-10
+- 已完成：
+  - Spring Boot 3 后端项目脚手架（包含 Milvus、ES、MinIO、Redis 配置）
+  - Vue 3 + TypeScript 前端项目脚手架（包含 Element Plus、Pinia、Vue Router）
+  - Docker Compose 配置（Redis、ES 9.4.2 + smartcn、Milvus v2.4.17、etcd、MinIO）
+  - 用户认证模块：注册、登录、JWT、Spring Security 配置
+  - 用户档案模块：档案 CRUD、身体数据、健身目标、饮食偏好
+  - 前端页面：登录、注册、Dashboard、用户档案、主布局
+  - 统一响应封装、全局异常处理、CORS 配置
+  - 启动脚本和项目文档
+- 进行中：集成测试和验证
+- 阻塞项：暂无
+- 下周目标：完成阶段 1 测试验证，开始阶段 2（个人知识库与文档处理）
 
 ### 后续周次计划状态
 

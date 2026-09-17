@@ -1,8 +1,107 @@
 package com.gymmind.course.application;
-import com.gymmind.audit.application.AuditRecorder; import com.gymmind.audit.domain.*; import com.gymmind.coach.domain.repository.CoachRepository; import com.gymmind.course.domain.model.Course; import com.gymmind.course.domain.repository.CourseRepository; import com.gymmind.iam.domain.model.RoleCode; import com.gymmind.shared.error.*; import com.gymmind.shared.security.CurrentActor; import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional; import java.time.Instant; import java.util.Map;
-@Service public class DefaultCourseService implements CourseService { private final CourseRepository courses; private final CoachRepository coaches; private final AuditRecorder audit; public DefaultCourseService(CourseRepository courses,CoachRepository coaches,AuditRecorder audit){this.courses=courses;this.coaches=coaches;this.audit=audit;}
- @Override @Transactional public CourseView create(CurrentActor actor,CreateCourseCommand c){require(actor,"course:write"); if(c==null||c.tenantId()!=null&&!actor.tenantId().equals(c.tenantId()))throw new BusinessException(ErrorCode.FORBIDDEN); coaches.findByTenantIdAndId(actor.tenantId(),c.coachId()).orElseThrow(()->new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)); Course saved=courses.save(Course.create(actor.tenantId(),c.coachId(),c.title(),c.type(),c.startsAt(),c.endsAt(),c.capacity(),c.location())); audit.record(new AuditEvent("COURSE_CREATED","COURSE",saved.getId(),AuditResult.SUCCESS,"course-service",Map.of())); return view(saved); }
- @Override @Transactional public void update(CurrentActor actor,Long id,String title,String type,Instant s,Instant e,int cap,String loc){require(actor,"course:write"); Course c=find(actor,id); try{c.update(title,type,s,e,cap,loc);}catch(IllegalStateException ex){throw new BusinessException(ErrorCode.CONFLICT);}catch(IllegalArgumentException ex){throw new BusinessException(ErrorCode.VALIDATION_FAILED);} courses.save(c); audit.record(new AuditEvent("COURSE_UPDATED","COURSE",id,AuditResult.SUCCESS,"course-service",Map.of()));}
- @Override @Transactional public void cancel(CurrentActor actor,Long id){require(actor,"course:write"); Course c=find(actor,id); c.cancel(); courses.save(c); audit.record(new AuditEvent("COURSE_CANCELLED","COURSE",id,AuditResult.SUCCESS,"course-service",Map.of()));}
- private Course find(CurrentActor a,Long id){return courses.findByTenantIdAndId(a.tenantId(),id).orElseThrow(()->new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));} private static void require(CurrentActor a,String p){if(a==null||a.tenantId()==null||!a.roles().contains(RoleCode.GYM_ADMIN)||!a.hasPermission(p))throw new BusinessException(ErrorCode.FORBIDDEN);} private static CourseView view(Course c){return new CourseView(c.getId(),c.getTenantId(),c.getCoachId(),c.getTitle(),c.getType(),c.getStartsAt(),c.getEndsAt(),c.getCapacity(),c.getReservedCount(),c.getLocation(),c.getStatus());}
+
+import com.gymmind.audit.application.AuditRecorder;
+import com.gymmind.audit.domain.AuditEvent;
+import com.gymmind.audit.domain.AuditResult;
+import com.gymmind.coach.domain.repository.CoachRepository;
+import com.gymmind.course.domain.model.Course;
+import com.gymmind.course.domain.repository.CourseRepository;
+import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.CurrentActor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class DefaultCourseService implements CourseService {
+
+    private final CourseRepository courses;
+    private final CoachRepository coaches;
+    private final AuditRecorder audit;
+
+    public DefaultCourseService(CourseRepository courses, CoachRepository coaches, AuditRecorder audit) {
+        this.courses = courses;
+        this.coaches = coaches;
+        this.audit = audit;
+    }
+
+    @Override
+    @Transactional
+    public CourseView create(CurrentActor actor, CreateCourseCommand command) {
+        require(actor, "course:write");
+        if (command == null || command.tenantId() != null && !actor.tenantId().equals(command.tenantId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        coaches.findByTenantIdAndId(actor.tenantId(), command.coachId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        Course saved = courses.save(Course.create(actor.tenantId(), command.coachId(), command.title(),
+                command.type(), command.startsAt(), command.endsAt(), command.capacity(), command.location()));
+        audit.record(new AuditEvent("COURSE_CREATED", "COURSE", saved.getId(), AuditResult.SUCCESS,
+                "course-service", Map.of()));
+        return view(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CourseView find(CurrentActor actor, Long id) {
+        require(actor, "course:read");
+        return view(findCourse(actor, id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CourseView> list(CurrentActor actor) {
+        require(actor, "course:read");
+        return courses.findAllByTenantId(actor.tenantId()).stream().map(DefaultCourseService::view).toList();
+    }
+
+    @Override
+    @Transactional
+    public void update(CurrentActor actor, Long id, String title, String type, Instant startsAt, Instant endsAt,
+                       int capacity, String location) {
+        require(actor, "course:write");
+        Course course = findCourse(actor, id);
+        try {
+            course.update(title, type, startsAt, endsAt, capacity, location);
+        } catch (IllegalStateException ex) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        courses.save(course);
+        audit.record(new AuditEvent("COURSE_UPDATED", "COURSE", id, AuditResult.SUCCESS, "course-service", Map.of()));
+    }
+
+    @Override
+    @Transactional
+    public void cancel(CurrentActor actor, Long id) {
+        require(actor, "course:write");
+        Course course = findCourse(actor, id);
+        course.cancel();
+        courses.save(course);
+        audit.record(new AuditEvent("COURSE_CANCELLED", "COURSE", id, AuditResult.SUCCESS, "course-service", Map.of()));
+    }
+
+    private Course findCourse(CurrentActor actor, Long id) {
+        return courses.findByTenantIdAndId(actor.tenantId(), id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private static void require(CurrentActor actor, String permission) {
+        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
+                || !actor.hasPermission(permission)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private static CourseView view(Course course) {
+        return new CourseView(course.getId(), course.getTenantId(), course.getCoachId(), course.getTitle(),
+                course.getType(), course.getStartsAt(), course.getEndsAt(), course.getCapacity(),
+                course.getReservedCount(), course.getLocation(), course.getStatus());
+    }
 }

@@ -1,27 +1,32 @@
-# GymMind - AI 智能健身 RAG 系统
+# GymMind - AI智能健身 RAG 系统
 
-个性化智能健身 Web 系统，结合用户画像、知识库、训练记录和饮食数据，提供有来源、可解释、可追踪的健身辅助建议。
+AI-Powered Personal Fitness RAG System with Elasticsearch + Milvus dual indexing architecture.
+
+## 项目结构
+
+```
+GymMind/
+├── backend/           # Spring Boot 后端
+├── frontend/          # Vue 3 前端
+├── docker/            # Docker 配置文件
+├── docs/              # 项目文档
+├── sql/               # 数据库脚本
+├── docker-compose.yml # Docker Compose 配置
+└── README.md
+```
 
 ## 技术栈
 
 ### 后端
-- Java 17+
-- Spring Boot 3
-- Spring Security (JWT 认证)
+- Java 17
+- Spring Boot 3.2.5
+- Spring Security + JWT
 - Spring Data JPA
-- Spring AI
-- Maven
-
-### AI & RAG
-- Elasticsearch 9.4.2 (全文搜索 + 中文分词)
-- Milvus v2.4.17 (向量数据库)
-- OpenAI Compatible API (支持 DeepSeek、Qwen、OpenAI)
-
-### 数据存储
-- MySQL 8.0 (关系型数据库)
-- Redis 7 (缓存和会话)
+- MySQL 8.0
+- Redis
+- Elasticsearch 9.4.2 (全文检索)
+- Milvus v2.4.17 (向量检索)
 - MinIO (对象存储)
-- etcd (Milvus 依赖)
 
 ### 前端
 - Vue 3
@@ -29,96 +34,124 @@
 - Vite
 - Element Plus
 - Pinia
-- ECharts
+- Vue Router
+- Axios
 
 ## 快速开始
 
 ### 1. 环境要求
-- JDK 17+
+
+- Java 17+
+- Node.js 18+
 - Maven 3.8+
 - Docker & Docker Compose
-- Node.js 18+ (前端开发)
-- 本地 MySQL 8.0
+- MySQL 8.0 (本地已安装)
 
 ### 2. 配置环境变量
+
+复制 `.env.example` 到 `.env` 并修改配置：
+
 ```bash
 cp .env.example .env
-# 编辑 .env 文件，填入你的配置
 ```
 
-### 3. 启动 Docker 服务
+修改 `.env` 文件中的配置：
+- `MYSQL_PASSWORD`: 你的本地 MySQL 密码
+- `JWT_SECRET`: JWT 密钥（生产环境必须修改）
+- `AI_API_KEY`: AI API 密钥（DeepSeek/OpenAI）
+- `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`: MinIO 访问凭证
+
+### 3. 启动基础设施
+
+使用 Docker Compose 启动 Redis、Elasticsearch、Milvus、etcd 和 MinIO：
+
 ```bash
-# 启动所有服务（Redis、Elasticsearch、etcd、MinIO、Milvus）
 docker-compose up -d
+```
 
-# 查看服务状态
+验证服务状态：
+```bash
 docker-compose ps
-
-# 查看日志
-docker-compose logs -f
 ```
 
-### 4. 初始化本地 MySQL 数据库
+访问服务：
+- Elasticsearch: http://localhost:9200
+- MinIO Console: http://localhost:9001
+- Milvus: localhost:19530
+
+### 4. 初始化数据库
+
+在本地 MySQL 中创建数据库：
+
 ```sql
-CREATE DATABASE IF NOT EXISTS gymmind CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE gymmind CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 5. 启动后端服务
+### 5. 启动后端
+
 ```bash
 cd backend
+mvn clean install
 mvn spring-boot:run
 ```
 
-### 6. 启动前端服务
+后端将在 http://localhost:8080 启动
+
+### 6. 启动前端
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## 服务端口
+前端将在 http://localhost:5173 启动
 
-| 服务 | 端口 | 说明 |
-|------|------|------|
-| 后端 API | 8080 | Spring Boot 应用 |
-| 前端 | 5173 | Vite 开发服务器 |
-| MySQL | 3306 | 本地 MySQL |
-| Redis | 6379 | 缓存 |
-| Elasticsearch | 9200 | 全文搜索 |
-| MinIO API | 9000 | 对象存储 API |
-| MinIO Console | 9001 | MinIO 管理控制台 |
-| Milvus | 19530 | 向量数据库 gRPC |
-| Milvus Metrics | 9091 | Milvus 监控 |
+## API 文档
 
-## Docker 服务说明
+### 认证接口
 
-本项目复用了图书馆管理系统的 Docker 配置：
+- `POST /api/auth/register` - 用户注册
+- `POST /api/auth/login` - 用户登录
+- `POST /api/auth/logout` - 用户登出
 
-- **Redis**: 缓存和会话存储
-- **Elasticsearch**: 全文搜索引擎，预装 analysis-smartcn 中文分词插件
-- **etcd**: Milvus 的依赖服务
-- **MinIO**: S3 兼容的对象存储，用于文档和图片存储，同时作为 Milvus 的依赖
-- **Milvus**: 向量数据库，用于 RAG 向量检索
+### 用户档案接口
 
-详细的 Docker 服务配置说明请参考：`docs/DOCKER复用指南.md`
-
-## 停止服务
-
-```bash
-# 停止所有 Docker 服务
-docker-compose down
-
-# 停止并删除数据卷（慎用，会清空所有数据）
-docker-compose down -v
-```
-
-## 项目文档
-
-- [开发计划](docs/AI智能健身RAG系统_开发计划.md)
-- [Docker 复用指南](docs/DOCKER复用指南.md)
+- `GET /api/user/profile` - 获取用户档案
+- `PUT /api/user/profile` - 更新用户档案
 
 ## 开发进度
 
-当前阶段：**阶段 0 - 需求冻结与设计**
+详见 [开发计划](./docs/AI智能健身RAG系统_开发计划.md)
 
-详细进度请查看：[开发计划](docs/AI智能健身RAG系统_开发计划.md)
+当前阶段：**阶段 1 - 基础工程、认证与用户档案**
+
+已完成：
+- ✅ Spring Boot 后端项目结构
+- ✅ Vue 3 前端项目结构
+- ✅ Docker Compose 配置 (ES + Milvus)
+- ✅ 统一响应、异常处理、日志配置
+- ✅ 用户注册、登录、JWT 鉴权
+- ✅ 用户档案管理
+
+进行中：
+- 🔄 测试与验证
+
+## 项目特色
+
+### 双重索引架构
+
+本项目采用 **Elasticsearch + Milvus 双重索引**架构实现混合检索：
+
+- **Milvus**: 向量检索，语义相似度匹配
+- **Elasticsearch**: 全文检索，关键词匹配和元数据过滤
+- **混合召回**: RRF (Reciprocal Rank Fusion) 融合排序
+- **用户隔离**: 所有检索都严格按 userId 过滤
+
+## 许可证
+
+本项目为毕业设计项目。
+
+## 联系方式
+
+如有问题，请联系项目负责人。

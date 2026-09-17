@@ -1,381 +1,259 @@
 <template>
-  <el-container class="main-layout">
-    <el-aside :width="isCollapsed ? '64px' : '240px'" class="sidebar">
-      <div class="sidebar-header">
-        <router-link to="/dashboard" class="logo-link">
-          <svg class="logo-mark" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-            <rect x="4" y="5" width="6" height="18" rx="1.5" fill="currentColor"/>
-            <rect x="18" y="5" width="6" height="18" rx="1.5" fill="currentColor"/>
-            <rect x="9" y="11" width="10" height="3" rx="1" fill="currentColor"/>
-          </svg>
-          <span v-if="!isCollapsed" class="logo-text">GymMind</span>
+  <div class="shell">
+    <aside class="sidebar">
+      <router-link to="/dashboard" class="brand">GymMind</router-link>
+
+      <nav v-for="group in menuGroups" :key="group.title" class="menu-group">
+        <div class="group-title">{{ group.title }}</div>
+        <router-link
+          v-for="item in group.items"
+          :key="item.path"
+          :to="item.path"
+          class="menu-link"
+          :class="{ active: isActive(item.path) }"
+        >
+          {{ item.label }}
         </router-link>
-      </div>
-
-      <nav class="sidebar-nav" aria-label="主导航">
-        <el-menu
-          :default-active="$route.path"
-          router
-          class="sidebar-menu"
-          :collapse="isCollapsed"
-          background-color="transparent"
-        >
-          <el-menu-item index="/dashboard">
-            <el-icon><HomeFilled /></el-icon>
-            <template #title>仪表板</template>
-          </el-menu-item>
-          <el-menu-item index="/plan-generator">
-            <el-icon><Calendar /></el-icon>
-            <template #title>训练计划</template>
-          </el-menu-item>
-          <el-menu-item index="/exercise-library">
-            <el-icon><VideoPlay /></el-icon>
-            <template #title>动作库</template>
-          </el-menu-item>
-          <el-menu-item index="/social">
-            <el-icon><ChatDotSquare /></el-icon>
-            <template #title>社区动态</template>
-          </el-menu-item>
-          <el-menu-item index="/challenges">
-            <el-icon><Trophy /></el-icon>
-            <template #title>挑战赛</template>
-          </el-menu-item>
-          <el-menu-item index="/assistant">
-            <el-icon><ChatDotRound /></el-icon>
-            <template #title>AI 助手</template>
-          </el-menu-item>
-          <el-menu-item index="/knowledge">
-            <el-icon><Reading /></el-icon>
-            <template #title>知识库</template>
-          </el-menu-item>
-          <el-menu-item index="/search">
-            <el-icon><Search /></el-icon>
-            <template #title>智能搜索</template>
-          </el-menu-item>
-          <el-menu-item index="/report">
-            <el-icon><Document /></el-icon>
-            <template #title>周报分析</template>
-          </el-menu-item>
-          <el-menu-item index="/profile">
-            <el-icon><User /></el-icon>
-            <template #title>个人设置</template>
-          </el-menu-item>
-        </el-menu>
       </nav>
+    </aside>
 
-      <div class="sidebar-footer">
-        <button
-          type="button"
-          class="collapse-btn"
-          :aria-label="isCollapsed ? '展开侧边栏' : '收起侧边栏'"
-          @click="isCollapsed = !isCollapsed"
-        >
-          <el-icon v-if="isCollapsed"><DArrowRight /></el-icon>
-          <el-icon v-else><DArrowLeft /></el-icon>
-        </button>
-      </div>
-    </el-aside>
-
-    <el-container class="main-content">
-      <el-header class="top-header">
-        <div class="header-left">
-          <h1 class="page-title">{{ pageTitle }}</h1>
-          <p v-if="pageSubtitle" class="page-subtitle">{{ pageSubtitle }}</p>
+    <div class="main">
+      <header class="topbar">
+        <span class="page-hint">{{ currentTitle }}</span>
+        <div class="user-area">
+          <span class="username">{{ authStore.username }}</span>
+          <el-button size="small" text @click="handleLogout">退出</el-button>
         </div>
-        <div class="header-right">
-          <el-dropdown trigger="click" @command="handleCommand">
-            <button type="button" class="user-trigger">
-              <el-avatar :size="32" class="user-avatar">
-                {{ authStore.username?.charAt(0).toUpperCase() }}
-              </el-avatar>
-              <span class="username">{{ authStore.username }}</span>
-              <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
-            </button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="profile">
-                  <el-icon><User /></el-icon>
-                  个人设置
-                </el-dropdown-item>
-                <el-dropdown-item divided command="logout">
-                  <el-icon><SwitchButton /></el-icon>
-                  退出登录
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </el-header>
-
-      <el-main class="page-content">
+      </header>
+      <main class="content">
         <router-view />
-      </el-main>
-    </el-container>
-  </el-container>
+      </main>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
 
 const route = useRoute()
-const router = useRouter()
 const authStore = useAuthStore()
-const isCollapsed = ref(false)
 
-const pageMeta: Record<string, { title: string; subtitle?: string }> = {
-  '/dashboard': { title: '仪表板', subtitle: '今日训练与营养概览' },
-  '/plan-generator': { title: '训练计划', subtitle: '生成个性化训练方案' },
-  '/exercise-library': { title: '动作库', subtitle: '专业健身动作视频指导' },
-  '/social': { title: '社区动态', subtitle: '分享训练心得与进展' },
-  '/challenges': { title: '挑战赛', subtitle: '参与健身挑战，追踪排名' },
-  '/assistant': { title: 'AI 助手', subtitle: '基于知识库的智能健身咨询' },
-  '/knowledge': { title: '知识库', subtitle: '管理健身文档与资料' },
-  '/search': { title: '智能搜索', subtitle: '跨文档语义检索' },
-  '/report': { title: '周报分析', subtitle: '每周训练数据回顾' },
-  '/profile': { title: '个人设置', subtitle: '账户与身体数据管理' }
+const menuGroups = [
+  {
+    title: '概览',
+    items: [{ path: '/dashboard', label: '首页' }]
+  },
+  {
+    title: '智能',
+    items: [
+      { path: '/assistant', label: 'AI 助手' },
+      { path: '/knowledge', label: '知识库' },
+      { path: '/plan', label: '训练计划' },
+      { path: '/agents/manage', label: 'Agent' },
+      { path: '/ai-tools', label: 'AI 工具箱' }
+    ]
+  },
+  {
+    title: '门店运营',
+    items: [
+      { path: '/operations', label: '会员·课程·预约' },
+      { path: '/membership', label: '会籍·支付' },
+      { path: '/training', label: '训练·营养' }
+    ]
+  },
+  {
+    title: '分析搜索',
+    items: [
+      { path: '/analytics', label: '数据分析' },
+      { path: '/search', label: '搜索导入' }
+    ]
+  },
+  {
+    title: '系统管理',
+    items: [
+      { path: '/admin', label: '用户·审计' },
+      { path: '/tenant-settings', label: '租户设置' },
+      { path: '/platform', label: '平台管理' },
+      { path: '/profile', label: '账号设置' }
+    ]
+  }
+]
+
+const flatItems = menuGroups.flatMap(g => g.items)
+
+const currentTitle = computed(() => {
+  const hit = flatItems.find(i => isActive(i.path))
+  return hit?.label ?? 'GymMind'
+})
+
+function isActive(path: string) {
+  return route.path === path || route.path.startsWith(path + '/')
 }
 
-const pageTitle = computed(() => pageMeta[route.path]?.title || 'GymMind')
-const pageSubtitle = computed(() => pageMeta[route.path]?.subtitle)
-
-const handleCommand = async (command: string) => {
-  if (command === 'logout') {
-    try {
-      await ElMessageBox.confirm('确定要退出登录吗？', '退出确认', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      })
-      await authStore.logout()
-    } catch {
-      /* cancelled */
-    }
-  } else if (command === 'profile') {
-    router.push('/profile')
+const handleLogout = async () => {
+  try {
+    await ElMessageBox.confirm('确定退出登录？', '提示', { type: 'warning' })
+    await authStore.logout()
+  } catch {
+    /* 取消 */
   }
 }
 </script>
 
 <style scoped>
-.main-layout {
-  min-height: 100dvh;
-  background: var(--canvas);
+.shell {
+  min-height: 100vh;
+  display: flex;
 }
 
 .sidebar {
+  width: 220px;
+  flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  transition: width var(--transition-base);
-  position: relative;
-}
-
-.sidebar-header {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--border);
-}
-
-.logo-link {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  text-decoration: none;
-  color: var(--ink);
-  min-width: 0;
-}
-
-.logo-mark {
-  flex-shrink: 0;
-  color: var(--ink);
-}
-
-.logo-text {
-  font-family: var(--font-serif);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-medium);
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-}
-
-.sidebar-nav {
-  flex: 1;
+  padding: 16px 12px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
   overflow-y: auto;
-  padding: var(--space-3) var(--space-2);
 }
 
-.sidebar-menu {
-  border: none;
-}
-
-.sidebar-menu :deep(.el-menu-item) {
-  height: 40px;
-  line-height: 40px;
-  margin-bottom: 2px;
-  border-radius: var(--radius-sm);
-  color: var(--ink-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  transition: all var(--transition-base);
-}
-
-.sidebar-menu :deep(.el-menu-item:hover) {
-  background: var(--gray-100) !important;
-  color: var(--ink) !important;
-}
-
-.sidebar-menu :deep(.el-menu-item.is-active) {
-  background: var(--ink) !important;
-  color: var(--ink-inverse) !important;
-  font-weight: var(--weight-semibold);
-}
-
-.sidebar-menu :deep(.el-menu-item .el-icon) {
+.brand {
+  display: block;
   font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  padding: 4px 8px 16px;
+  letter-spacing: -0.02em;
 }
 
-.sidebar-footer {
-  padding: var(--space-3);
-  border-top: 1px solid var(--border);
+.brand:hover {
+  color: var(--primary);
+  text-decoration: none;
 }
 
-.collapse-btn {
-  width: 100%;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--ink-secondary);
-  cursor: pointer;
-  transition: all var(--transition-base);
+.menu-group {
+  margin-bottom: 16px;
 }
 
-.collapse-btn:hover {
-  background: var(--gray-100);
-  color: var(--ink);
+.group-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 8px 6px;
 }
 
-.collapse-btn:active {
-  transform: scale(0.98);
+.menu-link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  margin-bottom: 2px;
+  transition: background 0.15s, color 0.15s;
 }
 
-.main-content {
+.menu-link:hover {
+  background: var(--bg);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.menu-link.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
 }
 
-.top-header {
-  height: auto;
-  min-height: 64px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+.topbar {
+  height: 52px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-8);
-  gap: var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.header-left {
-  min-width: 0;
+.page-hint {
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.page-title {
-  font-family: var(--font-serif);
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-medium);
-  color: var(--ink);
-  margin: 0;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.page-subtitle {
-  font-size: var(--text-sm);
-  color: var(--ink-secondary);
-  margin: var(--space-1) 0 0;
-  max-width: none;
-}
-
-.user-trigger {
+.user-area {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-base);
-  font-family: inherit;
-}
-
-.user-trigger:hover {
-  background: var(--gray-100);
-  border-color: var(--gray-300);
-}
-
-.user-avatar {
-  background: var(--ink);
-  color: var(--ink-inverse);
-  font-weight: var(--weight-semibold);
-  font-size: var(--text-sm);
+  gap: 8px;
 }
 
 .username {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--ink);
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dropdown-icon {
-  color: var(--ink-tertiary);
-  font-size: 12px;
-}
-
-.page-content {
-  background: var(--canvas);
-  padding: var(--space-8);
-  overflow-y: auto;
+.content {
   flex: 1;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
 }
 
-:deep(.el-dropdown-menu__item) {
-  padding: var(--space-3) var(--space-4);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-}
+@media (max-width: 900px) {
+  .shell {
+    flex-direction: column;
+  }
 
-@media (max-width: 768px) {
   .sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    z-index: var(--z-fixed);
+    width: 100%;
+    height: auto;
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 12px;
   }
 
-  .page-content {
-    padding: var(--space-4);
+  .brand {
+    width: 100%;
+    padding-bottom: 8px;
   }
 
-  .username {
+  .menu-group {
+    display: contents;
+  }
+
+  .group-title {
     display: none;
   }
 
-  .page-subtitle {
+  .menu-link {
+    display: inline-block;
+    margin: 0;
+  }
+
+  .username {
     display: none;
   }
 }

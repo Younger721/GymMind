@@ -12,6 +12,7 @@ import com.gymmind.shared.security.CurrentActor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -40,6 +41,13 @@ public class DefaultExerciseService implements ExerciseService {
         audit.record(new AuditEvent("EXERCISE_CREATED", "EXERCISE", saved.getId(), AuditResult.SUCCESS,
                 "exercise-service", Map.of("resourceName", saved.getName())));
         return ExerciseView.from(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExerciseView> list(CurrentActor actor) {
+        require(actor, "exercise:read");
+        return exercises.findAllByTenantId(actor.tenantId()).stream().map(ExerciseView::from).toList();
     }
 
     @Override

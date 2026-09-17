@@ -22,7 +22,8 @@ class SystemCatalogInitializerTest {
     void catalogContainsPermissionsUsedByTenantScopedAiAndAuditApis() {
         assertThat(PermissionCatalog.entries()).extracting(PermissionCatalog.Entry::code)
                 .contains("ai:recommend", "ai:report", "audit:read", "knowledge:write",
-                        "ai:plan", "analytics:read", "knowledge:read");
+                        "ai:plan", "analytics:read", "knowledge:read",
+                        "agent:write", "agent:chat", "platform:quota:write", "platform:stats:read");
     }
 
     @Test
@@ -47,6 +48,6 @@ class SystemCatalogInitializerTest {
 
         new SystemCatalogInitializer(roles, permissions, lock, links).run();
 
-        verify(links, org.mockito.Mockito.times(52)).save(any());
+        verify(links, org.mockito.Mockito.times(72)).save(any());
     }
 }

@@ -48,12 +48,21 @@ public class PlatformAdminInitializer implements ApplicationRunner {
         Role role = roleRepository.findByCode(RoleCode.PLATFORM_ADMIN)
                 .orElseThrow(() -> new IllegalStateException("PLATFORM_ADMIN role is not initialized"));
         UserAccount user = userRepository.findByNormalizedEmail(UserAccount.normalizeEmail(properties.getEmail()))
-                .map(existing -> requirePlatformAccount(existing))
+                .map(existing -> syncPlatformAdminPassword(requirePlatformAccount(existing)))
                 .orElseGet(() -> userRepository.save(UserAccount.platformAdmin(
                         properties.getEmail(), passwordEncoder.encode(properties.getPassword()), "Platform administrator")));
         if (!userRoleRepository.existsByUserIdAndRoleId(user.getId(), role.getId())) {
             userRoleRepository.save(UserRole.assign(user, role));
         }
+    }
+
+    /** 开发环境配置变更时同步平台管理员密码 */
+    private UserAccount syncPlatformAdminPassword(UserAccount user) {
+        if (!passwordEncoder.matches(properties.getPassword(), user.getPasswordHash())) {
+            user.resetPassword(passwordEncoder.encode(properties.getPassword()));
+            return userRepository.save(user);
+        }
+        return user;
     }
 
     private static UserAccount requirePlatformAccount(UserAccount user) {

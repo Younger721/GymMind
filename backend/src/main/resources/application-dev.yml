@@ -11,3 +11,13 @@ spring:
     hibernate:
       ddl-auto: update
     open-in-view: false
+gymmind:
+  search:
+    keyword-backend: memory
+    vector-backend: memory
+  object-store: local
+  ai:
+    harness:
+      platform-default-plugins: basic_chat
+      tenant-default-plugins: basic_chat,knowledge_search
+      default-system-prompt: 你是 GymMind 智能健身助手，回答要专业、简洁、安全，不要编造不存在的服务。

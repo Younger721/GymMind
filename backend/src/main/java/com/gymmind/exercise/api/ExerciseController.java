@@ -30,6 +30,11 @@ public class ExerciseController {
         return ApiResponse.success(service.create(actors.requireCurrent(), request.toCommand()));
     }
 
+    @GetMapping
+    public ApiResponse<java.util.List<ExerciseView>> list() {
+        return ApiResponse.success(service.list(actors.requireCurrent()));
+    }
+
     @GetMapping("/{id}")
     public ApiResponse<ExerciseView> find(@PathVariable Long id) {
         return ApiResponse.success(service.find(actors.requireCurrent(), id));

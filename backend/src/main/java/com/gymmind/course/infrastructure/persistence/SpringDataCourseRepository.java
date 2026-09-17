@@ -1,1 +1,4 @@
-package com.gymmind.course.infrastructure.persistence; import com.gymmind.course.domain.model.Course; import org.springframework.data.jpa.repository.JpaRepository; import java.util.Optional; interface SpringDataCourseRepository extends JpaRepository<Course,Long>{Optional<Course> findByTenantIdAndId(Long tenantId,Long id);}
+package com.gymmind.course.infrastructure.persistence; import com.gymmind.course.domain.model.Course; import org.springframework.data.jpa.repository.JpaRepository; import java.util.Optional; interface SpringDataCourseRepository extends JpaRepository<Course, Long> {
+    Optional<Course> findByTenantIdAndId(Long tenantId, Long id);
+    java.util.List<Course> findAllByTenantId(Long tenantId);
+}

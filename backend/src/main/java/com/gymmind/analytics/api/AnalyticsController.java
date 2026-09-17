@@ -5,4 +5,5 @@ public class AnalyticsController { private final DashboardQueryService dashboard
  @GetMapping("/dashboard") public ApiResponse<DashboardMetrics> dashboard(@RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate from,@RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate to){return ApiResponse.success(dashboard.dashboard(actors.requireCurrent(),from,to));}
  @GetMapping("/weekly-metrics") public ApiResponse<WeeklyMetrics> weekly(@RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate weekStart){return ApiResponse.success(weekly.weekly(actors.requireCurrent(),weekStart));}
  @GetMapping("/weekly-report") public ApiResponse<WeeklyReport> report(@RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate weekStart){return ApiResponse.success(report.report(actors.requireCurrent(),weekStart));}
+ @GetMapping("/weekly-reports") public ApiResponse<WeeklyReport> reports(@RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate weekStart){return ApiResponse.success(report.report(actors.requireCurrent(),weekStart));}
 }

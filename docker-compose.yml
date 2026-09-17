@@ -1,48 +1,48 @@
 services:
-  # MySQL 8.0 - 使用本地 MySQL，这里仅作为参考配置保留
-  # 实际使用你本地已有的 MySQL 实例
-  # mysql:
-  #   image: mysql:8.0
-  #   container_name: gymmind-mysql
-  #   environment:
-  #     MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
-  #     MYSQL_DATABASE: gymmind
-  #   ports:
-  #     - "${MYSQL_HOST_PORT:-3306}:3306"
-  #   command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
-  #     - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
-
-  # Redis 7 - 缓存和会话存储（复用）
+  # Redis 7 - 缓存与会话撤销
   redis:
     image: redis:7-alpine
     container_name: gymmind-redis
+    restart: unless-stopped
     ports:
       - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
 
-  # Elasticsearch 9.4.2 with 中文分词插件（复用）
+  # Elasticsearch 9.4.2 + 中文分词
   elasticsearch:
     build:
       context: ./docker/elasticsearch
       dockerfile: Dockerfile
     image: gymmind-elasticsearch:9.4.2-smartcn
     container_name: gymmind-es
+    restart: unless-stopped
     environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
     ports:
       - "${ES_HOST_PORT:-9202}:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
 
-  # etcd - Milvus 依赖（复用）
+  # etcd - Milvus 元数据
   etcd:
     image: quay.io/coreos/etcd:v3.5.16
     container_name: gymmind-etcd
+    restart: unless-stopped
     environment:
       ETCD_AUTO_COMPACTION_MODE: revision
       ETCD_AUTO_COMPACTION_RETENTION: "1000"
@@ -54,25 +54,39 @@ services:
       --data-dir=/etcd
     volumes:
       - etcd_data:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
-  # MinIO - 对象存储，Milvus 依赖（复用）
+  # MinIO - 对象存储（Milvus 与知识库）
   minio:
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
     container_name: gymmind-minio
+    restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     command: minio server /minio_data --console-address ":9001"
     ports:
-      - "9000:9000"  # API 端口
-      - "9001:9001"  # 控制台端口
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
-  # Milvus v2.4.17 - 向量数据库（复用）
+  # Milvus - 向量数据库
   milvus:
     image: milvusdb/milvus:v2.4.17
     container_name: gymmind-milvus
+    restart: unless-stopped
     command: ["milvus", "run", "standalone"]
     environment:
       ETCD_ENDPOINTS: etcd:2379
@@ -80,18 +94,48 @@ services:
       MINIO_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
       MINIO_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
     ports:
-      - "19530:19530"  # gRPC 端口
-      - "9091:9091"    # Metrics 端口
+      - "${MILVUS_PORT:-19530}:19530"
+      - "9091:9091"
     depends_on:
-      - etcd
-      - minio
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - milvus_data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  # 可选：容器内 MySQL（默认关闭，本机已有 MySQL 时使用 USE_DOCKER_MYSQL=0）
+  mysql:
+    profiles: ["mysql"]
+    image: mysql:8.0
+    container_name: gymmind-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required when USE_DOCKER_MYSQL=1}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-gymmind}
+    ports:
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docs/database_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
 volumes:
-  # mysql_data:  # 使用本地 MySQL，注释掉
   redis_data:
   es_data:
   etcd_data:
   minio_data:
   milvus_data:
+  mysql_data:

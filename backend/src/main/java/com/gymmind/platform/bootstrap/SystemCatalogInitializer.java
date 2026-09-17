@@ -48,6 +48,9 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         }
         link(RoleCode.PLATFORM_ADMIN, "platform:tenant:read");
         link(RoleCode.PLATFORM_ADMIN, "platform:tenant:write");
+        link(RoleCode.PLATFORM_ADMIN, "platform:quota:read");
+        link(RoleCode.PLATFORM_ADMIN, "platform:quota:write");
+        link(RoleCode.PLATFORM_ADMIN, "platform:stats:read");
         link(RoleCode.GYM_ADMIN, "tenant:settings:read");
         link(RoleCode.GYM_ADMIN, "tenant:settings:write");
         link(RoleCode.GYM_ADMIN, "user:read");
@@ -98,6 +101,23 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         link(RoleCode.GYM_ADMIN, "knowledge:read");
         link(RoleCode.COACH, "knowledge:read");
         link(RoleCode.MEMBER, "knowledge:read");
+        link(RoleCode.GYM_ADMIN, "agent:read");
+        link(RoleCode.GYM_ADMIN, "agent:write");
+        link(RoleCode.GYM_ADMIN, "agent:chat");
+        link(RoleCode.GYM_ADMIN, "tenant:quota:read");
+        link(RoleCode.GYM_ADMIN, "ai:chat");
+        link(RoleCode.GYM_ADMIN, "ai:memory");
+        link(RoleCode.GYM_ADMIN, "search:read");
+        link(RoleCode.GYM_ADMIN, "search:write");
+        link(RoleCode.COACH, "agent:read");
+        link(RoleCode.COACH, "agent:chat");
+        link(RoleCode.COACH, "ai:chat");
+        link(RoleCode.COACH, "ai:memory");
+        link(RoleCode.COACH, "search:read");
+        link(RoleCode.MEMBER, "agent:read");
+        link(RoleCode.MEMBER, "agent:chat");
+        link(RoleCode.MEMBER, "ai:chat");
+        link(RoleCode.MEMBER, "ai:memory");
     }
 
     private void link(RoleCode roleCode, String permissionCode) {

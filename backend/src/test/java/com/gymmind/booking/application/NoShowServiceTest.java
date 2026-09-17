@@ -29,7 +29,8 @@ class NoShowServiceTest {
         when(courses.findByTenantIdAndId(11L, 5L)).thenReturn(Optional.of(courseAt(11L, 5L, 3600)));
         when(bookings.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        new DefaultNoShowService(bookings, courses, mock(AuditRecorder.class))
+        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        new DefaultNoShowService(bookings, courses, mock(com.gymmind.booking.application.port.MembershipEntitlementPort.class), mock(AuditRecorder.class))
                 .markTenantNoShows(11L, Instant.now());
 
         assertThat(ended.getStatus()).isEqualTo(BookingStatus.NO_SHOW);
@@ -41,7 +42,7 @@ class NoShowServiceTest {
     @Test
     void missingTenantContextFailsClosed() {
         NoShowService service = new DefaultNoShowService(mock(BookingRepository.class),
-                mock(CourseRepository.class), mock(AuditRecorder.class));
+                mock(CourseRepository.class), mock(com.gymmind.booking.application.port.MembershipEntitlementPort.class), mock(AuditRecorder.class));
 
         assertThatThrownBy(() -> service.markTenantNoShows(null, Instant.now()))
                 .isInstanceOf(IllegalArgumentException.class);
