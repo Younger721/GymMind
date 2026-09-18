@@ -74,18 +74,18 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
     @Override
     public AuthResult login(LoginCommand command) {
         if (command == null) {
-            throw unauthenticated();
+            throw invalidCredentials();
         }
         String normalizedEmail;
         try {
             normalizedEmail = UserAccount.normalizeEmail(command.email());
         } catch (IllegalArgumentException exception) {
-            throw unauthenticated();
+            throw invalidCredentials();
         }
         UserAccount user = userRepository.findByNormalizedEmail(normalizedEmail)
-                .orElseThrow(DefaultAuthApplicationService::unauthenticated);
+                .orElseThrow(DefaultAuthApplicationService::invalidCredentials);
         if (!passwordMatches(command.password(), user.getPasswordHash())) {
-            throw unauthenticated();
+            throw invalidCredentials();
         }
         return issue(loadActiveAccount(
                 user, user.getTenantId(), user.getTokenVersion(), LOGIN_SOURCE_TOKEN_ID));
@@ -225,6 +225,10 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
 
     private static BusinessException unauthenticated() {
         return new BusinessException(ErrorCode.UNAUTHENTICATED);
+    }
+
+    private static BusinessException invalidCredentials() {
+        return new BusinessException(ErrorCode.INVALID_CREDENTIALS);
     }
 
     private record AuthenticatedAccount(UserAccount user, CurrentActor actor) {

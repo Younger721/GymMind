@@ -52,7 +52,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(header().string(TraceIdFilter.HEADER_NAME, "validation_trace_1"))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("参数校验失败"))
                 .andExpect(jsonPath("$.traceId").value("validation_trace_1"));
     }
 
@@ -63,7 +63,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("CONFLICT"))
-                .andExpect(jsonPath("$.message").value("Resource conflict"))
+                .andExpect(jsonPath("$.message").value("资源冲突"))
                 .andExpect(jsonPath("$.traceId").value("business_trace_1"))
                 .andExpect(contentDoesNotContain("duplicate-key-password=secret"));
     }
@@ -75,7 +75,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
-                .andExpect(jsonPath("$.message").value("Internal server error"))
+                .andExpect(jsonPath("$.message").value("服务器内部错误"))
                 .andExpect(jsonPath("$.traceId").value("failure_trace_01"))
                 .andExpect(contentDoesNotContain("SELECT token, password"))
                 .andExpect(contentDoesNotContain("credentials"))
@@ -100,7 +100,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.message").value("参数校验失败"))
                 .andExpect(jsonPath("$.traceId").value("malformed_trace_1"));
     }
 

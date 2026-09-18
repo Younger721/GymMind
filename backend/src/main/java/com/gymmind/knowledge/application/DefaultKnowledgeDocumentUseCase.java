@@ -1,6 +1,7 @@
 package com.gymmind.knowledge.application;
 
 import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
@@ -87,7 +88,16 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
 
     @Override
     public List<KnowledgeDocumentView> list(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null || !actor.hasPermission("knowledge:read")) {
+        if (actor == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        // 平台管理员白名单：可查看全部租户资料
+        if (canBrowseAllTenants(actor)) {
+            return repository.findAllAccessible().stream()
+                    .map(KnowledgeDocumentView::from)
+                    .toList();
+        }
+        if (actor.tenantId() == null || !actor.hasPermission("knowledge:read")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return repository.findByTenantId(actor.tenantId()).stream()
@@ -99,7 +109,15 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
 
     @Override
     public boolean canRead(CurrentActor actor, Long id) {
-        if (actor == null || actor.tenantId() == null) {
+        if (actor == null || id == null) {
+            return false;
+        }
+        if (canBrowseAllTenants(actor)) {
+            return repository.findById(id)
+                    .filter(document -> document.status() != DocumentStatus.DELETED)
+                    .isPresent();
+        }
+        if (actor.tenantId() == null) {
             return false;
         }
         KnowledgeDocument document;
@@ -109,6 +127,11 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             return false;
         }
         return document.visibility() == DocumentVisibility.TENANT || actor.userId().equals(document.ownerUserId());
+    }
+
+    /** 平台管理员跨租户只读白名单 */
+    private static boolean canBrowseAllTenants(CurrentActor actor) {
+        return actor.isPlatformAdmin() && actor.hasPermission("platform:knowledge:read");
     }
 
     private void write(CurrentActor actor) {

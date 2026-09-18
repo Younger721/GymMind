@@ -15,4 +15,6 @@ interface SpringDataTenantAgentRepository extends JpaRepository<TenantAgent, Lon
     List<TenantAgent> findAllByTenantIdAndStatus(Long tenantId, AgentStatus status);
 
     long countByTenantId(Long tenantId);
+
+    List<TenantAgent> findTop200ByOrderByIdDesc();
 }

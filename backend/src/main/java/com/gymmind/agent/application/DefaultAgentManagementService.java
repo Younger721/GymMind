@@ -36,6 +36,9 @@ public class DefaultAgentManagementService implements AgentManagementService {
     @Override
     @Transactional(readOnly = true)
     public List<AgentView> list(CurrentActor actor) {
+        if (canBrowseAllTenants(actor)) {
+            return agents.findAllAccessible().stream().map(AgentView::from).toList();
+        }
         requireTenant(actor);
         if (canManage(actor)) {
             return agents.findAllByTenantId(actor.tenantId()).stream().map(AgentView::from).toList();
@@ -51,6 +54,11 @@ public class DefaultAgentManagementService implements AgentManagementService {
     @Override
     @Transactional(readOnly = true)
     public AgentView find(CurrentActor actor, Long agentId) {
+        if (canBrowseAllTenants(actor)) {
+            return agents.findById(agentId)
+                    .map(AgentView::from)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        }
         requireTenant(actor);
         TenantAgent agent = getScoped(actor, agentId);
         if (!canManage(actor) && agent.getStatus() != AgentStatus.ACTIVE) {
@@ -135,6 +143,11 @@ public class DefaultAgentManagementService implements AgentManagementService {
 
     private static boolean canManage(CurrentActor actor) {
         return actor.roles().contains(RoleCode.GYM_ADMIN) && actor.hasPermission("agent:write");
+    }
+
+    /** 平台管理员跨租户只读白名单 */
+    private static boolean canBrowseAllTenants(CurrentActor actor) {
+        return actor != null && actor.isPlatformAdmin() && actor.hasPermission("platform:agent:read");
     }
 
     private static void validate(CreateAgentCommand command) {

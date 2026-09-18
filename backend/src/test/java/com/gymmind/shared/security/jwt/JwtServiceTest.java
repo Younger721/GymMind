@@ -251,7 +251,7 @@ class JwtServiceTest {
         assertThatThrownBy(() -> jwtService.verify(rawToken, expectedType))
                 .isInstanceOfSatisfying(BusinessException.class, exception -> {
                     assertThat(exception.errorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
-                    assertThat(exception.getMessage()).isEqualTo("Authentication required");
+                    assertThat(exception.getMessage()).isEqualTo("未登录或登录已失效");
                     assertThat(exception.getCause()).isNull();
                     if (rawToken != null && !rawToken.isBlank()) {
                         assertThat(exception.toString()).doesNotContain(rawToken);

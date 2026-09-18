@@ -36,10 +36,21 @@ function extractMessage(data: unknown): string {
   return '请求失败'
 }
 
+function isAuthRequest(url: string | undefined): boolean {
+  if (!url) return false
+  return /\/v1\/auth\/(login|register|refresh)/.test(url)
+}
+
+function isOnLoginPage(): boolean {
+  return router.currentRoute.value.path === '/login'
+    || router.currentRoute.value.path === '/register'
+}
+
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response.data,
   (error) => {
     const skipToast = error.config?.skipErrorToast === true
+    const requestUrl = error.config?.url as string | undefined
 
     if (error.response) {
       const { status, data } = error.response
@@ -48,10 +59,17 @@ apiClient.interceptors.response.use(
       if (!skipToast) {
         switch (status) {
           case 401:
-            ElMessage.error('登录已过期，请重新登录')
-            localStorage.removeItem('token')
-            localStorage.removeItem('refreshToken')
-            router.push('/login')
+            if (isAuthRequest(requestUrl)) {
+              // 登录/注册失败：优先展示后端中文 message
+              ElMessage.error(message || '账号或密码错误')
+            } else {
+              localStorage.removeItem('token')
+              localStorage.removeItem('refreshToken')
+              if (!isOnLoginPage()) {
+                ElMessage.error('登录已过期，请重新登录')
+                router.push('/login')
+              }
+            }
             break
           case 403:
             ElMessage.error('没有权限执行此操作')

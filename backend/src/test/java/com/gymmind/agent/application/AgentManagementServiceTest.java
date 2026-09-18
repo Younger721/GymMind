@@ -60,6 +60,19 @@ class AgentManagementServiceTest {
     }
 
     @Test
+    void platformAdminWithWhitelistCanListAllTenantAgents() {
+        var agents = mock(TenantAgentRepository.class);
+        var agentA = TenantAgent.create(7L, "A", "", "prompt", true, "knowledge_search", 1L);
+        var agentB = TenantAgent.create(8L, "B", "", "prompt", true, "knowledge_search", 2L);
+        when(agents.findAllAccessible()).thenReturn(List.of(agentA, agentB));
+
+        var service = new DefaultAgentManagementService(agents, mock(TenantQuotaService.class), mock(AuditRecorder.class));
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:agent:read"), 0, "platform");
+        assertThat(service.list(platformAdmin)).hasSize(2);
+    }
+
+    @Test
     void cannotAccessOtherTenantAgent() {
         var agents = mock(TenantAgentRepository.class);
         when(agents.findByTenantIdAndId(7L, 99L)).thenReturn(Optional.empty());

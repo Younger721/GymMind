@@ -89,13 +89,26 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await authApi.login(credentials)
       if (!response.success || !response.data) {
+        ElMessage.error(response.message || '登录失败')
         throw new Error(response.message || '登录失败')
       }
       applyAuthResponse(response.data)
       ElMessage.success('登录成功')
       router.push('/dashboard')
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Login failed:', error)
+      const axiosError = error as {
+        response?: { status?: number; data?: { message?: string } }
+      }
+      const status = axiosError.response?.status
+      const apiMessage = axiosError.response?.data?.message
+      if (status === 401) {
+        ElMessage.error(apiMessage || '账号或密码错误')
+      } else if (status === 400) {
+        ElMessage.error(apiMessage || '请填写有效的账号和密码')
+      } else if (!(error instanceof Error && error.message)) {
+        ElMessage.error(apiMessage || '登录失败，请稍后重试')
+      }
       throw error
     }
   }

@@ -11,12 +11,12 @@
         :closable="false"
         show-icon
         title="开发测试账号"
-        description="平台管理员：admin / 123456"
+        description="平台管理员：admin@qq.com / 123456"
       />
 
       <el-form @submit.prevent="handleLogin" label-position="top">
-        <el-form-item label="账号">
-          <el-input v-model="email" placeholder="admin" />
+        <el-form-item label="邮箱">
+          <el-input v-model="email" placeholder="admin@qq.com" />
         </el-form-item>
         <el-form-item label="密码">
           <el-input v-model="password" type="password" placeholder="123456" show-password />
@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 
@@ -43,6 +43,16 @@ const authStore = useAuthStore()
 const isDev = import.meta.env.DEV
 const email = ref('')
 const password = ref('')
+
+/** 进入登录页时清除失效的旧 token，避免残留会话触发 401 弹窗 */
+onMounted(() => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('refreshToken')
+  authStore.$patch({
+    token: null,
+    refreshToken: null
+  })
+})
 const loading = ref(false)
 
 const handleLogin = async () => {

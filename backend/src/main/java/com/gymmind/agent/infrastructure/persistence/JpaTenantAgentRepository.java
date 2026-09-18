@@ -41,4 +41,14 @@ class JpaTenantAgentRepository implements TenantAgentRepository {
     public long countByTenantId(Long tenantId) {
         return delegate.countByTenantId(tenantId);
     }
+
+    @Override
+    public Optional<TenantAgent> findById(Long id) {
+        return delegate.findById(id);
+    }
+
+    @Override
+    public List<TenantAgent> findAllAccessible() {
+        return delegate.findTop200ByOrderByIdDesc();
+    }
 }

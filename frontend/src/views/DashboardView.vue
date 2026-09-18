@@ -51,11 +51,6 @@ const quickLinks = [
 ]
 
 onMounted(async () => {
-  if (authStore.isPlatformAdmin) {
-    docCount.value = null
-    agentCount.value = null
-    return
-  }
   try {
     const docs = await knowledgeApi.listDocuments()
     docCount.value = docs.data?.length ?? 0

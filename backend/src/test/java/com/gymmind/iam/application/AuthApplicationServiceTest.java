@@ -103,11 +103,11 @@ class AuthApplicationServiceTest {
 
     @Test
     void loginFailuresDoNotRevealEmailPasswordUserOrTenant() {
-        assertUnauthenticated(() -> service.login(new LoginCommand("missing@example.com", "wrong")));
+        assertInvalidCredentials(() -> service.login(new LoginCommand("missing@example.com", "wrong")));
 
         UserAccount user = user(42L, 7L, RoleCode.GYM_ADMIN);
         when(users.findByNormalizedEmail("owner@example.com")).thenReturn(Optional.of(user));
-        assertUnauthenticated(() -> service.login(new LoginCommand("owner@example.com", "wrong")));
+        assertInvalidCredentials(() -> service.login(new LoginCommand("owner@example.com", "wrong")));
 
         user.disable();
         assertUnauthenticated(() -> service.login(new LoginCommand("owner@example.com", "correct-password")));
@@ -246,11 +246,20 @@ class AuthApplicationServiceTest {
         return tenant;
     }
 
+    private static void assertInvalidCredentials(Runnable action) {
+        assertThatThrownBy(action::run)
+                .isInstanceOfSatisfying(BusinessException.class, exception -> {
+                    assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+                    assertThat(exception.getMessage()).isEqualTo("账号或密码错误");
+                    assertThat(exception.getCause()).isNull();
+                });
+    }
+
     private static void assertUnauthenticated(Runnable action) {
         assertThatThrownBy(action::run)
                 .isInstanceOfSatisfying(BusinessException.class, exception -> {
                     assertThat(exception.errorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED);
-                    assertThat(exception.getMessage()).isEqualTo("Authentication required");
+                    assertThat(exception.getMessage()).isEqualTo("未登录或登录已失效");
                     assertThat(exception.getCause()).isNull();
                 });
     }

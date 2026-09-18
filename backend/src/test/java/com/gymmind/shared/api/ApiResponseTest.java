@@ -25,7 +25,7 @@ class ApiResponseTest {
 
         assertThat(json.get("success").asBoolean()).isTrue();
         assertThat(json.get("code").asText()).isEqualTo("OK");
-        assertThat(json.get("message").asText()).isEqualTo("Success");
+        assertThat(json.get("message").asText()).isEqualTo("操作成功");
         assertThat(json.get("data").asText()).isEqualTo("ready");
         assertThat(json.get("traceId").asText()).isEqualTo("request_trace_123");
     }

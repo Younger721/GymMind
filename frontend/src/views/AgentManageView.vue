@@ -5,10 +5,11 @@
         <h2 class="simple-page-title">Agent 管理</h2>
         <p class="simple-page-desc">配置门店 AI 助手（会员仅可使用）</p>
       </div>
-      <el-button type="primary" @click="openCreate">新建</el-button>
+      <el-button v-if="!authStore.isPlatformAdmin" type="primary" @click="openCreate">新建</el-button>
+      <el-tag v-else type="info">平台管理员 · 全租户只读</el-tag>
     </div>
 
-    <el-card v-if="quota" class="quota-card" shadow="never">
+    <el-card v-if="quota && !authStore.isPlatformAdmin" class="quota-card" shadow="never">
       <div class="quota-grid">
         <div class="quota-item">
           <span class="label">Agent 数量</span>
@@ -26,6 +27,7 @@
     </el-card>
 
     <el-table :data="agents" v-loading="loading" stripe>
+      <el-table-column v-if="authStore.isPlatformAdmin" prop="tenantId" label="租户ID" width="90" />
       <el-table-column prop="name" label="名称" min-width="140" />
       <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
       <el-table-column label="知识库" width="90">
@@ -49,7 +51,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column v-if="!authStore.isPlatformAdmin" label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button
@@ -96,8 +98,10 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { agentApi, type AgentView, type TenantQuotaView } from '@/api/agent'
+import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 
+const authStore = useAuthStore()
 const agents = ref<AgentView[]>([])
 const quota = ref<TenantQuotaView | null>(null)
 const loading = ref(false)
@@ -117,9 +121,14 @@ const form = reactive({
 const load = async () => {
   loading.value = true
   try {
-    const [agentRes, quotaRes] = await Promise.all([agentApi.list(), agentApi.quota()])
-    agents.value = agentRes.data
-    quota.value = quotaRes.data
+    const agentRes = await agentApi.list({ silent: authStore.isPlatformAdmin })
+    agents.value = agentRes.data || []
+    if (!authStore.isPlatformAdmin) {
+      const quotaRes = await agentApi.quota()
+      quota.value = quotaRes.data
+    } else {
+      quota.value = null
+    }
   } catch {
     ElMessage.error('加载 Agent 列表失败，请确认您有管理员权限')
   } finally {

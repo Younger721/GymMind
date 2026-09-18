@@ -30,11 +30,15 @@ export interface AuthResponseData {
 
 export const authApi = {
   login(data: LoginRequest) {
-    return apiClient.post<any, ApiResponse<AuthResponseData>>('/v1/auth/login', data)
+    return apiClient.post<any, ApiResponse<AuthResponseData>>('/v1/auth/login', data, {
+      skipErrorToast: true
+    })
   },
 
   register(data: RegisterRequest) {
-    return apiClient.post<any, ApiResponse<AuthResponseData>>('/v1/auth/register', data)
+    return apiClient.post<any, ApiResponse<AuthResponseData>>('/v1/auth/register', data, {
+      skipErrorToast: true
+    })
   },
 
   logout(refreshToken: string) {

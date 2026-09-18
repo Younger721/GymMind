@@ -51,6 +51,8 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         link(RoleCode.PLATFORM_ADMIN, "platform:quota:read");
         link(RoleCode.PLATFORM_ADMIN, "platform:quota:write");
         link(RoleCode.PLATFORM_ADMIN, "platform:stats:read");
+        link(RoleCode.PLATFORM_ADMIN, "platform:knowledge:read");
+        link(RoleCode.PLATFORM_ADMIN, "platform:agent:read");
         link(RoleCode.GYM_ADMIN, "tenant:settings:read");
         link(RoleCode.GYM_ADMIN, "tenant:settings:write");
         link(RoleCode.GYM_ADMIN, "user:read");

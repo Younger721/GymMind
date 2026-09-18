@@ -6,15 +6,18 @@
         <p class="simple-page-desc">上传文档后自动解析，无需手动分类</p>
       </div>
       <el-upload
+        v-if="!authStore.isPlatformAdmin"
         :show-file-list="false"
         :http-request="handleUpload"
         :disabled="uploading"
       >
         <el-button type="primary" :loading="uploading">上传文档</el-button>
       </el-upload>
+      <el-tag v-else type="info">平台管理员 · 全租户只读</el-tag>
     </div>
 
     <el-table :data="documents" v-loading="loading" class="simple-card" style="padding: 0; overflow: hidden">
+      <el-table-column v-if="authStore.isPlatformAdmin" prop="tenantId" label="租户ID" width="90" />
       <el-table-column prop="fileName" label="文件名" min-width="200" />
       <el-table-column prop="status" label="状态" width="120">
         <template #default="{ row }">
@@ -22,7 +25,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="visibility" label="可见范围" width="120" />
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column v-if="!authStore.isPlatformAdmin" label="操作" width="100" fixed="right">
         <template #default="{ row }">
           <el-button link type="danger" @click="remove(row.id)">删除</el-button>
         </template>
@@ -36,7 +39,9 @@ import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { knowledgeApi, type KnowledgeDocumentView } from '@/api/knowledge'
+import { useAuthStore } from '@/stores/auth'
 
+const authStore = useAuthStore()
 const documents = ref<KnowledgeDocumentView[]>([])
 const loading = ref(false)
 const uploading = ref(false)

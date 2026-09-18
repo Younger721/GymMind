@@ -46,6 +46,18 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
+    void platformAdminWithWhitelistCanListAllTenantDocuments() {
+        useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:knowledge:read"), 0, "platform");
+        assertThat(useCase.list(platformAdmin)).hasSize(1);
+
+        var otherTenantAdmin = new CurrentActor(13L, 8L, Set.of(RoleCode.GYM_ADMIN), Set.of("knowledge:write"), 0, "t3");
+        useCase.upload(otherTenantAdmin, new UploadKnowledgeDocumentCommand("other.md", "text/markdown", "# other".getBytes(), DocumentVisibility.TENANT));
+        assertThat(useCase.list(platformAdmin)).hasSize(2);
+    }
+
+    @Test
     void listRequiresReadPermissionAndReturnsTenantDocuments() {
         useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
         var reader = new CurrentActor(12L, 7L, Set.of(RoleCode.MEMBER), Set.of("knowledge:read"), 0, "t2");
@@ -87,7 +99,22 @@ class KnowledgeDocumentUseCaseTest {
         private long sequence = 0;
         private final java.util.Map<Long, KnowledgeDocument> values = new java.util.HashMap<>();
         public KnowledgeDocument save(KnowledgeDocument document) { if (document.id() == null) document.assignId(++sequence); values.put(document.id(), document); return document; }
-        public Optional<KnowledgeDocument> findByTenantIdAndId(Long tenantId, Long id) { return Optional.ofNullable(values.get(id)).filter(d -> tenantId.equals(d.tenantId())); }
-        public List<KnowledgeDocument> findByTenantId(Long tenantId) { return values.values().stream().filter(d -> tenantId.equals(d.tenantId())).toList(); }
+        public Optional<KnowledgeDocument> findByTenantIdAndId(Long tenantId, Long id) {
+            return Optional.ofNullable(values.get(id)).filter(d -> tenantId.equals(d.tenantId()));
+        }
+
+        public Optional<KnowledgeDocument> findById(Long id) {
+            return Optional.ofNullable(values.get(id));
+        }
+
+        public List<KnowledgeDocument> findByTenantId(Long tenantId) {
+            return values.values().stream().filter(d -> tenantId.equals(d.tenantId())).toList();
+        }
+
+        public List<KnowledgeDocument> findAllAccessible() {
+            return values.values().stream()
+                    .filter(d -> d.status() != DocumentStatus.DELETED)
+                    .toList();
+        }
     }
 }

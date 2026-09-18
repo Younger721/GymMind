@@ -43,6 +43,8 @@ public final class PermissionCatalog {
             new Entry("platform:quota:read", "Read tenant quotas"),
             new Entry("platform:quota:write", "Manage tenant quotas"),
             new Entry("platform:stats:read", "Read platform statistics"),
+            new Entry("platform:knowledge:read", "Read all tenant knowledge documents"),
+            new Entry("platform:agent:read", "Read all tenant agents"),
             new Entry("search:read", "Search imported articles"),
             new Entry("search:write", "Import public articles"),
             new Entry("ai:memory", "Manage personal AI memory"),

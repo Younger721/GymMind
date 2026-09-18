@@ -11,7 +11,7 @@ public record ApiResponse<T>(
 ) {
 
     public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, "OK", "Success", data, currentTraceId());
+        return new ApiResponse<>(true, "OK", "操作成功", data, currentTraceId());
     }
 
     public static <T> ApiResponse<T> error(String code, String message) {
