@@ -22,7 +22,18 @@ class TenantAccessGuardTest {
     }
 
     @Test
-    void platformActorCannotEnterTenantBusinessScope() {
+    void platformActorCanEnterTenantScopeWithContext() {
+        CurrentActor platform = SecurityTestActors.platformAdmin();
+        TenantContextHolder.set(10L);
+        try {
+            assertThat(guard.requireTenant(platform)).isEqualTo(10L);
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
+
+    @Test
+    void platformActorWithoutContextCannotEnterTenantBusinessScope() {
         CurrentActor platform = SecurityTestActors.platformAdmin();
 
         assertThatThrownBy(() -> guard.requireTenant(platform))
@@ -46,11 +57,14 @@ class TenantAccessGuardTest {
     }
 
     @Test
-    void platformActorGetsForbiddenBeforeTenantComparison() {
-        assertThatThrownBy(() -> guard.requireSameTenant(SecurityTestActors.platformAdmin(), 10L))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.FORBIDDEN);
+    void platformActorWithContextCanAccessSameTenant() {
+        TenantContextHolder.set(10L);
+        try {
+            assertThatCode(() -> guard.requireSameTenant(SecurityTestActors.platformAdmin(), 10L))
+                    .doesNotThrowAnyException();
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 
     @Test

@@ -9,9 +9,9 @@ import com.gymmind.booking.domain.model.BookingStatus;
 import com.gymmind.booking.domain.repository.BookingRepository;
 import com.gymmind.course.domain.model.Course;
 import com.gymmind.course.domain.repository.CourseRepository;
-import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import jakarta.persistence.OptimisticLockException;
 import org.springframework.stereotype.Service;
@@ -51,21 +51,22 @@ public class DefaultBookingService implements BookingService {
     public BookingView book(CurrentActor actor, BookCourseCommand command) {
         requireWrite(actor, command == null ? null : command.tenantId());
 
+        Long tenantId = ActorAccess.tenantId(actor);
         var existing = bookings.findByTenantIdAndMemberIdAndCourseId(
-                actor.tenantId(), command.memberId(), command.courseId());
+                tenantId, command.memberId(), command.courseId());
         if (existing.isPresent()) {
             return BookingView.from(existing.get());
         }
 
-        entitlements.reserve(actor.tenantId(), command.memberId());
+        entitlements.reserve(tenantId, command.memberId());
         try {
-            reserveCourseCapacity(actor.tenantId(), command.courseId());
+            reserveCourseCapacity(tenantId, command.courseId());
         } catch (RuntimeException ex) {
-            entitlements.release(actor.tenantId(), command.memberId());
+            entitlements.release(tenantId, command.memberId());
             throw ex;
         }
 
-        Booking saved = bookings.save(Booking.create(actor.tenantId(), command.memberId(), command.courseId()));
+        Booking saved = bookings.save(Booking.create(tenantId, command.memberId(), command.courseId()));
         audit.record(new AuditEvent("BOOKING_CREATED", "BOOKING", saved.getId(),
                 AuditResult.SUCCESS, "booking-service", Map.of()));
         return BookingView.from(saved);
@@ -75,10 +76,11 @@ public class DefaultBookingService implements BookingService {
     @Transactional
     public BookingView cancel(CurrentActor actor, Long bookingId) {
         requireWrite(actor, null);
-        Booking booking = bookings.findByTenantIdAndId(actor.tenantId(), bookingId)
+        Long tenantId = ActorAccess.tenantId(actor);
+        Booking booking = bookings.findByTenantIdAndId(tenantId, bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        Course course = courses.findByTenantIdAndId(actor.tenantId(), booking.getCourseId())
+        Course course = courses.findByTenantIdAndId(tenantId, booking.getCourseId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         ensureCancellationAllowed(course);
 
@@ -92,7 +94,7 @@ public class DefaultBookingService implements BookingService {
         booking.cancel();
         course.release();
         courses.save(course);
-        entitlements.release(actor.tenantId(), booking.getMemberId());
+        entitlements.release(tenantId, booking.getMemberId());
         Booking saved = bookings.save(booking);
         audit.record(new AuditEvent("BOOKING_CANCELLED", "BOOKING", saved.getId(),
                 AuditResult.SUCCESS, "booking-service", Map.of()));
@@ -103,7 +105,7 @@ public class DefaultBookingService implements BookingService {
     @Transactional
     public BookingView confirm(CurrentActor actor, Long bookingId) {
         requireWrite(actor, null);
-        Booking booking = bookings.findByTenantIdAndId(actor.tenantId(), bookingId)
+        Booking booking = bookings.findByTenantIdAndId(ActorAccess.tenantId(actor), bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (booking.getStatus() == BookingStatus.CONFIRMED) {
             return BookingView.from(booking);
@@ -138,7 +140,7 @@ public class DefaultBookingService implements BookingService {
     @Transactional(readOnly = true)
     public List<BookingView> list(CurrentActor actor) {
         requireWrite(actor, null);
-        return bookings.findAllByTenantId(actor.tenantId()).stream().map(BookingView::from).toList();
+        return bookings.findAllByTenantId(ActorAccess.tenantId(actor)).stream().map(BookingView::from).toList();
     }
 
     private void ensureCancellationAllowed(Course course) {
@@ -149,11 +151,9 @@ public class DefaultBookingService implements BookingService {
     }
 
     private static void requireWrite(CurrentActor actor, Long commandTenantId) {
-        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission("booking:write")) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        if (commandTenantId != null && !actor.tenantId().equals(commandTenantId)) {
+        ActorAccess.requireGymAdmin(actor, "booking:write");
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (commandTenantId != null && !tenantId.equals(commandTenantId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

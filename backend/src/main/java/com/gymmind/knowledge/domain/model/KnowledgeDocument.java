@@ -24,6 +24,19 @@ public class KnowledgeDocument {
     public void markParsing() { require(DocumentStatus.UPLOADING); status=DocumentStatus.PARSING; }
     public void markReady() { if (status != DocumentStatus.UPLOADING && status != DocumentStatus.PARSING) throw new IllegalStateException("invalid status transition"); status=DocumentStatus.READY; }
     public void tombstone() { if (status == DocumentStatus.DELETED) return; status=DocumentStatus.DELETED; }
+
+    /** 更新可见范围（租户隔离内的元数据修改） */
+    public void updateVisibility(DocumentVisibility newVisibility, Long actorUserId) {
+        if (newVisibility == null) {
+            throw new IllegalArgumentException("visibility must not be null");
+        }
+        if (newVisibility == DocumentVisibility.PRIVATE_USER
+                && (actorUserId == null || actorUserId <= 0)) {
+            throw new IllegalArgumentException("private document requires owner");
+        }
+        visibility = newVisibility;
+        ownerUserId = newVisibility == DocumentVisibility.PRIVATE_USER ? actorUserId : null;
+    }
     private void require(DocumentStatus expected) { if (status != expected) throw new IllegalStateException("invalid status transition"); }
     public Long id(){return id;} public Long tenantId(){return tenantId;} public Long ownerUserId(){return ownerUserId;} public String fileName(){return fileName;} public String contentType(){return contentType;} public String objectKey(){return objectKey;} public DocumentVisibility visibility(){return visibility;} public DocumentStatus status(){return status;}
 }

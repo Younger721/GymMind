@@ -11,10 +11,7 @@ public class TenantAccessGuard {
 
     public Long requireTenant(CurrentActor actor) {
         requireActor(actor);
-        if (actor.tenantId() == null) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return actor.tenantId();
+        return ActorAccess.requireTenantId(actor);
     }
 
     public void requireSameTenant(CurrentActor actor, Long resourceTenantId) {

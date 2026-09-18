@@ -46,13 +46,10 @@ public class SystemCatalogInitializer implements ApplicationRunner {
             permissionRepository.findByCode(entry.code())
                     .orElseGet(() -> permissionRepository.save(Permission.of(entry.code(), entry.name())));
         }
-        link(RoleCode.PLATFORM_ADMIN, "platform:tenant:read");
-        link(RoleCode.PLATFORM_ADMIN, "platform:tenant:write");
-        link(RoleCode.PLATFORM_ADMIN, "platform:quota:read");
-        link(RoleCode.PLATFORM_ADMIN, "platform:quota:write");
-        link(RoleCode.PLATFORM_ADMIN, "platform:stats:read");
-        link(RoleCode.PLATFORM_ADMIN, "platform:knowledge:read");
-        link(RoleCode.PLATFORM_ADMIN, "platform:agent:read");
+        // 平台管理员白名单：授予全部权限码（JWT 与 DB 角色映射保持一致）
+        for (PermissionCatalog.Entry entry : PermissionCatalog.entries()) {
+            link(RoleCode.PLATFORM_ADMIN, entry.code());
+        }
         link(RoleCode.GYM_ADMIN, "tenant:settings:read");
         link(RoleCode.GYM_ADMIN, "tenant:settings:write");
         link(RoleCode.GYM_ADMIN, "user:read");

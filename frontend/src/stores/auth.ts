@@ -40,6 +40,11 @@ function readRoles(): string[] {
   }
 }
 
+function readPlatformContextTenantId(): number | null {
+  const raw = localStorage.getItem('platformContextTenantId')
+  return raw ? Number(raw) : null
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
   const refreshToken = ref<string | null>(localStorage.getItem('refreshToken'))
@@ -48,6 +53,8 @@ export const useAuthStore = defineStore('auth', () => {
   const email = ref<string | null>(localStorage.getItem('email'))
   const tenantId = ref<number | null>(readTenantId())
   const roles = ref<string[]>(readRoles())
+  /** 平台管理员当前代管的门店租户 ID */
+  const platformContextTenantId = ref<number | null>(readPlatformContextTenantId())
 
   const isAuthenticated = computed(() => !!token.value)
   const isPlatformAdmin = computed(() => {
@@ -128,6 +135,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function setPlatformContextTenantId(id: number | null) {
+    platformContextTenantId.value = id
+    if (id != null) {
+      localStorage.setItem('platformContextTenantId', String(id))
+    } else {
+      localStorage.removeItem('platformContextTenantId')
+    }
+  }
+
   async function logout() {
     try {
       if (refreshToken.value) {
@@ -143,6 +159,7 @@ export const useAuthStore = defineStore('auth', () => {
       email.value = null
       tenantId.value = null
       roles.value = []
+      platformContextTenantId.value = null
       localStorage.removeItem('token')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userId')
@@ -150,6 +167,7 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.removeItem('email')
       localStorage.removeItem('tenantId')
       localStorage.removeItem('roles')
+      localStorage.removeItem('platformContextTenantId')
       ElMessage.success('已退出登录')
       router.push('/login')
     }
@@ -163,6 +181,8 @@ export const useAuthStore = defineStore('auth', () => {
     email,
     tenantId,
     roles,
+    platformContextTenantId,
+    setPlatformContextTenantId,
     isPlatformAdmin,
     isTenantUser,
     isAuthenticated,

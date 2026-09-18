@@ -7,6 +7,7 @@ import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.tenancy.application.TenantQuotaService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
 @Service
 public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase {
@@ -45,13 +47,14 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
 
     @Override
     public KnowledgeDocumentView upload(CurrentActor actor, UploadKnowledgeDocumentCommand command) {
+        Long tenantId = ActorAccess.requireTenantId(actor);
         write(actor);
         if (quotas != null) {
-            quotas.ensureKnowledgeUploadAllowed(actor.tenantId());
+            quotas.ensureKnowledgeUploadAllowed(tenantId);
         }
         KnowledgeDocumentValidator.validate(command);
         Long owner = command.visibility() == DocumentVisibility.PRIVATE_USER ? actor.userId() : null;
-        KnowledgeDocument document = KnowledgeDocument.create(actor.tenantId(), owner, command.fileName(),
+        KnowledgeDocument document = KnowledgeDocument.create(tenantId, owner, command.fileName(),
                 command.contentType(), command.visibility(), sequence.incrementAndGet());
         store.put(document.objectKey(), command.content(), command.contentType());
         KnowledgeDocument saved = repository.save(document);
@@ -59,6 +62,25 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             ingestWorker.enqueue(saved.tenantId(), saved.id());
         }
         return KnowledgeDocumentView.from(saved);
+    }
+
+    @Override
+    public KnowledgeDocumentView find(CurrentActor actor, Long id) {
+        requireRead(actor);
+        KnowledgeDocument document = get(actor, id);
+        ensureReadable(actor, document);
+        return KnowledgeDocumentView.from(document);
+    }
+
+    @Override
+    public KnowledgeDocumentView update(CurrentActor actor, Long id, UpdateKnowledgeDocumentCommand command) {
+        write(actor);
+        if (command == null || command.visibility() == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        KnowledgeDocument document = get(actor, id);
+        document.updateVisibility(command.visibility(), actor.userId());
+        return KnowledgeDocumentView.from(repository.save(document));
     }
 
     @Override
@@ -88,23 +110,15 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
 
     @Override
     public List<KnowledgeDocumentView> list(CurrentActor actor) {
-        if (actor == null) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+        Long tenantId = ActorAccess.requireTenantId(actor);
+        requireRead(actor);
+        Stream<KnowledgeDocument> stream = repository.findByTenantId(tenantId).stream()
+                .filter(document -> document.status() != DocumentStatus.DELETED);
+        if (!ActorAccess.canManageTenant(actor)) {
+            stream = stream.filter(document -> document.visibility() == DocumentVisibility.TENANT
+                    || (document.ownerUserId() != null && document.ownerUserId().equals(actor.userId())));
         }
-        // 平台管理员白名单：可查看全部租户资料
-        if (canBrowseAllTenants(actor)) {
-            return repository.findAllAccessible().stream()
-                    .map(KnowledgeDocumentView::from)
-                    .toList();
-        }
-        if (actor.tenantId() == null || !actor.hasPermission("knowledge:read")) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        return repository.findByTenantId(actor.tenantId()).stream()
-                .filter(document -> document.visibility() == DocumentVisibility.TENANT
-                        || (document.ownerUserId() != null && document.ownerUserId().equals(actor.userId())))
-                .map(KnowledgeDocumentView::from)
-                .toList();
+        return stream.map(KnowledgeDocumentView::from).toList();
     }
 
     @Override
@@ -112,40 +126,58 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         if (actor == null || id == null) {
             return false;
         }
-        if (canBrowseAllTenants(actor)) {
-            return repository.findById(id)
-                    .filter(document -> document.status() != DocumentStatus.DELETED)
-                    .isPresent();
-        }
-        if (actor.tenantId() == null) {
-            return false;
-        }
-        KnowledgeDocument document;
         try {
-            document = get(actor, id);
+            KnowledgeDocument document = get(actor, id);
+            ensureReadable(actor, document);
+            return true;
         } catch (BusinessException ex) {
             return false;
         }
-        return document.visibility() == DocumentVisibility.TENANT || actor.userId().equals(document.ownerUserId());
     }
 
-    /** 平台管理员跨租户只读白名单 */
-    private static boolean canBrowseAllTenants(CurrentActor actor) {
-        return actor.isPlatformAdmin() && actor.hasPermission("platform:knowledge:read");
+    private void requireRead(CurrentActor actor) {
+        if (actor == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (ActorAccess.isSuperAdmin(actor)) {
+            return;
+        }
+        if (actor.tenantId() == null || !actor.hasPermission("knowledge:read")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private void write(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null || !actor.hasPermission("knowledge:write")
+        if (actor == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        ActorAccess.requireTenantId(actor);
+        if (ActorAccess.isSuperAdmin(actor)) {
+            return;
+        }
+        if (!actor.hasPermission("knowledge:write")
                 || (!actor.roles().contains(RoleCode.GYM_ADMIN) && !actor.roles().contains(RoleCode.COACH))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
 
     private KnowledgeDocument get(CurrentActor actor, Long id) {
-        if (actor == null || actor.tenantId() == null || id == null) {
+        if (id == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
-        return repository.findByTenantIdAndId(actor.tenantId(), id)
+        Long tenantId = ActorAccess.requireTenantId(actor);
+        return repository.findByTenantIdAndId(tenantId, id)
+                .filter(document -> document.status() != DocumentStatus.DELETED)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private static void ensureReadable(CurrentActor actor, KnowledgeDocument document) {
+        if (ActorAccess.canManageTenant(actor)) {
+            return;
+        }
+        if (document.visibility() != DocumentVisibility.TENANT
+                && (document.ownerUserId() == null || !document.ownerUserId().equals(actor.userId()))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 }

@@ -17,6 +17,7 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter,
+            PlatformTenantContextFilter platformTenantContextFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler) throws Exception {
         return http
@@ -42,6 +43,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(platformTenantContextFilter, JwtAuthenticationFilter.class)
                 .build();
     }
 }

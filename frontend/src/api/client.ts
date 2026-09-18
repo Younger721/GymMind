@@ -23,6 +23,11 @@ apiClient.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // 平台管理员代管门店：传递所选租户上下文
+    const platformTenantId = localStorage.getItem('platformContextTenantId')
+    if (platformTenantId && config.headers) {
+      config.headers['X-Tenant-Id'] = platformTenantId
+    }
     return config
   },
   (error) => Promise.reject(error)

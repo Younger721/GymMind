@@ -21,6 +21,21 @@
       <header class="topbar">
         <span class="page-hint">{{ currentTitle }}</span>
         <div class="user-area">
+          <el-select
+            v-if="authStore.isPlatformAdmin"
+            v-model="selectedTenantId"
+            size="small"
+            placeholder="选择门店租户"
+            style="width: 160px"
+            @change="onTenantChange"
+          >
+            <el-option
+              v-for="t in tenantOptions"
+              :key="t.id"
+              :label="t.label"
+              :value="t.id"
+            />
+          </el-select>
           <span class="username">{{ authStore.username }}</span>
           <el-button size="small" text @click="handleLogout">退出</el-button>
         </div>
@@ -33,13 +48,40 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { tenancyApi } from '@/api/tenancy'
 import { ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const tenantOptions = ref<{ id: number; label: string }[]>([])
+const selectedTenantId = ref<number | null>(authStore.platformContextTenantId)
+
+async function loadTenants() {
+  if (!authStore.isPlatformAdmin) return
+  try {
+    const res = await tenancyApi.listTenants(0, 100)
+    const items = (res.data?.content ?? []) as Array<{ id: number; name?: string; code?: string }>
+    tenantOptions.value = items.map(t => ({
+      id: t.id,
+      label: t.name || t.code || `租户 #${t.id}`
+    }))
+    if (!selectedTenantId.value && tenantOptions.value.length > 0) {
+      selectedTenantId.value = tenantOptions.value[0].id
+      authStore.setPlatformContextTenantId(selectedTenantId.value)
+    }
+  } catch {
+    /* 平台管理接口失败时不阻塞导航 */
+  }
+}
+
+function onTenantChange(id: number | null) {
+  authStore.setPlatformContextTenantId(id)
+}
+
+onMounted(loadTenants)
 
 const menuGroups = [
   {

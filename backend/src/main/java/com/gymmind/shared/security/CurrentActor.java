@@ -49,7 +49,11 @@ public record CurrentActor(
         return roles.contains(RoleCode.PLATFORM_ADMIN);
     }
 
+    /** 平台管理员白名单：拥有全部权限 */
     public boolean hasPermission(String permission) {
+        if (isPlatformAdmin()) {
+            return permission != null && !permission.isBlank();
+        }
         return permission != null && permissions.contains(permission);
     }
 }

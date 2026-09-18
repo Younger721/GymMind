@@ -8,9 +8,9 @@ import com.gymmind.booking.domain.model.Booking;
 import com.gymmind.booking.domain.model.BookingStatus;
 import com.gymmind.booking.domain.repository.BookingRepository;
 import com.gymmind.course.domain.repository.CourseRepository;
-import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,17 +45,18 @@ public class DefaultCheckInService implements CheckInService {
     @Transactional
     public void checkIn(CurrentActor actor, Long memberId, Long courseId) {
         requirePermission(actor);
-        var course = courses.findByTenantIdAndId(actor.tenantId(), courseId)
+        Long tenantId = ActorAccess.tenantId(actor);
+        var course = courses.findByTenantIdAndId(tenantId, courseId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         Instant now = clock.instant();
         if (now.isBefore(course.getStartsAt()) || now.isAfter(course.getEndsAt())) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
-        Booking booking = bookings.findByTenantIdAndMemberIdAndCourseId(actor.tenantId(), memberId, courseId)
+        Booking booking = bookings.findByTenantIdAndMemberIdAndCourseId(tenantId, memberId, courseId)
                 .filter(value -> value.getStatus() == BookingStatus.CONFIRMED)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
 
-        entitlements.consume(actor.tenantId(), memberId);
+        entitlements.consume(tenantId, memberId);
         booking.complete();
         bookings.save(booking);
         audit.record(new AuditEvent("CHECKIN_RECORDED", "CHECKIN", courseId,
@@ -63,9 +64,6 @@ public class DefaultCheckInService implements CheckInService {
     }
 
     private static void requirePermission(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission("checkin:write")) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        ActorAccess.requireGymAdmin(actor, "checkin:write");
     }
 }

@@ -6,9 +6,9 @@ import com.gymmind.audit.domain.AuditResult;
 import com.gymmind.coach.domain.repository.CoachRepository;
 import com.gymmind.course.domain.model.Course;
 import com.gymmind.course.domain.repository.CourseRepository;
-import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,12 +34,13 @@ public class DefaultCourseService implements CourseService {
     @Transactional
     public CourseView create(CurrentActor actor, CreateCourseCommand command) {
         require(actor, "course:write");
-        if (command == null || command.tenantId() != null && !actor.tenantId().equals(command.tenantId())) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (command == null || command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        coaches.findByTenantIdAndId(actor.tenantId(), command.coachId())
+        coaches.findByTenantIdAndId(tenantId, command.coachId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        Course saved = courses.save(Course.create(actor.tenantId(), command.coachId(), command.title(),
+        Course saved = courses.save(Course.create(tenantId, command.coachId(), command.title(),
                 command.type(), command.startsAt(), command.endsAt(), command.capacity(), command.location()));
         audit.record(new AuditEvent("COURSE_CREATED", "COURSE", saved.getId(), AuditResult.SUCCESS,
                 "course-service", Map.of()));
@@ -57,7 +58,7 @@ public class DefaultCourseService implements CourseService {
     @Transactional(readOnly = true)
     public List<CourseView> list(CurrentActor actor) {
         require(actor, "course:read");
-        return courses.findAllByTenantId(actor.tenantId()).stream().map(DefaultCourseService::view).toList();
+        return courses.findAllByTenantId(ActorAccess.tenantId(actor)).stream().map(DefaultCourseService::view).toList();
     }
 
     @Override
@@ -88,15 +89,12 @@ public class DefaultCourseService implements CourseService {
     }
 
     private Course findCourse(CurrentActor actor, Long id) {
-        return courses.findByTenantIdAndId(actor.tenantId(), id)
+        return courses.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
     private static void require(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission(permission)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        ActorAccess.requireGymAdmin(actor, permission);
     }
 
     private static CourseView view(Course course) {

@@ -7,6 +7,7 @@ import com.gymmind.member.domain.model.Member;
 import com.gymmind.member.domain.repository.MemberRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.TenantAccessGuard;
 import com.gymmind.iam.domain.model.RoleCode;
@@ -65,7 +66,7 @@ public class DefaultMemberService implements MemberService {
     public void update(CurrentActor actor, Long memberId, String fullName, String phone) {
         requireAdmin(actor, "member:write");
         Member member = findTenant(actor, memberId);
-        if (members.existsByTenantIdAndPhone(actor.tenantId(), phone) && !phone.equals(member.getPhone())) throw new BusinessException(ErrorCode.CONFLICT);
+        if (members.existsByTenantIdAndPhone(ActorAccess.tenantId(actor), phone) && !phone.equals(member.getPhone())) throw new BusinessException(ErrorCode.CONFLICT);
         member.update(fullName, phone);
         members.save(member);
         audit.record(new AuditEvent("MEMBER_UPDATED", "MEMBER", memberId, AuditResult.SUCCESS, "member-service", Map.of()));
@@ -86,15 +87,20 @@ public class DefaultMemberService implements MemberService {
     public PageResponse<MemberView> list(CurrentActor actor, String query, Pageable pageable) {
         requireAdmin(actor, "member:read");
         Pageable effective = pageable == null ? Pageable.ofSize(20) : pageable;
+        Long tenantId = ActorAccess.tenantId(actor);
         var page = (query == null || query.isBlank())
-                ? members.findAllByTenantId(actor.tenantId(), effective)
-                : members.searchByTenantId(actor.tenantId(), query.trim(), effective);
+                ? members.findAllByTenantId(tenantId, effective)
+                : members.searchByTenantId(tenantId, query.trim(), effective);
         return new PageResponse<>(page.map(DefaultMemberService::view).getContent(), page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
-    private Member findTenant(CurrentActor actor, Long id) { return members.findByTenantIdAndId(actor.tenantId(), id).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)); }
+    private Member findTenant(CurrentActor actor, Long id) {
+        return members.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
     private static void requireAdmin(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN) || !actor.hasPermission(permission)) throw new BusinessException(ErrorCode.FORBIDDEN);
+        ActorAccess.requireGymAdmin(actor, permission);
     }
     private static MemberView view(Member member) { return new MemberView(member.getId(), member.getTenantId(), member.getUserId(), member.getMemberNumber(), member.getFullName(), member.getPhone(), member.getStatus()); }
 }

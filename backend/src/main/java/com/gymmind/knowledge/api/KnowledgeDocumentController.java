@@ -2,6 +2,7 @@ package com.gymmind.knowledge.api;
 
 import com.gymmind.knowledge.application.KnowledgeDocumentUseCase;
 import com.gymmind.knowledge.application.KnowledgeDocumentView;
+import com.gymmind.knowledge.application.UpdateKnowledgeDocumentCommand;
 import com.gymmind.knowledge.application.UploadKnowledgeDocumentCommand;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.shared.api.ApiResponse;
@@ -40,6 +41,19 @@ public class KnowledgeDocumentController {
     @GetMapping
     public ApiResponse<List<KnowledgeDocumentView>> list() {
         return ApiResponse.success(useCase.list(actors.requireCurrent()));
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<KnowledgeDocumentView> find(@PathVariable Long id) {
+        return ApiResponse.success(useCase.find(actors.requireCurrent(), id));
+    }
+
+    @PatchMapping("/{id}")
+    public ApiResponse<KnowledgeDocumentView> update(
+            @PathVariable Long id,
+            @RequestParam DocumentVisibility visibility) {
+        return ApiResponse.success(useCase.update(
+                actors.requireCurrent(), id, new UpdateKnowledgeDocumentCommand(visibility)));
     }
 
     @PostMapping("/{id}/reindex")

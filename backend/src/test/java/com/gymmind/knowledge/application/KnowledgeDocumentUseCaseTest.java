@@ -6,6 +6,7 @@ import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import com.gymmind.iam.domain.model.RoleCode;
 import org.junit.jupiter.api.Test;
 
@@ -46,15 +47,31 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
-    void platformAdminWithWhitelistCanListAllTenantDocuments() {
+    void platformAdminListsOnlySelectedTenantDocuments() {
         useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
-        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
-                Set.of("platform:knowledge:read"), 0, "platform");
-        assertThat(useCase.list(platformAdmin)).hasSize(1);
-
         var otherTenantAdmin = new CurrentActor(13L, 8L, Set.of(RoleCode.GYM_ADMIN), Set.of("knowledge:write"), 0, "t3");
         useCase.upload(otherTenantAdmin, new UploadKnowledgeDocumentCommand("other.md", "text/markdown", "# other".getBytes(), DocumentVisibility.TENANT));
-        assertThat(useCase.list(platformAdmin)).hasSize(2);
+
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:knowledge:read"), 0, "platform");
+        assertThatThrownBy(() -> useCase.list(platformAdmin)).isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+
+        TenantContextHolder.set(7L);
+        try {
+            assertThat(useCase.list(platformAdmin)).hasSize(1);
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
+
+    @Test
+    void gymAdminCanUpdateDocumentVisibilityWithinTenant() {
+        KnowledgeDocumentView view = useCase.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
+        KnowledgeDocumentView updated = useCase.update(admin, view.id(),
+                new UpdateKnowledgeDocumentCommand(DocumentVisibility.PRIVATE_USER));
+        assertThat(updated.visibility()).isEqualTo(DocumentVisibility.PRIVATE_USER);
     }
 
     @Test

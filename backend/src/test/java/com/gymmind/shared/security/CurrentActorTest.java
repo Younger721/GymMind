@@ -36,8 +36,9 @@ class CurrentActorTest {
 
         assertThat(actor.isPlatformAdmin()).isTrue();
         assertThat(actor.hasPermission("platform:tenant:read")).isTrue();
-        assertThat(actor.hasPermission("platform:tenant:write")).isFalse();
+        assertThat(actor.hasPermission("membership:write")).isTrue();
         assertThat(actor.hasPermission(null)).isFalse();
+        assertThat(actor.hasPermission("  ")).isFalse();
     }
 
     @Test
