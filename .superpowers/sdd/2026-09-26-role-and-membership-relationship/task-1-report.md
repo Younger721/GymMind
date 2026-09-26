@@ -17,3 +17,9 @@ Implemented and committed as `483e691` (`feat: support members across tenants`).
 ## Concerns
 
 Existing member services still use legacy tenant-scoped repository methods and will need to be migrated in the subsequent service/API tasks. The legacy `member_profile.tenant_id` column remains intentionally for migration compatibility.
+
+## Review fixes
+
+- Fixed MemberTenant constructor superclass invocation order.
+- Normalized blank tenant fields to null and updated the focused test.
+- Added optional MemberTenantRepository integration to DefaultMemberService for membership verification and creation.
