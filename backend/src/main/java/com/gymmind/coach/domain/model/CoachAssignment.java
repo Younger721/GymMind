@@ -35,5 +35,7 @@ public class CoachAssignment extends TenantScopedEntity {
     public boolean isActive() { return status == CoachAssignmentStatus.ACTIVE; }
     public CoachAssignmentStatus getStatus() { return status; }
     public Long getRequestedBy() { return requestedBy; }
+    public java.time.Instant getRequestedAt() { return requestedAt; }
+    public java.time.Instant getResolvedAt() { return resolvedAt; }
     private void requireStatus(CoachAssignmentStatus... allowed) { for (CoachAssignmentStatus value : allowed) if (status == value) return; throw new IllegalStateException("Invalid assignment status: " + status); }
 }

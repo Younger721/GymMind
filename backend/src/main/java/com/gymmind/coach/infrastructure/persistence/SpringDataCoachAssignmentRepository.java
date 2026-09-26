@@ -13,4 +13,7 @@ interface SpringDataCoachAssignmentRepository extends JpaRepository<CoachAssignm
     List<Long> findMemberIdsByTenantIdAndCoachId(@Param("tenantId") Long tenantId, @Param("coachId") Long coachId);
     long deleteByTenantIdAndCoachIdAndMemberIdAndStatus(Long tenantId, Long coachId, Long memberId, CoachAssignmentStatus status);
     Optional<CoachAssignment> findByIdAndTenantId(Long id, Long tenantId);
+    List<CoachAssignment> findByTenantIdAndStatus(Long tenantId, CoachAssignmentStatus status);
+    List<CoachAssignment> findByTenantIdAndCoachIdAndStatus(Long tenantId, Long coachId, CoachAssignmentStatus status);
+    List<CoachAssignment> findByTenantIdAndMemberIdAndStatus(Long tenantId, Long memberId, CoachAssignmentStatus status);
 }

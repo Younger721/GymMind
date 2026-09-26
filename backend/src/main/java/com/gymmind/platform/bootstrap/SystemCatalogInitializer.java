@@ -50,6 +50,12 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         for (PermissionCatalog.Entry entry : PermissionCatalog.entries()) {
             link(RoleCode.PLATFORM_ADMIN, entry.code());
         }
+        // 门店管理员：授予全部非 platform 权限码
+        for (PermissionCatalog.Entry entry : PermissionCatalog.entries()) {
+            if (!entry.code().startsWith("platform:")) {
+                link(RoleCode.GYM_ADMIN, entry.code());
+            }
+        }
         link(RoleCode.GYM_ADMIN, "tenant:settings:read");
         link(RoleCode.GYM_ADMIN, "tenant:settings:write");
         link(RoleCode.GYM_ADMIN, "user:read");
@@ -59,7 +65,13 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         link(RoleCode.GYM_ADMIN, "member:read");
         link(RoleCode.GYM_ADMIN, "member:write");
         link(RoleCode.COACH, "coach:read");
+        link(RoleCode.COACH, "coach-relation:read");
+        link(RoleCode.COACH, "coach-relation:accept");
+        link(RoleCode.COACH, "coach-relation:reject");
         link(RoleCode.MEMBER, "member:read");
+        link(RoleCode.MEMBER, "coach-relation:request");
+        link(RoleCode.MEMBER, "coach-relation:read");
+        link(RoleCode.GYM_ADMIN, "coach-relation:manage");
         link(RoleCode.GYM_ADMIN, "course:read");
         link(RoleCode.GYM_ADMIN, "course:write");
         link(RoleCode.GYM_ADMIN, "membership:read");

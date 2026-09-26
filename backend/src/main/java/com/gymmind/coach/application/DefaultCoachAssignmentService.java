@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.Objects;
+import java.util.List;
 
 @Service
 public class DefaultCoachAssignmentService implements CoachAssignmentService {
@@ -73,6 +74,20 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
         if (ActorAccess.canManageTenant(actor)) return actor.hasPermission("member:read");
         if (!actor.roles().contains(RoleCode.COACH)) return false;
         return coaches.findByTenantIdAndUserId(tenantId, actor.userId()).map(coach -> assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coach.getId(), memberId, CoachAssignmentStatus.ACTIVE)).orElse(false);
+    }
+    @Override @Transactional(readOnly = true) public List<CoachAssignment> list(CurrentActor actor, CoachAssignmentStatus status) {
+        if (actor == null || actor.tenantId() == null || status == null) throw new BusinessException(ErrorCode.FORBIDDEN);
+        Long tenantId = actor.tenantId();
+        if (ActorAccess.canManageTenant(actor)) return assignments.findByTenantIdAndStatus(tenantId, status);
+        if (actor.roles().contains(RoleCode.COACH)) {
+            Long coachId = coaches.findByTenantIdAndUserId(tenantId, actor.userId()).map(c -> c.getId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+            return assignments.findByTenantIdAndCoachIdAndStatus(tenantId, coachId, status);
+        }
+        if (actor.roles().contains(RoleCode.MEMBER) && members != null) {
+            Long memberId = members.findByUserId(actor.userId()).map(m -> m.getId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+            return assignments.findByTenantIdAndMemberIdAndStatus(tenantId, memberId, status);
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
     private static void requireAdmin(CurrentActor actor) { ActorAccess.requireGymAdmin(actor, "coach:assign"); }
 }

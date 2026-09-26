@@ -26,6 +26,15 @@
         </div>
         <BizCrudPanel title="新建教练" :create-fields="coachFields" :loader="emptyLoader" :creator="createCoach" />
       </el-tab-pane>
+      <el-tab-pane v-if="isMember || isCoach" label="教练关系" name="relations">
+        <BizCrudPanel title="当前关系" :loader="loadRelations" :row-actions="relationActions" />
+        <div v-if="isMember" class="simple-card relation-request">
+          <el-form inline @submit.prevent>
+            <el-form-item label="教练 ID"><el-input v-model="relationCoachId" style="width: 120px" /></el-form-item>
+            <el-button type="primary" @click="requestCoach">申请教练</el-button>
+          </el-form>
+        </div>
+      </el-tab-pane>
       <el-tab-pane label="课程" name="courses">
         <BizCrudPanel
           title="课程排期"
@@ -52,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import BizCrudPanel, { type FieldDef, type RowAction } from '@/components/business/BizCrudPanel.vue'
 import JsonBlock from '@/components/business/JsonBlock.vue'
@@ -60,11 +69,16 @@ import { membersApi } from '@/api/members'
 import { coachesApi } from '@/api/coaches'
 import { coursesApi } from '@/api/courses'
 import { bookingsApi, checkInsApi } from '@/api/bookings'
+import { useAuthStore } from '@/stores/auth'
 
 const tab = ref('members')
 const coachLookupId = ref('')
 const coachLookupResult = ref<unknown>(null)
 const coachLoading = ref(false)
+const relationCoachId = ref('')
+const auth = useAuthStore()
+const isMember = computed(() => auth.roles.includes('MEMBER'))
+const isCoach = computed(() => auth.roles.includes('COACH'))
 
 const memberFields: FieldDef[] = [
   { key: 'memberNumber', label: '会员号', placeholder: 'M001' },
@@ -89,18 +103,21 @@ const courseFields: FieldDef[] = [
 ]
 
 const bookingFields: FieldDef[] = [
-  { key: 'memberId', label: '会员ID', type: 'number' },
-  { key: 'courseId', label: '课程ID', type: 'number' }
+  { key: 'memberId', label: '会员', type: 'select', optionsLoader: loadMemberOptions },
+  { key: 'courseId', label: '课程', type: 'select', optionsLoader: loadCourseOptions }
 ]
 
 const checkInFields: FieldDef[] = [
-  { key: 'memberId', label: '会员ID', type: 'number' },
-  { key: 'courseId', label: '课程ID', type: 'number' }
+  { key: 'memberId', label: '会员', type: 'select', optionsLoader: loadMemberOptions },
+  { key: 'courseId', label: '课程', type: 'select', optionsLoader: loadCourseOptions }
 ]
 
 const memberActions: RowAction[] = [
   { label: '暂停', handler: row => membersApi.suspend(Number(row.id)) }
 ]
+const relationActions: RowAction[] = isCoach.value
+  ? [{ label: '接受', handler: row => coachesApi.acceptRelation(Number(row.id)) }, { label: '拒绝', handler: row => coachesApi.rejectRelation(Number(row.id)) }]
+  : [{ label: '结束', handler: row => coachesApi.endRelation(Number(row.id)) }]
 
 const courseActions: RowAction[] = [
   { label: '取消', handler: row => coursesApi.cancel(Number(row.id)) }
@@ -133,6 +150,12 @@ async function findCoach() {
   }
 }
 
+async function loadRelations() { return coachesApi.relations(isCoach.value ? 'pending' : 'active') }
+async function requestCoach() {
+  const id = Number(relationCoachId.value)
+  if (id > 0) await membersApi.requestCoach(id)
+}
+
 async function createCoach(p: Record<string, string>) {
   return coachesApi.create({
     coachNumber: p.coachNumber,
@@ -143,6 +166,24 @@ async function createCoach(p: Record<string, string>) {
 
 async function loadCourses() {
   return coursesApi.list()
+}
+
+async function loadMemberOptions() {
+  const response = await membersApi.list(undefined, 0, 100)
+  const content = response.data?.content ?? []
+  return content.map(member => ({
+    label: `${member.fullName ?? '未命名'} (${member.memberNumber ?? member.id})`,
+    value: String(member.id)
+  }))
+}
+
+async function loadCourseOptions() {
+  const response = await coursesApi.list()
+  const courses = response.data ?? []
+  return (courses as Array<Record<string, unknown>>).map(course => ({
+    label: `${String(course.title ?? '未命名课程')} (#${String(course.id)})`,
+    value: String(course.id)
+  }))
 }
 
 async function createCourse(p: Record<string, string>) {

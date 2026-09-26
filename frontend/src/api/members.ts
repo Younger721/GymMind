@@ -29,5 +29,11 @@ export const membersApi = {
   },
   suspend(id: number) {
     return apiClient.post(`/v1/members/${id}/suspend`)
+  },
+  requestCoach(coachId: number) {
+    return apiClient.post('/v1/coach-relations', { coachId })
+  },
+  coachRelations(status: 'pending' | 'active' = 'active') {
+    return apiClient.get(`/v1/coach-relations/${status}`)
   }
 }

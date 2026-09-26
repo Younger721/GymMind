@@ -16,5 +16,12 @@ export const coachesApi = {
   },
   unassignMember(coachId: number, memberId: number) {
     return apiClient.delete(`/v1/coaches/${coachId}/members/${memberId}`)
-  }
+  },
+  relations(status: 'pending' | 'active' = 'active') {
+    return apiClient.get(`/v1/coach-relations/${status}`)
+  },
+  acceptRelation(id: number) { return apiClient.post(`/v1/coach-relations/${id}/accept`) },
+  rejectRelation(id: number) { return apiClient.post(`/v1/coach-relations/${id}/reject`) },
+  cancelRelation(id: number) { return apiClient.post(`/v1/coach-relations/${id}/cancel`) },
+  endRelation(id: number) { return apiClient.post(`/v1/coach-relations/${id}/end`) }
 }

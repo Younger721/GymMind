@@ -14,4 +14,7 @@ public interface CoachAssignmentRepository {
     Optional<CoachAssignment> findByIdAndTenantId(Long id, Long tenantId);
     Optional<CoachAssignment> findPendingByTenantIdAndCoachIdAndMemberId(Long tenantId, Long coachId, Long memberId);
     boolean existsByTenantIdAndCoachIdAndMemberIdAndStatus(Long tenantId, Long coachId, Long memberId, CoachAssignmentStatus status);
+    List<CoachAssignment> findByTenantIdAndStatus(Long tenantId, CoachAssignmentStatus status);
+    List<CoachAssignment> findByTenantIdAndCoachIdAndStatus(Long tenantId, Long coachId, CoachAssignmentStatus status);
+    List<CoachAssignment> findByTenantIdAndMemberIdAndStatus(Long tenantId, Long memberId, CoachAssignmentStatus status);
 }

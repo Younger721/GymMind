@@ -16,4 +16,7 @@ import com.gymmind.coach.domain.model.CoachAssignmentStatus;
     public Optional<CoachAssignment> findByIdAndTenantId(Long id, Long tenantId) { return delegate.findByIdAndTenantId(id, tenantId); }
     public Optional<CoachAssignment> findPendingByTenantIdAndCoachIdAndMemberId(Long tenantId, Long coachId, Long memberId) { return delegate.findByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, CoachAssignmentStatus.PENDING); }
     public boolean existsByTenantIdAndCoachIdAndMemberIdAndStatus(Long tenantId, Long coachId, Long memberId, CoachAssignmentStatus status) { return delegate.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, status); }
+    public List<CoachAssignment> findByTenantIdAndStatus(Long tenantId, CoachAssignmentStatus status) { return delegate.findByTenantIdAndStatus(tenantId, status); }
+    public List<CoachAssignment> findByTenantIdAndCoachIdAndStatus(Long tenantId, Long coachId, CoachAssignmentStatus status) { return delegate.findByTenantIdAndCoachIdAndStatus(tenantId, coachId, status); }
+    public List<CoachAssignment> findByTenantIdAndMemberIdAndStatus(Long tenantId, Long memberId, CoachAssignmentStatus status) { return delegate.findByTenantIdAndMemberIdAndStatus(tenantId, memberId, status); }
 }
