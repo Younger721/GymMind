@@ -1,6 +1,6 @@
 package com.gymmind.member.domain.model;
 
-import com.gymmind.shared.persistence.TenantScopedEntity;
+import com.gymmind.shared.persistence.AuditableEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,14 +13,17 @@ import jakarta.persistence.UniqueConstraint;
         @UniqueConstraint(name = "uk_member_tenant_number", columnNames = {"tenant_id", "member_number"}),
         @UniqueConstraint(name = "uk_member_tenant_phone", columnNames = {"tenant_id", "phone"})
 })
-public class Member extends TenantScopedEntity {
+public class Member extends AuditableEntity {
+    /** Legacy column retained for migration compatibility; tenant membership now lives in member_tenant. */
+    @Column(name = "tenant_id")
+    private Long tenantId;
     @Column(name = "user_id")
     private Long userId;
-    @Column(name = "member_number", nullable = false, length = 64)
+    @Column(name = "member_number", length = 64)
     private String memberNumber;
     @Column(nullable = false, length = 128)
     private String fullName;
-    @Column(nullable = false, length = 32)
+    @Column(length = 32)
     private String phone;
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
@@ -29,7 +32,7 @@ public class Member extends TenantScopedEntity {
     protected Member() {}
 
     private Member(Long tenantId, Long userId, String memberNumber, String fullName, String phone) {
-        super(requireTenant(tenantId));
+        this.tenantId = tenantId;
         this.userId = userId;
         this.memberNumber = required(memberNumber, "memberNumber");
         this.fullName = required(fullName, "fullName");
@@ -40,6 +43,11 @@ public class Member extends TenantScopedEntity {
         return new Member(tenantId, userId, memberNumber, fullName, phone);
     }
 
+    /** Creates a global member profile. Tenant-specific data belongs to MemberTenant. */
+    public static Member create(Long userId, String fullName) {
+        return new Member(null, userId, null, fullName, null);
+    }
+
     public void update(String fullName, String phone) {
         this.fullName = required(fullName, "fullName");
         this.phone = required(phone, "phone");
@@ -48,17 +56,17 @@ public class Member extends TenantScopedEntity {
     public void suspend() { status = MemberStatus.SUSPENDED; }
     public void activate() { status = MemberStatus.ACTIVE; }
     public Long getUserId() { return userId; }
+    public Long getTenantId() { return tenantId; }
     public String getMemberNumber() { return memberNumber; }
     public String getFullName() { return fullName; }
     public String getPhone() { return phone; }
     public MemberStatus getStatus() { return status; }
 
-    private static Long requireTenant(Long value) {
-        if (value == null || value <= 0) throw new IllegalArgumentException("tenantId must be positive");
-        return value;
-    }
     private static String required(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
+        if (value == null || value.isBlank()) {
+            if ("memberNumber".equals(name) || "phone".equals(name)) return null;
+            throw new IllegalArgumentException(name + " must not be blank");
+        }
         return value.trim();
     }
 }
