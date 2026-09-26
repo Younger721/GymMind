@@ -5,6 +5,8 @@ import com.gymmind.audit.domain.AuditEvent;
 import com.gymmind.audit.domain.AuditResult;
 import com.gymmind.member.domain.model.Member;
 import com.gymmind.member.domain.repository.MemberRepository;
+import com.gymmind.member.domain.repository.MemberTenantRepository;
+import com.gymmind.member.domain.model.MemberTenant;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
@@ -22,11 +24,17 @@ import com.gymmind.shared.api.PageResponse;
 public class DefaultMemberService implements MemberService {
     private final MemberRepository members;
     private final AuditRecorder audit;
+    private final MemberTenantRepository memberships;
     private final TenantAccessGuard guard = new TenantAccessGuard();
 
     public DefaultMemberService(MemberRepository members, AuditRecorder audit) {
+        this(members, audit, null);
+    }
+
+    public DefaultMemberService(MemberRepository members, AuditRecorder audit, MemberTenantRepository memberships) {
         this.members = Objects.requireNonNull(members, "members");
         this.audit = Objects.requireNonNull(audit, "audit");
+        this.memberships = memberships;
     }
 
     @Override
@@ -39,6 +47,10 @@ public class DefaultMemberService implements MemberService {
         if (members.findByTenantIdAndMemberNumber(tenantId, command.memberNumber()).isPresent()
                 || members.existsByTenantIdAndPhone(tenantId, command.phone())) throw new BusinessException(ErrorCode.CONFLICT);
         Member saved = members.save(Member.create(tenantId, command.userId(), command.memberNumber(), command.fullName(), command.phone()));
+        if (memberships != null && saved.getId() != null) {
+            if (memberships.existsByTenantIdAndMemberId(tenantId, saved.getId())) throw new BusinessException(ErrorCode.CONFLICT);
+            memberships.save(MemberTenant.create(saved.getId(), tenantId, command.memberNumber(), command.phone()));
+        }
         audit.record(new AuditEvent("MEMBER_CREATED", "MEMBER", saved.getId(), AuditResult.SUCCESS, "member-service", Map.of()));
         return view(saved);
     }
@@ -47,6 +59,7 @@ public class DefaultMemberService implements MemberService {
     @Transactional(readOnly = true)
     public MemberView find(CurrentActor actor, Long memberId) {
         Long tenantId = guard.requireTenant(actor);
+        requireMembership(tenantId, memberId);
         Member member = members.findByTenantIdAndId(tenantId, memberId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (actor.roles().contains(RoleCode.MEMBER) && !Objects.equals(actor.userId(), member.getUserId())) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         if (!actor.roles().contains(RoleCode.MEMBER) && !actor.hasPermission("member:read")) throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -57,6 +70,7 @@ public class DefaultMemberService implements MemberService {
     @Transactional(readOnly = true)
     public MemberView findSelf(CurrentActor actor) {
         Long tenantId = guard.requireTenant(actor);
+        requireMembershipForUser(tenantId, actor.userId());
         Member member = members.findByTenantIdAndUserId(tenantId, actor.userId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         return view(member);
     }
@@ -95,8 +109,21 @@ public class DefaultMemberService implements MemberService {
     }
 
     private Member findTenant(CurrentActor actor, Long id) {
+        requireMembership(ActorAccess.tenantId(actor), id);
         return members.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private void requireMembership(Long tenantId, Long memberId) {
+        if (memberships != null && !memberships.existsByTenantIdAndMemberId(tenantId, memberId))
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    private void requireMembershipForUser(Long tenantId, Long userId) {
+        if (memberships == null) return;
+        Member member = members.findByTenantIdAndUserId(tenantId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        requireMembership(tenantId, member.getId());
     }
 
     private static void requireAdmin(CurrentActor actor, String permission) {

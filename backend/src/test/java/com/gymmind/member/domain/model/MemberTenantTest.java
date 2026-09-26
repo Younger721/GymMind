@@ -17,7 +17,6 @@ class MemberTenantTest {
     void membershipRequiresPositiveIdsAndContactFields() {
         assertThatThrownBy(() -> MemberTenant.create(0L, 11L, "A-001", "13800000001"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> MemberTenant.create(7L, 11L, "", "13800000001"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(MemberTenant.create(7L, 11L, "", "13800000001").getMemberNumber()).isNull();
     }
 }

@@ -29,12 +29,12 @@ public class MemberTenant extends TenantScopedEntity {
     protected MemberTenant() {}
 
     private MemberTenant(Long memberId, Long tenantId, String memberNumber, String phone) {
+        super(tenantId);
         if (memberId == null || memberId <= 0) throw new IllegalArgumentException("memberId must be positive");
         if (tenantId == null || tenantId <= 0) throw new IllegalArgumentException("tenantId must be positive");
-        super(tenantId);
         this.memberId = memberId;
-        this.memberNumber = optional(memberNumber);
-        this.phone = optional(phone);
+        this.memberNumber = normalize(memberNumber);
+        this.phone = normalize(phone);
     }
 
     /** Creates a bare tenant membership for callers that populate profile fields separately. */
@@ -47,8 +47,8 @@ public class MemberTenant extends TenantScopedEntity {
     }
 
     public void update(String memberNumber, String phone) {
-        this.memberNumber = optional(memberNumber);
-        this.phone = optional(phone);
+        this.memberNumber = normalize(memberNumber);
+        this.phone = normalize(phone);
     }
 
     public void suspend() { status = MemberStatus.SUSPENDED; }
@@ -58,9 +58,5 @@ public class MemberTenant extends TenantScopedEntity {
     public String getPhone() { return phone; }
     public MemberStatus getStatus() { return status; }
 
-    private static String required(String value, String name) {
-        if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
-        return value.trim();
-    }
-    private static String optional(String value) { return value == null ? null : value.trim(); }
+    private static String normalize(String value) { return value == null || value.isBlank() ? null : value.trim(); }
 }
