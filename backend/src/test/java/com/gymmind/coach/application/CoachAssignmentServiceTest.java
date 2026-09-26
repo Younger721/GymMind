@@ -57,6 +57,7 @@ class CoachAssignmentServiceTest {
         var members = mock(com.gymmind.member.domain.repository.MemberRepository.class);
         var memberships = mock(com.gymmind.member.domain.repository.MemberTenantRepository.class);
         var member = com.gymmind.member.domain.model.Member.create(41L, "Member");
+        org.springframework.test.util.ReflectionTestUtils.setField(member, "id", 1L);
         when(members.findByUserId(41L)).thenReturn(Optional.of(member));
         when(memberships.existsByTenantIdAndMemberId(11L, 1L)).thenReturn(true);
         when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(eq(11L), eq(3L), eq(1L), any())).thenReturn(false);
