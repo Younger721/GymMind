@@ -13,7 +13,7 @@ class MemberCoachMigrationContractTest {
     void migrationBackfillsMembershipsAndInvalidatesCrossTenantRelations() throws Exception {
         String sql = Files.readString(Path.of("..", "docs", "database", "2026-09-26-member-coach-relationship-migration.sql"), StandardCharsets.UTF_8);
         assertThat(sql).contains("INSERT INTO member_tenant")
-                .contains("m.tenant_id = a.tenant_id")
+                .contains("mt.member_id = a.member_id")
                 .contains("mt.tenant_id = a.tenant_id")
                 .contains("SET a.status = 'ENDED'");
     }
