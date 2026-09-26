@@ -5,7 +5,7 @@ import java.util.List;
 public interface CoachAssignmentService {
     void assign(CurrentActor actor, AssignCoachCommand command);
     void unassign(CurrentActor actor, Long coachId, Long memberId);
-    void request(CurrentActor actor, Long coachId);
+    CoachAssignment request(CurrentActor actor, Long coachId);
     void accept(CurrentActor actor, Long relationId);
     void reject(CurrentActor actor, Long relationId);
     void cancel(CurrentActor actor, Long relationId);

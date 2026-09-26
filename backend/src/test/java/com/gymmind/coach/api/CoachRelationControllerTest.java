@@ -2,6 +2,7 @@ package com.gymmind.coach.api;
 
 import com.gymmind.coach.application.CoachAssignmentService;
 import com.gymmind.coach.domain.model.CoachAssignmentStatus;
+import com.gymmind.coach.domain.model.CoachAssignment;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.error.GlobalExceptionHandler;
@@ -43,10 +44,15 @@ class CoachRelationControllerTest {
     @Test
     void memberCanRequestCoachAndResponseUsesApiContract() throws Exception {
         when(actors.requireCurrent()).thenReturn(tenantActor(10L, Set.of(RoleCode.MEMBER), Set.of("coach-relation:request")));
+        when(service.request(any(), eq(7L))).thenReturn(CoachAssignment.createRequest(10L, 7L, 4L, 2L));
         mvc.perform(post("/api/v1/coach-relations").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"coachId\":7}"))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.code").value("OK"));
+                .andExpect(jsonPath("$.code").value("OK"))
+                .andExpect(jsonPath("$.data.tenantId").value(10))
+                .andExpect(jsonPath("$.data.coachId").value(7))
+                .andExpect(jsonPath("$.data.memberId").value(4))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
         verify(service).request(any(), eq(7L));
     }
 

@@ -38,17 +38,20 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
         audit.record(new AuditEvent("COACH_ASSIGNED", "COACH_MEMBER_ASSIGNMENT", command.coachId(), AuditResult.SUCCESS, "coach-assignment-service", Map.of()));
     }
     @Override @Transactional public void unassign(CurrentActor actor, Long coachId, Long memberId) { requireAdmin(actor); assignments.deleteActiveByTenantIdAndCoachIdAndMemberId(ActorAccess.tenantId(actor), coachId, memberId); audit.record(new AuditEvent("COACH_UNASSIGNED", "COACH_MEMBER_ASSIGNMENT", coachId, AuditResult.SUCCESS, "coach-assignment-service", Map.of())); }
-    @Override @Transactional public void request(CurrentActor actor, Long coachId) {
+    @Override @Transactional public CoachAssignment request(CurrentActor actor, Long coachId) {
         if (actor == null || !actor.roles().contains(RoleCode.MEMBER) || actor.tenantId() == null || coachId == null) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long tenantId = actor.tenantId();
         coaches.findByTenantIdAndId(tenantId, coachId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (members == null || memberships == null) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long memberId = members.findByUserId(actor.userId()).map(m -> m.getId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!memberships.existsByTenantIdAndMemberId(tenantId, memberId)) throw new BusinessException(ErrorCode.FORBIDDEN);
-        if (assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, CoachAssignmentStatus.PENDING)
-                || assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, CoachAssignmentStatus.ACTIVE)) return;
-        CoachAssignment relation = CoachAssignment.createRequest(tenantId, coachId, memberId, actor.userId()); assignments.save(relation);
+        if (assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, CoachAssignmentStatus.PENDING))
+            return assignments.findPendingByTenantIdAndCoachIdAndMemberId(tenantId, coachId, memberId).orElseThrow(() -> new BusinessException(ErrorCode.CONFLICT));
+        if (assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, CoachAssignmentStatus.ACTIVE))
+            return assignments.findActiveByTenantIdAndCoachIdAndMemberId(tenantId, coachId, memberId).orElseThrow(() -> new BusinessException(ErrorCode.CONFLICT));
+        CoachAssignment relation = CoachAssignment.createRequest(tenantId, coachId, memberId, actor.userId()); relation = assignments.save(relation);
         audit.record(new AuditEvent("COACH_REQUESTED", "COACH_MEMBER_ASSIGNMENT", coachId, AuditResult.SUCCESS, "coach-assignment-service", Map.of()));
+        return relation;
     }
     @Override @Transactional public void accept(CurrentActor actor, Long relationId) { transition(actor, relationId, CoachAssignmentStatus.PENDING, true, false); }
     @Override @Transactional public void reject(CurrentActor actor, Long relationId) { transition(actor, relationId, CoachAssignmentStatus.PENDING, false, false); }
@@ -76,8 +79,8 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
         return coaches.findByTenantIdAndUserId(tenantId, actor.userId()).map(coach -> assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coach.getId(), memberId, CoachAssignmentStatus.ACTIVE)).orElse(false);
     }
     @Override @Transactional(readOnly = true) public List<CoachAssignment> list(CurrentActor actor, CoachAssignmentStatus status) {
-        if (actor == null || actor.tenantId() == null || status == null) throw new BusinessException(ErrorCode.FORBIDDEN);
-        Long tenantId = actor.tenantId();
+        if (actor == null || status == null) throw new BusinessException(ErrorCode.FORBIDDEN);
+        Long tenantId = ActorAccess.tenantId(actor);
         if (ActorAccess.canManageTenant(actor)) return assignments.findByTenantIdAndStatus(tenantId, status);
         if (actor.roles().contains(RoleCode.COACH)) {
             Long coachId = coaches.findByTenantIdAndUserId(tenantId, actor.userId()).map(c -> c.getId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));

@@ -25,9 +25,8 @@ public class CoachRelationController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Void> request(@Valid @RequestBody Request body) {
-        service.request(actors.requireCurrent(), body.coachId());
-        return ApiResponse.success(null);
+    public ApiResponse<View> request(@Valid @RequestBody Request body) {
+        return ApiResponse.success(View.from(service.request(actors.requireCurrent(), body.coachId())));
     }
 
     @PostMapping("/{id}/accept")
