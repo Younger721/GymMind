@@ -15,6 +15,7 @@ import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.ActorAccess;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +25,7 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
     private final CoachRepository coaches; private final CoachAssignmentRepository assignments; private final AuditRecorder audit;
     private final MemberRepository members; private final MemberTenantRepository memberships;
     public DefaultCoachAssignmentService(CoachRepository coaches, CoachAssignmentRepository assignments, AuditRecorder audit) { this(coaches, assignments, audit, null, null); }
+    @Autowired
     public DefaultCoachAssignmentService(CoachRepository coaches, CoachAssignmentRepository assignments, AuditRecorder audit, MemberRepository members, MemberTenantRepository memberships) { this.coaches = coaches; this.assignments = assignments; this.audit = audit; this.members = members; this.memberships = memberships; }
     @Override @Transactional public void assign(CurrentActor actor, AssignCoachCommand command) {
         requireAdmin(actor); if (command == null || command.coachId() == null || command.memberId() == null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
@@ -55,7 +57,9 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
         Long tenantId = ActorAccess.tenantId(actor); if (tenantId == null || relationId == null) throw new BusinessException(ErrorCode.FORBIDDEN);
         CoachAssignment relation = assignments.findByIdAndTenantId(relationId, tenantId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         boolean coachOwner = actor.roles().contains(RoleCode.COACH) && coaches.findByTenantIdAndUserId(tenantId, actor.userId()).map(c -> Objects.equals(c.getId(), relation.getCoachId())).orElse(false);
-        boolean memberOwner = actor.roles().contains(RoleCode.MEMBER) && Objects.equals(actor.userId(), relation.getMemberId());
+        boolean memberOwner = actor.roles().contains(RoleCode.MEMBER)
+                && members != null
+                && members.findByUserId(actor.userId()).map(member -> Objects.equals(member.getId(), relation.getMemberId())).orElse(false);
         if ((accept || !memberOrEnd) && !coachOwner) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (memberOrEnd && !memberOwner && !coachOwner && !ActorAccess.canManageTenant(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (relation.getStatus() != expected) throw new BusinessException(ErrorCode.CONFLICT);

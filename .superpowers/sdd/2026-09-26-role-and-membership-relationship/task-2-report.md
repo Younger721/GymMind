@@ -21,3 +21,4 @@ The focused Maven test command was attempted, but the repository currently fails
 - Removed duplicate Spring Data method declarations.
 - Request identity resolves the member profile by actor user id and requires a `member_tenant` row for the active tenant.
 - Pending rejection is restricted to the owning coach; member actors can only cancel their own pending request.
+- Follow-up fixes resolve member ownership through the member profile ID (rather than comparing user ID to profile ID), and Spring injection now selects the membership-aware constructor.

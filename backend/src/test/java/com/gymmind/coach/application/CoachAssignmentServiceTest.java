@@ -26,8 +26,8 @@ class CoachAssignmentServiceTest {
         when(coach.getId()).thenReturn(3L);
         when(coach.getUserId()).thenReturn(31L);
         when(coaches.findByTenantIdAndUserId(11L, 31L)).thenReturn(Optional.of(coach));
-        when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndActive(eq(11L), anyLong(), eq(41L))).thenReturn(true);
-        when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndActive(eq(12L), anyLong(), eq(41L))).thenReturn(false);
+        when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(eq(11L), anyLong(), eq(41L), any())).thenReturn(true);
+        when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(eq(12L), anyLong(), eq(41L), any())).thenReturn(false);
         CoachAssignmentService service = new DefaultCoachAssignmentService(coaches, assignments, mock(AuditRecorder.class));
 
         assertThat(service.canAccess(coachActor(11L, 31L), 41L)).isTrue();
@@ -54,10 +54,14 @@ class CoachAssignmentServiceTest {
         CoachRepository coaches = mock(CoachRepository.class);
         CoachAssignmentRepository assignments = mock(CoachAssignmentRepository.class);
         when(coaches.findByTenantIdAndId(11L, 3L)).thenReturn(Optional.of(Coach.create(11L, 31L, "C-001", "Coach", "13900000000")));
-        when(assignments.findPendingByTenantIdAndCoachIdAndMemberId(11L, 3L, 41L)).thenReturn(Optional.empty());
-        when(assignments.findActiveByTenantIdAndCoachIdAndMemberId(11L, 3L, 41L)).thenReturn(Optional.empty());
+        var members = mock(com.gymmind.member.domain.repository.MemberRepository.class);
+        var memberships = mock(com.gymmind.member.domain.repository.MemberTenantRepository.class);
+        var member = com.gymmind.member.domain.model.Member.create(41L, "Member");
+        when(members.findByUserId(41L)).thenReturn(Optional.of(member));
+        when(memberships.existsByTenantIdAndMemberId(11L, 1L)).thenReturn(true);
+        when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(eq(11L), eq(3L), eq(1L), any())).thenReturn(false);
         when(assignments.save(any(CoachAssignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        CoachAssignmentService service = new DefaultCoachAssignmentService(coaches, assignments, mock(AuditRecorder.class));
+        CoachAssignmentService service = new DefaultCoachAssignmentService(coaches, assignments, mock(AuditRecorder.class), members, memberships);
 
         service.request(memberActor(11L, 41L), 3L);
         verify(assignments).save(any(CoachAssignment.class));
