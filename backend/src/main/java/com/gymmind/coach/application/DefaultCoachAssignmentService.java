@@ -7,6 +7,8 @@ import com.gymmind.coach.domain.model.CoachAssignment;
 import com.gymmind.coach.domain.model.CoachAssignmentStatus;
 import com.gymmind.coach.domain.repository.CoachAssignmentRepository;
 import com.gymmind.coach.domain.repository.CoachRepository;
+import com.gymmind.member.domain.repository.MemberRepository;
+import com.gymmind.member.domain.repository.MemberTenantRepository;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
@@ -20,7 +22,9 @@ import java.util.Objects;
 @Service
 public class DefaultCoachAssignmentService implements CoachAssignmentService {
     private final CoachRepository coaches; private final CoachAssignmentRepository assignments; private final AuditRecorder audit;
-    public DefaultCoachAssignmentService(CoachRepository coaches, CoachAssignmentRepository assignments, AuditRecorder audit) { this.coaches = coaches; this.assignments = assignments; this.audit = audit; }
+    private final MemberRepository members; private final MemberTenantRepository memberships;
+    public DefaultCoachAssignmentService(CoachRepository coaches, CoachAssignmentRepository assignments, AuditRecorder audit) { this(coaches, assignments, audit, null, null); }
+    public DefaultCoachAssignmentService(CoachRepository coaches, CoachAssignmentRepository assignments, AuditRecorder audit, MemberRepository members, MemberTenantRepository memberships) { this.coaches = coaches; this.assignments = assignments; this.audit = audit; this.members = members; this.memberships = memberships; }
     @Override @Transactional public void assign(CurrentActor actor, AssignCoachCommand command) {
         requireAdmin(actor); if (command == null || command.coachId() == null || command.memberId() == null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         Long tenantId = ActorAccess.tenantId(actor);
@@ -35,7 +39,9 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
         if (actor == null || !actor.roles().contains(RoleCode.MEMBER) || actor.tenantId() == null || coachId == null) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long tenantId = actor.tenantId();
         coaches.findByTenantIdAndId(tenantId, coachId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        Long memberId = actor.userId();
+        if (members == null || memberships == null) throw new BusinessException(ErrorCode.FORBIDDEN);
+        Long memberId = members.findByUserId(actor.userId()).map(m -> m.getId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!memberships.existsByTenantIdAndMemberId(tenantId, memberId)) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, CoachAssignmentStatus.PENDING)
                 || assignments.existsByTenantIdAndCoachIdAndMemberIdAndStatus(tenantId, coachId, memberId, CoachAssignmentStatus.ACTIVE)) return;
         CoachAssignment relation = CoachAssignment.createRequest(tenantId, coachId, memberId, actor.userId()); assignments.save(relation);
@@ -50,7 +56,7 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
         CoachAssignment relation = assignments.findByIdAndTenantId(relationId, tenantId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         boolean coachOwner = actor.roles().contains(RoleCode.COACH) && coaches.findByTenantIdAndUserId(tenantId, actor.userId()).map(c -> Objects.equals(c.getId(), relation.getCoachId())).orElse(false);
         boolean memberOwner = actor.roles().contains(RoleCode.MEMBER) && Objects.equals(actor.userId(), relation.getMemberId());
-        if ((accept || (!memberOrEnd && !memberOwner)) && !coachOwner) throw new BusinessException(ErrorCode.FORBIDDEN);
+        if ((accept || !memberOrEnd) && !coachOwner) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (memberOrEnd && !memberOwner && !coachOwner && !ActorAccess.canManageTenant(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (relation.getStatus() != expected) throw new BusinessException(ErrorCode.CONFLICT);
         if (accept) relation.accept(); else if (expected == CoachAssignmentStatus.PENDING && coachOwner) relation.reject(); else if (expected == CoachAssignmentStatus.PENDING) relation.cancel(); else relation.end();

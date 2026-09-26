@@ -16,3 +16,8 @@ Implemented the stateful coach/member relation model and service operations.
 
 The focused Maven test command was attempted, but the repository currently fails compilation in many unrelated pre-existing files (agent, AI, booking, audit, and other packages). The errors occur before the focused coach test is compiled, so a green test result is not currently available.
 
+## Review follow-up
+
+- Removed duplicate Spring Data method declarations.
+- Request identity resolves the member profile by actor user id and requires a `member_tenant` row for the active tenant.
+- Pending rejection is restricted to the owning coach; member actors can only cancel their own pending request.
