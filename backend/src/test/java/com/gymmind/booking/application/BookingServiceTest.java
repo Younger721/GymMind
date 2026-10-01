@@ -10,6 +10,11 @@ import com.gymmind.course.domain.repository.CourseRepository;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.member.domain.model.Member;
+import com.gymmind.member.domain.repository.MemberRepository;
+import com.gymmind.coach.domain.model.Coach;
+import com.gymmind.coach.domain.repository.CoachRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -27,6 +32,98 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class BookingServiceTest {
+
+    @Test
+    void platformAdminListsBookingsAcrossTenantsWithoutContext() {
+        CourseRepository courses = mock(CourseRepository.class);
+        BookingRepository bookings = mock(BookingRepository.class);
+        Booking first = Booking.create(11L, 41L, 4L);
+        Booking second = Booking.create(22L, 51L, 8L);
+        when(bookings.findAll()).thenReturn(java.util.List.of(first, second));
+        BookingService service = new DefaultBookingService(courses, bookings, mock(MembershipEntitlementPort.class), mock(AuditRecorder.class), CLOCK);
+
+        var result = service.list(new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token"));
+
+        assertThat(result).hasSize(2);
+        verify(bookings).findAll();
+    }
+
+    @Test
+    void coachListsOnlyBookingsForCoursesTheyCreated() {
+        CourseRepository courses = mock(CourseRepository.class);
+        BookingRepository bookings = mock(BookingRepository.class);
+        CoachRepository coaches = mock(CoachRepository.class);
+        MemberRepository members = mock(MemberRepository.class);
+        Coach coach = mock(Coach.class);
+        when(coach.getId()).thenReturn(3L);
+        when(coaches.findByTenantIdAndUserId(11L, 7L)).thenReturn(Optional.of(coach));
+        when(bookings.findAllByTenantId(11L)).thenReturn(java.util.List.of(
+                Booking.create(11L, 41L, 4L), Booking.create(11L, 42L, 8L)));
+        when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(
+                Course.create(11L, 3L, "My Yoga", "GROUP", FIXED_NOW.plusSeconds(3600), FIXED_NOW.plusSeconds(7200), 10, "Studio")));
+        when(courses.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(
+                Course.create(11L, 9L, "Other Run", "GROUP", FIXED_NOW.plusSeconds(3600), FIXED_NOW.plusSeconds(7200), 10, "Studio")));
+        BookingService service = new DefaultBookingService(courses, bookings, mock(MembershipEntitlementPort.class),
+                mock(AuditRecorder.class), CLOCK, members, coaches);
+
+        assertThat(service.list(new CurrentActor(7L, 11L, Set.of(RoleCode.COACH), Set.of(), 0L, "token")))
+                .extracting(BookingView::courseId).containsExactly(4L);
+    }
+
+    @Test
+    void gymAdminListsAllBookingsInTheirTenant() {
+        CourseRepository courses = mock(CourseRepository.class);
+        BookingRepository bookings = mock(BookingRepository.class);
+        when(bookings.findAllByTenantId(11L)).thenReturn(java.util.List.of(
+                Booking.create(11L, 41L, 4L), Booking.create(11L, 42L, 8L)));
+        BookingService service = new DefaultBookingService(courses, bookings, mock(MembershipEntitlementPort.class),
+                mock(AuditRecorder.class), CLOCK);
+
+        assertThat(service.list(admin(11L))).hasSize(2);
+    }
+
+    @Test
+    void memberListsOnlyOwnBookings() {
+        CourseRepository courses = mock(CourseRepository.class);
+        BookingRepository bookings = mock(BookingRepository.class);
+        MemberRepository members = mock(MemberRepository.class);
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(41L);
+        when(members.findByTenantIdAndUserId(11L, 7L)).thenReturn(Optional.of(member));
+        when(bookings.findAllByTenantId(11L)).thenReturn(java.util.List.of(
+                Booking.create(11L, 41L, 4L), Booking.create(11L, 42L, 8L)));
+        BookingService service = new DefaultBookingService(courses, bookings, mock(MembershipEntitlementPort.class),
+                mock(AuditRecorder.class), CLOCK, members);
+
+        assertThat(service.list(new CurrentActor(7L, 11L, Set.of(RoleCode.MEMBER), Set.of(), 0L, "token")))
+                .extracting(BookingView::memberId).containsExactly(41L);
+    }
+
+    @Test
+    void memberBooksForSelfAndBookingIsImmediatelyConfirmed() {
+        CourseRepository courses = mock(CourseRepository.class);
+        BookingRepository bookings = mock(BookingRepository.class);
+        MembershipEntitlementPort entitlements = mock(MembershipEntitlementPort.class);
+        MemberRepository members = mock(MemberRepository.class);
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(41L);
+        when(members.findByTenantIdAndUserId(11L, 7L)).thenReturn(Optional.of(member));
+        Course course = Course.create(11L, 3L, "Yoga", "GROUP", FIXED_NOW.plusSeconds(3600),
+                FIXED_NOW.plusSeconds(7200), 10, "Studio");
+        when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(course));
+        when(bookings.findByTenantIdAndMemberIdAndCourseId(11L, member.getId(), 4L)).thenReturn(Optional.empty());
+        when(bookings.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        BookingService service = new DefaultBookingService(courses, bookings, entitlements,
+                mock(AuditRecorder.class), CLOCK, members);
+
+        BookingView view = service.book(new CurrentActor(7L, 11L, Set.of(RoleCode.MEMBER), Set.of(), 0L, "token"),
+                new BookCourseCommand(null, null, 4L));
+
+        assertThat(view.memberId()).isEqualTo(member.getId());
+        assertThat(view.status()).isEqualTo(BookingStatus.CONFIRMED);
+        verify(entitlements).reserve(11L, member.getId());
+    }
 
     private static final Instant FIXED_NOW = Instant.parse("2026-09-11T08:00:00Z");
     private static final Clock CLOCK = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
@@ -71,6 +168,31 @@ class BookingServiceTest {
         assertThat(view.memberId()).isEqualTo(41L);
         verify(entitlements, never()).reserve(11L, 41L);
         verify(courses, never()).save(any());
+    }
+
+    @Test
+    void cancelledBookingCanBeBookedAgain() {
+        CourseRepository courses = mock(CourseRepository.class);
+        BookingRepository bookings = mock(BookingRepository.class);
+        MembershipEntitlementPort entitlements = mock(MembershipEntitlementPort.class);
+        Booking existing = Booking.create(11L, 41L, 4L);
+        existing.cancel();
+        Course course = Course.create(11L, 3L, "Yoga", "GROUP",
+                FIXED_NOW.plusSeconds(3600), FIXED_NOW.plusSeconds(7200), 10, "Studio");
+        when(bookings.findByTenantIdAndMemberIdAndCourseId(11L, 41L, 4L)).thenReturn(Optional.of(existing));
+        when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(course));
+        when(bookings.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingService service = new DefaultBookingService(
+                courses, bookings, entitlements, mock(AuditRecorder.class), CLOCK);
+
+        BookingView view = service.book(admin(11L), new BookCourseCommand(null, 41L, 4L));
+
+        assertThat(view.status()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(course.getReservedCount()).isEqualTo(1);
+        verify(entitlements).reserve(11L, 41L);
+        verify(bookings).save(existing);
     }
 
     @Test

@@ -12,6 +12,7 @@ management:
         include: health,info
 platform-admin:
   email: ${PLATFORM_ADMIN_EMAIL:}
+  username: ${PLATFORM_ADMIN_USERNAME:}
   password: ${PLATFORM_ADMIN_PASSWORD:}
 gymmind:
   search:
@@ -26,5 +27,7 @@ gymmind:
       issuer: GymMind
       # Development fallback only; production deployments must override JWT_SECRET.
       secret: ${JWT_SECRET:GymMind-local-dev-secret-change-me-please-32bytes}
-      access-ttl: PT15M
+      access-ttl: PT2H
       refresh-ttl: P7D
+  rate-limit:
+    requests-per-minute: ${GYMMIND_RATE_LIMIT_PER_MINUTE:300}

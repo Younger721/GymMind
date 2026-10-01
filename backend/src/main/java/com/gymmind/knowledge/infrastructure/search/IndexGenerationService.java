@@ -12,7 +12,8 @@ public class IndexGenerationService {
     public IndexGenerationService(KeywordIndexPort keyword, VectorIndexPort vector) { this.keyword = keyword; this.vector = vector; }
 
     public boolean publish(Long tenantId, String generation, List<IndexedChunk> chunks) {
-        if (tenantId == null || tenantId <= 0 || generation == null || generation.isBlank() || chunks == null) return false;
+        // Tenant 0 is the reserved platform-wide index used by public documents.
+        if (tenantId == null || tenantId < 0 || generation == null || generation.isBlank() || chunks == null) return false;
         for (IndexedChunk c : chunks) if (c == null || !tenantId.equals(c.tenantId()) || c.id() == null || c.vector() == null || c.vector().length != 1024) return false;
         try {
             for (IndexedChunk c : chunks) keyword.upsert(c);
@@ -27,7 +28,7 @@ public class IndexGenerationService {
     public String currentGeneration(Long tenantId) { return published.get(tenantId); }
 
     public void delete(Long tenantId, String chunkId) {
-        if (tenantId == null || tenantId <= 0 || chunkId == null || chunkId.isBlank()) throw new IllegalArgumentException("invalid delete target");
+        if (tenantId == null || tenantId < 0 || chunkId == null || chunkId.isBlank()) throw new IllegalArgumentException("invalid delete target");
         keyword.delete(chunkId, tenantId);
         vector.delete(chunkId, tenantId);
     }

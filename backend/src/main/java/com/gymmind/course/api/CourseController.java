@@ -4,6 +4,8 @@ import com.gymmind.course.application.CourseService;
 import com.gymmind.course.application.CourseView;
 import com.gymmind.course.application.CreateCourseCommand;
 import com.gymmind.shared.api.ApiResponse;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActorProvider;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -15,10 +17,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @RestController
@@ -43,8 +49,15 @@ public class CourseController {
     }
 
     @GetMapping
-    public ApiResponse<List<CourseView>> list() {
-        return ApiResponse.success(service.list(actors.requireCurrent()));
+    public ApiResponse<List<CourseView>> list(@RequestParam(required = false) String from,
+                                              @RequestParam(required = false) String to,
+                                              @RequestParam(required = false) String type,
+                                              @RequestParam(required = false) Long coachId,
+                                              @RequestParam(defaultValue = "all") String scope,
+                                              @RequestParam(defaultValue = "false") boolean availableOnly) {
+        Instant fromInstant = parseDate(from, false);
+        Instant toInstant = parseDate(to, true);
+        return ApiResponse.success(service.list(actors.requireCurrent(), scope, fromInstant, toInstant, type, coachId, availableOnly));
     }
 
     @GetMapping("/{id}")
@@ -71,5 +84,19 @@ public class CourseController {
 
     public record UpdateRequest(@NotBlank String title, @NotBlank String type, Instant startsAt, Instant endsAt,
                                 int capacity, @NotBlank String location) {
+    }
+
+    private static Instant parseDate(String value, boolean endOfDay) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException ignored) {
+            try {
+                LocalDate date = LocalDate.parse(value);
+                return date.plusDays(endOfDay ? 1 : 0).atStartOfDay(ZoneOffset.UTC).toInstant();
+            } catch (DateTimeParseException invalidDate) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+        }
     }
 }

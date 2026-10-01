@@ -170,7 +170,8 @@ const loadReport = async () => {
     loading.value = true
     const startDate = formatDate(dateRange.value[0])
     const endDate = formatDate(dateRange.value[1])
-    report.value = await getWeeklyReport(startDate, endDate)
+    const response = await getWeeklyReport(startDate, endDate)
+    report.value = response.data
   } catch (error: any) {
     ElMessage.error(error.message || 'Failed to load report')
   } finally {

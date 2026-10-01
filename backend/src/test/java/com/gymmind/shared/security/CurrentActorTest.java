@@ -29,6 +29,17 @@ class CurrentActorTest {
     }
 
     @Test
+    void gymAdminMustHaveExplicitOperationPermission() {
+        CurrentActor actor = new CurrentActor(
+                2L, 10L, Set.of(RoleCode.GYM_ADMIN), Set.of("tenant:settings:read"),
+                0L, "gym-admin-jti");
+
+        assertThat(actor.hasPermission("user:write")).isFalse();
+        assertThat(actor.hasPermission("tenant:settings:read")).isTrue();
+        assertThat(actor.hasPermission("platform:tenant:read")).isFalse();
+    }
+
+    @Test
     void exposesPlatformAndPermissionDecisions() {
         CurrentActor actor = new CurrentActor(
                 1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of("platform:tenant:read"),

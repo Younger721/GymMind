@@ -5,6 +5,7 @@ import com.gymmind.knowledge.application.KnowledgeDocumentView;
 import com.gymmind.knowledge.application.UpdateKnowledgeDocumentCommand;
 import com.gymmind.knowledge.application.UploadKnowledgeDocumentCommand;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
+import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -32,10 +33,12 @@ public class KnowledgeDocumentController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<KnowledgeDocumentView> upload(
             @RequestPart("file") MultipartFile file,
-            @RequestParam DocumentVisibility visibility) throws IOException {
+            @RequestParam DocumentVisibility visibility,
+            @RequestParam(defaultValue = "GENERAL") String category,
+            @RequestParam(required = false) List<RoleCode> audienceRoles) throws IOException {
         return ApiResponse.success(useCase.upload(actors.requireCurrent(),
                 new UploadKnowledgeDocumentCommand(file.getOriginalFilename(), file.getContentType(),
-                        file.getBytes(), visibility)));
+                        file.getBytes(), visibility, category, audienceRoles)));
     }
 
     @GetMapping
@@ -51,15 +54,15 @@ public class KnowledgeDocumentController {
     @PatchMapping("/{id}")
     public ApiResponse<KnowledgeDocumentView> update(
             @PathVariable Long id,
-            @RequestParam DocumentVisibility visibility) {
+            @RequestParam DocumentVisibility visibility,
+            @RequestParam(required = false) List<RoleCode> audienceRoles) {
         return ApiResponse.success(useCase.update(
-                actors.requireCurrent(), id, new UpdateKnowledgeDocumentCommand(visibility)));
+                actors.requireCurrent(), id, new UpdateKnowledgeDocumentCommand(visibility, audienceRoles)));
     }
 
-    @PostMapping("/{id}/reindex")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    public ApiResponse<KnowledgeDocumentView> reindex(@PathVariable Long id) {
-        return ApiResponse.success(useCase.reindex(actors.requireCurrent(), id));
+    @PatchMapping("/{id}/publication")
+    public ApiResponse<KnowledgeDocumentView> publication(@PathVariable Long id, @RequestParam boolean published) {
+        return ApiResponse.success(useCase.publish(actors.requireCurrent(), id, published));
     }
 
     @DeleteMapping("/{id}")

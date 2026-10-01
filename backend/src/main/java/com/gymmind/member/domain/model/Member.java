@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.util.UUID;
 
 @Entity
 @Table(name = "member_profile", uniqueConstraints = {
@@ -28,6 +29,8 @@ public class Member extends AuditableEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private MemberStatus status = MemberStatus.ACTIVE;
+    @Column(name = "check_in_token", nullable = false, unique = true, length = 64)
+    private String checkInToken = UUID.randomUUID().toString().replace("-", "");
 
     protected Member() {}
 
@@ -61,6 +64,7 @@ public class Member extends AuditableEntity {
     public String getFullName() { return fullName; }
     public String getPhone() { return phone; }
     public MemberStatus getStatus() { return status; }
+    public String getCheckInToken() { return checkInToken; }
 
     private static String required(String value, String name) {
         if (value == null || value.isBlank()) {

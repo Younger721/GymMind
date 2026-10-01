@@ -5,6 +5,7 @@ import com.gymmind.knowledge.application.KnowledgeSearchService;
 import com.gymmind.search.application.ArticleSearchService;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
@@ -46,6 +47,29 @@ class McpToolServiceTest {
                 .isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.invoke(actor(Set.of("search:read")), "missing", "x"))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void platformAdminCanListAndInvokeAllTenantToolsWithTenantContext() {
+        var articles = mock(ArticleSearchService.class);
+        var knowledge = mock(KnowledgeSearchService.class);
+        when(articles.search(any(), eq("力量"))).thenReturn(java.util.List.of());
+        when(knowledge.search(any(), eq("动作"))).thenReturn(java.util.List.of());
+        var service = new DefaultMcpToolService(articles, knowledge);
+        TenantContextHolder.set(7L);
+        try {
+            assertThat(service.list(com.gymmind.support.SecurityTestActors.platformAdmin()).stream()
+                    .map(McpTool::name))
+                    .containsExactly("search_articles", "import_article", "knowledge_search");
+            assertThat(service.invoke(com.gymmind.support.SecurityTestActors.platformAdmin(),
+                    "search_articles", "力量"))
+                    .isEqualTo(java.util.List.of());
+            assertThat(service.invoke(com.gymmind.support.SecurityTestActors.platformAdmin(),
+                    "knowledge_search", "动作"))
+                    .isEqualTo(java.util.List.of());
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 
     private CurrentActor actor(Set<String> permissions) {

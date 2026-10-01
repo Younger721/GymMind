@@ -5,5 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 interface SpringDataAiUsageRepository extends JpaRepository<AiUsageEntity, Long> {
+    List<AiUsageEntity> findAllByOrderByCreatedAtDesc();
     List<AiUsageEntity> findAllByTenantIdOrderByCreatedAtDesc(Long tenantId);
 }

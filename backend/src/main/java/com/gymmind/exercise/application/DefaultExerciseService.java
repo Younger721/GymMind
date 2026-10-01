@@ -9,6 +9,7 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,13 +30,14 @@ public class DefaultExerciseService implements ExerciseService {
     @Transactional
     public ExerciseView create(CurrentActor actor, CreateExerciseCommand command) {
         require(actor, "exercise:write");
-        if (command == null || command.tenantId() != null && !actor.tenantId().equals(command.tenantId())) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (command == null || command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (exercises.existsByTenantIdAndName(actor.tenantId(), command.name().trim())) {
+        if (exercises.existsByTenantIdAndName(tenantId, command.name().trim())) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
-        Exercise saved = exercises.save(Exercise.create(actor.tenantId(), command.name(), command.category(),
+        Exercise saved = exercises.save(Exercise.create(tenantId, command.name(), command.category(),
                 command.targetMuscle(), command.difficulty(), command.equipment(), command.description(),
                 command.steps(), command.commonMistakes(), command.safetyNotes(), command.tags()));
         audit.record(new AuditEvent("EXERCISE_CREATED", "EXERCISE", saved.getId(), AuditResult.SUCCESS,
@@ -47,14 +49,14 @@ public class DefaultExerciseService implements ExerciseService {
     @Transactional(readOnly = true)
     public List<ExerciseView> list(CurrentActor actor) {
         require(actor, "exercise:read");
-        return exercises.findAllByTenantId(actor.tenantId()).stream().map(ExerciseView::from).toList();
+        return exercises.findAllByTenantId(ActorAccess.tenantId(actor)).stream().map(ExerciseView::from).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public ExerciseView find(CurrentActor actor, Long id) {
         require(actor, "exercise:read");
-        Exercise exercise = exercises.findByTenantIdAndId(actor.tenantId(), id)
+        Exercise exercise = exercises.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         return ExerciseView.from(exercise);
     }
@@ -63,7 +65,7 @@ public class DefaultExerciseService implements ExerciseService {
     @Transactional
     public void update(CurrentActor actor, Long id, ExerciseUpdateCommand command) {
         require(actor, "exercise:write");
-        Exercise exercise = exercises.findByTenantIdAndId(actor.tenantId(), id)
+        Exercise exercise = exercises.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         exercise.update(command.name(), command.category(), command.targetMuscle(), command.difficulty(),
                 command.equipment(), command.description(), command.steps(), command.commonMistakes(),
@@ -74,9 +76,6 @@ public class DefaultExerciseService implements ExerciseService {
     }
 
     private static void require(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission(permission)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        ActorAccess.requireGymAdmin(actor, permission);
     }
 }

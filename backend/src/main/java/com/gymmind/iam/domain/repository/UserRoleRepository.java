@@ -12,4 +12,5 @@ public interface UserRoleRepository {
     long countByUserId(Long userId);
     Set<RoleCode> findRoleCodesByUserId(Long userId);
     Set<String> findPermissionCodesByUserId(Long userId);
+    Set<Long> findUserIdsByRoleCodes(Set<RoleCode> roleCodes);
 }

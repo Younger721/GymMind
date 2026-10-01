@@ -16,10 +16,19 @@ public interface UserAdministrationService {
     void changeStatus(CurrentActor actor, Long userId, UserStatus status);
     void replaceRoles(CurrentActor actor, Long userId, Set<RoleCode> roles);
     List<RoleView> listRoles(CurrentActor actor);
+    List<PermissionView> listPermissionCatalog(CurrentActor actor);
+    void replaceRolePermissions(CurrentActor actor, RoleCode roleCode, Set<String> permissions);
+    void changeRoleStatus(CurrentActor actor, RoleCode roleCode, boolean active);
 
-    record UserView(Long id, Long tenantId, String email, String displayName,
+    record UserView(Long id, Long tenantId, String username, String email, String displayName,
                     UserStatus status, Set<RoleCode> roles) {}
-    record UserSummary(Long id, Long tenantId, String email, String displayName,
-                       UserStatus status, Set<RoleCode> roles) {}
-    record RoleView(Long id, RoleCode code, String name) {}
+    record UserSummary(Long id, Long tenantId, String username, String email, String displayName,
+                       UserStatus status, Set<RoleCode> roles, String membershipType,
+                       Integer membershipDaysRemaining) {}
+    record RoleView(Long id, RoleCode code, String name, String status, int permissionCount) {
+        public RoleView(Long id, RoleCode code, String name) {
+            this(id, code, name, "ACTIVE", 0);
+        }
+    }
+    record PermissionView(String code, String name, Set<RoleCode> roles) {}
 }

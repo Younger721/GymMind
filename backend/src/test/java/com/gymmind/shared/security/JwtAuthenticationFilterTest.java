@@ -5,6 +5,7 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.iam.domain.model.UserAccount;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
 import com.gymmind.iam.domain.repository.UserRoleRepository;
+import com.gymmind.platform.bootstrap.PermissionCatalog;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.jwt.JwtClaims;
@@ -68,6 +69,31 @@ class JwtAuthenticationFilterTest {
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(sessions).isAccessRevoked(7L, 42L, "access-jti");
+    }
+
+    @Test
+    void platformAdminReceivesAllCatalogAuthoritiesWhenDatabasePermissionsAreEmpty() throws Exception {
+        UserAccount platform = UserAccount.platformAdmin("root@example.com", "hash", "Root");
+        ReflectionTestUtils.setField(platform, "id", 42L);
+        when(users.findById(42L)).thenReturn(Optional.of(platform));
+        when(userRoles.findRoleCodesByUserId(42L)).thenReturn(Set.of(RoleCode.PLATFORM_ADMIN));
+        when(userRoles.findPermissionCodesByUserId(42L)).thenReturn(Set.of());
+        when(jwt.verify("platform-valid", TokenType.ACCESS)).thenReturn(claims(null));
+
+        MockHttpServletResponse response = request("Bearer platform-valid", () -> {
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            var authorities = authentication.getAuthorities().stream()
+                    .map(authority -> authority.getAuthority())
+                    .toList();
+            assertThat(authorities).contains("ROLE_PLATFORM_ADMIN");
+            assertThat(authorities).hasSize(PermissionCatalog.entries().size() + 1);
+            assertThat(authorities).containsAll(PermissionCatalog.entries().stream()
+                    .map(PermissionCatalog.Entry::code)
+                    .toList());
+        });
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        verifyNoInteractions(tenants);
     }
 
     @Test

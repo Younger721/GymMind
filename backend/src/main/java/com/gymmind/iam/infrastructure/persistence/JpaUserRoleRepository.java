@@ -44,4 +44,9 @@ class JpaUserRoleRepository implements UserRoleRepository {
     public Set<String> findPermissionCodesByUserId(Long userId) {
         return delegate.findPermissionCodesByUserId(userId);
     }
+
+    @Override
+    public Set<Long> findUserIdsByRoleCodes(Set<RoleCode> roleCodes) {
+        return delegate.findUserIdsByRoleCodes(roleCodes);
+    }
 }

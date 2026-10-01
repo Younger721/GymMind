@@ -48,6 +48,12 @@ import JsonBlock from '@/components/business/JsonBlock.vue'
 import { searchApi } from '@/api/searchApi'
 import { useBizList } from '@/composables/useBizList'
 
+type SearchRow = Record<string, unknown>
+
+function searchRows(response: { data: unknown[] }) {
+  return response.data as SearchRow[]
+}
+
 const keyword = ref('')
 const { rows, loading, runLoader } = useBizList()
 const submitting = ref(false)
@@ -56,17 +62,17 @@ const article = reactive({ url: '', title: '', summary: '' })
 
 async function searchVideos() {
   if (!keyword.value.trim()) return ElMessage.warning('请输入关键词')
-  await runLoader(() => searchApi.searchVideos(keyword.value.trim()))
+  await runLoader(async () => searchRows(await searchApi.searchVideos(keyword.value.trim())))
 }
 
 async function searchArticles() {
   if (!keyword.value.trim()) return ElMessage.warning('请输入关键词')
-  await runLoader(() => searchApi.searchArticles(keyword.value.trim()))
+  await runLoader(async () => searchRows(await searchApi.searchArticles(keyword.value.trim())))
 }
 
 async function searchKnowledge() {
   if (!keyword.value.trim()) return ElMessage.warning('请输入关键词')
-  await runLoader(() => searchApi.searchKnowledge(keyword.value.trim()))
+  await runLoader(async () => searchRows(await searchApi.searchKnowledge(keyword.value.trim())))
 }
 
 async function searchAll() {

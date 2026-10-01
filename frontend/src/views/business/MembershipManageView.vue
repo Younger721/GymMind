@@ -5,7 +5,7 @@
 
     <el-tabs v-model="tab">
       <el-tab-pane label="套餐" name="packages">
-        <BizCrudPanel title="创建套餐" :create-fields="packageFields" :loader="emptyLoader" :creator="createPackage" />
+        <BizCrudPanel title="创建套餐" :create-fields="packageFields" :loader="emptyLoader" :creator="createPackage" create-permission="membership:write" />
         <div class="simple-card lookup-box">
           <el-form inline>
             <el-form-item label="套餐 ID"><el-input v-model="packageId" style="width: 120px" /></el-form-item>
@@ -15,13 +15,13 @@
         </div>
       </el-tab-pane>
       <el-tab-pane label="发卡" name="grant">
-        <BizCrudPanel title="发放会籍" :create-fields="grantFields" :loader="emptyLoader" :creator="grantMembership" />
+        <BizCrudPanel title="发放会籍" :create-fields="grantFields" :loader="emptyLoader" :creator="grantMembership" create-permission="membership:write" />
       </el-tab-pane>
       <el-tab-pane label="订单" name="orders">
-        <BizCrudPanel title="创建订单" :create-fields="orderFields" :loader="emptyLoader" :creator="createOrder" />
+        <BizCrudPanel title="创建订单" :create-fields="orderFields" :loader="emptyLoader" :creator="createOrder" create-permission="order:write" />
       </el-tab-pane>
       <el-tab-pane label="收款" name="payments">
-        <BizCrudPanel title="记录支付" :create-fields="paymentFields" :loader="emptyLoader" :creator="recordPayment" />
+        <BizCrudPanel title="记录支付" :create-fields="paymentFields" :loader="emptyLoader" :creator="recordPayment" create-permission="payment:write" />
       </el-tab-pane>
     </el-tabs>
   </div>

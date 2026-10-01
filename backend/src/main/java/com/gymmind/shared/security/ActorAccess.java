@@ -33,7 +33,7 @@ public final class ActorAccess {
     public static Long requireTenantId(CurrentActor actor) {
         Long tenantId = tenantId(actor);
         if (tenantId == null) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+            throw new BusinessException(ErrorCode.TENANT_CONTEXT_REQUIRED);
         }
         return tenantId;
     }
@@ -47,13 +47,38 @@ public final class ActorAccess {
             return;
         }
         if (actor.tenantId() == null
+                || !actor.roles().contains(RoleCode.GYM_ADMIN)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    /**
+     * Checks a sensitive tenant operation against the permissions explicitly
+     * assigned to the actor. Role-wide administrator defaults do not satisfy
+     * this stricter check.
+     */
+    public static void requireExplicitGymAdmin(CurrentActor actor, String permission) {
+        if (actor == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (isSuperAdmin(actor)) {
+            requireTenantId(actor);
+            return;
+        }
+        if (actor.tenantId() == null
                 || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission(permission)) {
+                || permission == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
 
     public static boolean canManageTenant(CurrentActor actor) {
         return actor != null && (isSuperAdmin(actor) || actor.roles().contains(RoleCode.GYM_ADMIN));
+    }
+
+    public static void requirePlatformAdmin(CurrentActor actor, String permission) {
+        if (actor == null || !isSuperAdmin(actor)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 }

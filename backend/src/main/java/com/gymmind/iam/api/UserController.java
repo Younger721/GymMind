@@ -5,10 +5,12 @@ import com.gymmind.iam.api.request.CreateUserRequest;
 import com.gymmind.iam.api.request.ReplaceUserRolesRequest;
 import com.gymmind.iam.api.response.UserResponse;
 import com.gymmind.iam.application.UserAdministrationService;
+import com.gymmind.iam.application.UserStatisticsService;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.api.PageResponse;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.CurrentActorProvider;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Objects;
 
@@ -32,10 +35,21 @@ import java.util.Objects;
 @SecurityRequirement(name = "bearerAuth")
 public class UserController {
     private final UserAdministrationService service;
+    private final UserStatisticsService statisticsService;
     private final CurrentActorProvider actors;
 
+    @Autowired
+    public UserController(UserAdministrationService service, UserStatisticsService statisticsService,
+                          CurrentActorProvider actors) {
+        this.service = Objects.requireNonNull(service, "service");
+        this.statisticsService = Objects.requireNonNull(statisticsService, "statisticsService");
+        this.actors = Objects.requireNonNull(actors, "actors");
+    }
+
+    /** Backward-compatible constructor used by controller unit tests. */
     public UserController(UserAdministrationService service, CurrentActorProvider actors) {
         this.service = Objects.requireNonNull(service, "service");
+        this.statisticsService = null;
         this.actors = Objects.requireNonNull(actors, "actors");
     }
 
@@ -48,7 +62,11 @@ public class UserController {
 
     @GetMapping
     public ApiResponse<PageResponse<UserAdministrationService.UserSummary>> list(Pageable pageable) {
-        return ApiResponse.success(service.list(requireTenantAdmin(), pageable));
+        CurrentActor actor = requireUserListAccess();
+        PageResponse<UserAdministrationService.UserSummary> result = statisticsService == null
+                ? service.list(actor, pageable)
+                : statisticsService.list(actor, pageable);
+        return ApiResponse.success(result);
     }
 
     @PatchMapping("/{userId}/status")
@@ -69,9 +87,19 @@ public class UserController {
 
     private CurrentActor requireTenantAdmin() {
         CurrentActor actor = actors.requireCurrent();
-        if (actor.tenantId() == null || !actor.roles().contains(com.gymmind.iam.domain.model.RoleCode.GYM_ADMIN)) {
+        if (!ActorAccess.canManageTenant(actor)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        if (!ActorAccess.isSuperAdmin(actor)) ActorAccess.requireTenantId(actor);
+        return actor;
+    }
+
+    private CurrentActor requireUserListAccess() {
+        CurrentActor actor = actors.requireCurrent();
+        if (!ActorAccess.canManageTenant(actor)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (!ActorAccess.isSuperAdmin(actor)) ActorAccess.requireTenantId(actor);
         return actor;
     }
 }

@@ -16,6 +16,7 @@ class JpaMemberRepository implements MemberRepository {
     public Optional<Member> findByTenantIdAndUserId(Long tenantId, Long userId) { return delegate.findByTenantIdAndUserId(tenantId, userId); }
     public Optional<Member> findByUserId(Long userId) { return delegate.findByUserId(userId); }
     public Optional<Member> findByTenantIdAndMemberNumber(Long tenantId, String number) { return delegate.findByTenantIdAndMemberNumber(tenantId, number); }
+    public Optional<Member> findByTenantIdAndCheckInToken(Long tenantId, String token) { return delegate.findByTenantIdAndCheckInToken(tenantId, token); }
     public boolean existsByTenantIdAndPhone(Long tenantId, String phone) { return delegate.existsByTenantIdAndPhone(tenantId, phone); }
     public Page<Member> findAllByTenantId(Long tenantId, Pageable pageable) { return delegate.findAllByTenantId(tenantId, pageable); }
     public Page<Member> searchByTenantId(Long tenantId, String query, Pageable pageable) { return delegate.findByTenantIdAndFullNameContainingIgnoreCaseOrTenantIdAndMemberNumberContainingIgnoreCase(tenantId, query, tenantId, query, pageable); }

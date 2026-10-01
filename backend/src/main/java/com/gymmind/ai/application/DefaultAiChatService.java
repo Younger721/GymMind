@@ -11,6 +11,9 @@ import com.gymmind.knowledge.application.KnowledgeSearchService;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
+import com.gymmind.tenancy.application.TenantQuotaService;
+import com.gymmind.tenancy.application.TenantQuotaServices;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -26,15 +29,26 @@ public class DefaultAiChatService implements AiChatService {
     private final DefaultAiUsageService usage;
     private final AgentChatService agentChat;
     private final TenantAgentRepository agents;
+    private final TenantQuotaService quotas;
     private final QuestionIntentClassifier intents = new QuestionIntentClassifier();
     private final PromptInjectionGuard guard = new PromptInjectionGuard();
 
     public DefaultAiChatService(KnowledgeSearchService search, ChatModelGateway model) {
-        this(search, model, null, null, null, null);
+        this(search, model, null, null, null, null, TenantQuotaServices.unboundedForLegacyConstruction());
     }
 
     public DefaultAiChatService(KnowledgeSearchService search, ChatModelGateway model, AiMemoryService memory) {
-        this(search, model, memory, null, null, null);
+        this(search, model, memory, null, null, null, TenantQuotaServices.unboundedForLegacyConstruction());
+    }
+
+    public DefaultAiChatService(
+            KnowledgeSearchService search,
+            ChatModelGateway model,
+            AiMemoryService memory,
+            DefaultAiUsageService usage,
+            AgentChatService agentChat,
+            TenantAgentRepository agents) {
+        this(search, model, memory, usage, agentChat, agents, TenantQuotaServices.unboundedForLegacyConstruction());
     }
 
     @Autowired
@@ -44,23 +58,26 @@ public class DefaultAiChatService implements AiChatService {
             AiMemoryService memory,
             DefaultAiUsageService usage,
             AgentChatService agentChat,
-            TenantAgentRepository agents) {
+            TenantAgentRepository agents,
+            TenantQuotaService quotas) {
         this.search = search;
         this.model = model;
         this.memory = memory;
         this.usage = usage;
         this.agentChat = agentChat;
         this.agents = agents;
+        this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
     }
 
     @Override
     public AiChatView chat(CurrentActor actor, String sessionId, String question) {
-        if (actor == null || actor.tenantId() == null
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (tenantId == null
                 || (!actor.hasPermission("agent:chat") && !actor.hasPermission("ai:chat"))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (agentChat != null && agents != null) {
-            var activeAgents = agents.findAllByTenantIdAndStatus(actor.tenantId(), AgentStatus.ACTIVE);
+            var activeAgents = agents.findAllByTenantIdAndStatus(tenantId, AgentStatus.ACTIVE);
             if (!activeAgents.isEmpty()) {
                 return agentChat.chat(actor, activeAgents.get(0).getId(), sessionId, question);
             }
@@ -76,6 +93,7 @@ public class DefaultAiChatService implements AiChatService {
                 || guard.isBlocked(question)) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
+        quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
 
         QuestionIntent intent = intents.classify(question);
         long started = System.currentTimeMillis();

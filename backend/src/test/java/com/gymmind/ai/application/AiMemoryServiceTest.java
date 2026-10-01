@@ -9,16 +9,29 @@ import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 class AiMemoryServiceTest {
     @Test
+    void rejectsMemoryWhenAiModuleIsDisabled() {
+        var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
+        var service = new DefaultAiMemoryService(new InMemoryAiMemoryRepository(), quotas);
+        org.mockito.Mockito.doThrow(new com.gymmind.shared.error.BusinessException(com.gymmind.shared.error.ErrorCode.CONFLICT, "AI 模块未开通"))
+                .when(quotas).ensureAiModuleEnabled(7L);
+
+        assertThatThrownBy(() -> service.list(actor(7L, 1L)))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+    }
+    @Test
     void memorySurvivesServiceRecreationAndIsIsolatedByTenantAndUser() {
         var repository = new InMemoryAiMemoryRepository();
-        var writer = new DefaultAiMemoryService(repository);
+        var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
+        var writer = new DefaultAiMemoryService(repository, quotas);
         var actor = actor(7L, 1L);
         writer.write(actor, AiMemoryType.GOAL, "weight", "lose weight");
 
-        var reader = new DefaultAiMemoryService(repository);
+        var reader = new DefaultAiMemoryService(repository, quotas);
 
         assertThat(reader.list(actor)).containsExactly(new AiMemoryEntry(AiMemoryType.GOAL, "weight", "lose weight"));
         assertThat(reader.list(actor(8L, 1L))).isEmpty();
@@ -30,7 +43,7 @@ class AiMemoryServiceTest {
     @Test
     void writingSameScopedKeyUpdatesItsValue() {
         var repository = new InMemoryAiMemoryRepository();
-        var service = new DefaultAiMemoryService(repository);
+        var service = new DefaultAiMemoryService(repository, mock(com.gymmind.tenancy.application.TenantQuotaService.class));
         var actor = actor(7L, 1L);
         service.write(actor, AiMemoryType.PREFERENCE, "training", "morning");
         service.write(actor, AiMemoryType.PREFERENCE, "training", "evening");

@@ -12,15 +12,18 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import org.springframework.web.client.ResourceAccessException;
 
 /** Bailian OpenAI-compatible chat adapter with a deterministic local fallback. */
 @Component
 public class BailianChatAdapter implements ChatModelGateway {
+    private static final String QUICK_SYSTEM_PROMPT = "你是 GymMind AI。必须严格遵守用户请求中标记为【当前身份规则】的角色边界，不得自行把平台管理员、门店管理员或教练当成会员。直接回答，不要输出分析过程、思考步骤、检查过程或草稿；普通问题限制为 1～3 句话，总长度控制在 120 个中文字符以内。先给结论，再补充最多 2 条必要说明。信息不足时不要只陈述缺少什么，要主动提出最多 3 个具体问题并等待用户回答后再继续；训练计划优先追问目标、经验、频率、器械和伤病限制。不得编造。";
     private final RestClient client;
     private final ObjectMapper mapper = new ObjectMapper();
     private final String apiKey;
     private final String model;
-    private final BailianCallRetrier retrier;
 
     public BailianChatAdapter(RestClient.Builder builder) {
         String baseUrl = env("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1");
@@ -30,7 +33,6 @@ public class BailianChatAdapter implements ChatModelGateway {
         this.client = builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
         this.apiKey = env("DASHSCOPE_API_KEY", "");
         this.model = env("DASHSCOPE_CHAT_MODEL", "qwen3.7-plus");
-        this.retrier = new BailianCallRetrier(3, BailianChatAdapter::sleep);
     }
 
     @Override
@@ -41,18 +43,82 @@ public class BailianChatAdapter implements ChatModelGateway {
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = Map.of(
                 "model", model,
+                "max_tokens", 256,
+                "enable_thinking", false,
                 "messages", List.of(
-                        Map.of("role", "system", "content", "你是GymMind智能健身助手，请基于参考资料回答。"),
+                Map.of("role", "system", "content", quickSystemPrompt()),
                         Map.of("role", "user", "content", prompt + "\n参考资料：" + contextText)));
-        String raw = retrier.execute(() -> client.post().uri("/chat/completions")
+        String raw = client.post().uri("/chat/completions")
                 .header("Authorization", "Bearer " + apiKey)
-                .body(body).retrieve().body(String.class));
+                .body(body).retrieve().body(String.class);
         try {
-            JsonNode root = mapper.readTree(raw);
-            return root.path("choices").path(0).path("message").path("content").asText(raw);
+            return mapper.readTree(raw).path("choices").path(0).path("message").path("content").asText(raw);
         } catch (Exception ignored) {
             return raw == null ? "模型暂不可用" : raw;
         }
+    }
+
+    @Override
+    public String stream(String prompt, List<ContextSegment> context, Consumer<String> onToken) {
+        if (apiKey.isBlank()) {
+            String answer = "本地模式：已收到问题“" + prompt + "”，参考知识片段 " + context.size() + " 条。";
+            for (int i = 0; i < answer.length(); i += 12) {
+                onToken.accept(answer.substring(i, Math.min(answer.length(), i + 12)));
+            }
+            return answer;
+        }
+        String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
+        Map<String, Object> body = Map.of(
+                "model", model,
+                "stream", true,
+                "max_tokens", 256,
+                "enable_thinking", false,
+                "messages", List.of(
+                Map.of("role", "system", "content", quickSystemPrompt()),
+                        Map.of("role", "user", "content", prompt + "\n参考资料：" + contextText)));
+        StringBuilder answer = new StringBuilder();
+        AtomicBoolean emitted = new AtomicBoolean();
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                client.post().uri("/chat/completions")
+                        .header("Authorization", "Bearer " + apiKey)
+                        .body(body).exchange((request, response) -> {
+                            if (!response.getStatusCode().is2xxSuccessful()) {
+                                throw new IllegalStateException("Model service returned " + response.getStatusCode());
+                            }
+                            var raw = response.getBody();
+                            try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(raw, java.nio.charset.StandardCharsets.UTF_8))) {
+                                String line;
+                                while ((line = reader.readLine()) != null) {
+                                    if (!line.startsWith("data:")) continue;
+                                    String data = line.substring(5).trim();
+                                    if (data.isEmpty() || "[DONE]".equals(data)) continue;
+                                    JsonNode root = mapper.readTree(data);
+                                    JsonNode delta = root.path("choices").path(0).path("delta");
+                                    String token = delta.path("content").asText("");
+                                    if (!token.isEmpty()) {
+                                        emitted.set(true);
+                                        answer.append(token);
+                                        onToken.accept(token);
+                                    }
+                                }
+                            } catch (java.io.IOException exception) {
+                                throw new IllegalStateException("Failed to read model stream", exception);
+                            }
+                            return null;
+                        });
+                break;
+            } catch (ResourceAccessException failure) {
+                if (attempt >= 3 || emitted.get()) throw failure;
+                try {
+                    Thread.sleep(100L * (1L << (attempt - 1)));
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Model stream retry interrupted", interrupted);
+                }
+            }
+        }
+        return answer.toString();
     }
 
     private static String env(String name, String fallback) {
@@ -60,12 +126,8 @@ public class BailianChatAdapter implements ChatModelGateway {
         return value == null || value.isBlank() ? fallback : value;
     }
 
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Bailian retry interrupted", interrupted);
-        }
+    static String quickSystemPrompt() {
+        return QUICK_SYSTEM_PROMPT;
     }
+
 }

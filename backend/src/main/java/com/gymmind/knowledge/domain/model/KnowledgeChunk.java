@@ -34,7 +34,9 @@ public class KnowledgeChunk {
     }
 
     private KnowledgeChunk(Long tenantId, Long documentId, String chunkKey, long generation, String text) {
-        if (tenantId == null || tenantId <= 0 || documentId == null || documentId <= 0
+        // Tenant 0 is reserved for platform-wide public documents. A negative
+        // tenant is still invalid and must never reach either index backend.
+        if (tenantId == null || tenantId < 0 || documentId == null || documentId <= 0
                 || chunkKey == null || chunkKey.isBlank() || text == null || text.isBlank()) {
             throw new IllegalArgumentException("invalid chunk");
         }

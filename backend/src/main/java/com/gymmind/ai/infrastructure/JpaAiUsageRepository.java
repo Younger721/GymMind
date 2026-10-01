@@ -23,6 +23,12 @@ public class JpaAiUsageRepository implements AiUsageRepository {
     }
 
     @Override
+    public List<AiUsageRecord> findAll() {
+        return delegate.findAllByOrderByCreatedAtDesc().stream()
+                .map(AiUsageEntity::toRecord).toList();
+    }
+
+    @Override
     public List<AiUsageRecord> findAllByTenantId(Long tenantId) {
         if (tenantId == null || tenantId <= 0) {
             throw new IllegalArgumentException("tenantId must be positive");

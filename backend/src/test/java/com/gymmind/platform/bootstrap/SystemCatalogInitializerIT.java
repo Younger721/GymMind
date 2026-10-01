@@ -57,7 +57,8 @@ class SystemCatalogInitializerIT extends MySqlIntegrationTest {
                 "user:write",
                 "role:read",
                 "role:assign");
-        assertThat(permissionRepository.count()).isEqualTo(8);
+        assertThat(permissionRepository.count())
+                .isEqualTo(PermissionCatalog.entries().size() + PermissionCatalog.menuEntries().size() + 1);
         assertThat(requiredPermissions).allSatisfy(
                 code -> assertThat(permissionRepository.findByCode(code)).isPresent());
     }

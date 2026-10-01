@@ -2,10 +2,10 @@ import apiClient from './client'
 import type { ApiResponse } from '@/types/api'
 
 export const bookingsApi = {
-  list() {
-    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/bookings')
+  list(courseId?: number) {
+    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/bookings', { params: courseId ? { courseId } : undefined })
   },
-  book(body: { memberId: number; courseId: number }) {
+  book(body: { memberId?: number; courseId: number }) {
     return apiClient.post('/v1/bookings', body)
   },
   cancel(id: number) {

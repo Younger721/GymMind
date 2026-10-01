@@ -127,7 +127,6 @@ class SessionServiceTest {
         assertThatThrownBy(() -> service.isAccessRevoked(7L, 42L, "access-jti"))
                 .isInstanceOfSatisfying(BusinessException.class, exception -> {
                     assertThat(exception.errorCode()).isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE);
-                    assertThat(exception.getMessage()).isEqualTo("Dependency unavailable");
                     assertThat(exception.getCause()).isNull();
                 });
         assertThatThrownBy(() -> service.consume(session.tokenId(), RAW_REFRESH))

@@ -19,6 +19,13 @@ class IndexGenerationServiceTest {
         s.delete(7L, "c");
         assertThat(k.deleted).containsExactly("7:c"); assertThat(v.deleted).containsExactly("7:c");
     }
+    @Test void platformIndexTenantZeroCanPublishAndDelete() {
+        var k = new RecordingKeyword(); var v = new RecordingVector(); var s = new IndexGenerationService(k, v);
+        assertThat(s.publish(0L, "platform-generation", List.of(new IndexedChunk("platform-chunk", 0L, 42L, null, "text", new float[1024])))).isTrue();
+        s.delete(0L, "platform-chunk");
+        assertThat(k.deleted).containsExactly("0:platform-chunk");
+        assertThat(v.deleted).containsExactly("0:platform-chunk");
+    }
     static class RecordingKeyword implements KeywordIndexPort { boolean fail; java.util.List<String> deleted=new java.util.ArrayList<>(); public void upsert(IndexedChunk c){if(fail)throw new IllegalStateException();} public List<IndexedChunk> search(String q,Long t){return List.of();} public void delete(String id,Long t){deleted.add(t+":"+id);} }
     static class RecordingVector implements VectorIndexPort { boolean fail; java.util.List<String> deleted=new java.util.ArrayList<>(); public void upsert(IndexedChunk c){if(fail)throw new IllegalStateException();} public List<IndexedChunk> search(float[] q,Long t){return List.of();} public void delete(String id,Long t){deleted.add(t+":"+id);} }
 }

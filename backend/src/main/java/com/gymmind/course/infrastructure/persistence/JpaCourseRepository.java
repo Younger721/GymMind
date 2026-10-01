@@ -29,4 +29,9 @@ class JpaCourseRepository implements CourseRepository {
     public List<Course> findAllByTenantId(Long tenantId) {
         return delegate.findAllByTenantId(tenantId);
     }
+
+    @Override
+    public List<Course> findAll() {
+        return delegate.findAll();
+    }
 }

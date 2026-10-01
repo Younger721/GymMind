@@ -9,7 +9,7 @@ import java.util.List;
 public class AiHarnessProperties {
 
     /** 平台管理员默认可用插件 */
-    private List<String> platformDefaultPlugins = new ArrayList<>(List.of("basic_chat"));
+    private List<String> platformDefaultPlugins = new ArrayList<>(List.of("basic_chat", "knowledge_search"));
 
     /** 新租户开通时默认插件 */
     private List<String> tenantDefaultPlugins = new ArrayList<>(List.of("basic_chat", "knowledge_search"));

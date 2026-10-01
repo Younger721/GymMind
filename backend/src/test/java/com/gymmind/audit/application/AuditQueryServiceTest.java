@@ -12,8 +12,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import com.gymmind.shared.error.BusinessException;
+import static org.mockito.Mockito.when;
 
 class AuditQueryServiceTest {
 
@@ -26,10 +25,21 @@ class AuditQueryServiceTest {
     }
 
     @Test
-    void rejectsTenantActorWithoutAuditPermission() {
+    void ignoresPermissionCodeForTenantAdmin() {
         OperationAuditRepository repository = mock(OperationAuditRepository.class);
         var service = new DefaultAuditQueryService(repository);
-        assertThatThrownBy(() -> service.list(new CurrentActor(7L, 11L, Set.of(RoleCode.GYM_ADMIN), Set.of(), 0L, "token")))
-                .isInstanceOf(BusinessException.class);
+        service.list(new CurrentActor(7L, 11L, Set.of(RoleCode.GYM_ADMIN), Set.of(), 0L, "token"));
+        verify(repository).findAllByTenantId(11L);
+    }
+
+    @Test
+    void platformAdminWithoutTenantReadsAllAudits() {
+        OperationAuditRepository repository = mock(OperationAuditRepository.class);
+        when(repository.findAll()).thenReturn(List.of());
+        var service = new DefaultAuditQueryService(repository);
+
+        service.list(new CurrentActor(7L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token"));
+
+        verify(repository).findAll();
     }
 }

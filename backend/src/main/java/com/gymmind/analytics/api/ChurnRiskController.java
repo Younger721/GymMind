@@ -3,10 +3,11 @@ import com.gymmind.analytics.application.ChurnRiskService;
 import com.gymmind.analytics.domain.*;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import org.springframework.web.bind.annotation.*;
-@RestController @RequestMapping("/api/v1/analytics/churn-risks")
+@RestController @RequestMapping("/api/v1/analytics/churn-risks") @SecurityRequirement(name = "bearerAuth")
 public class ChurnRiskController {
     private final ChurnRiskService service; private final CurrentActorProvider actors;
     public ChurnRiskController(ChurnRiskService service, CurrentActorProvider actors) { this.service=service; this.actors=actors; }

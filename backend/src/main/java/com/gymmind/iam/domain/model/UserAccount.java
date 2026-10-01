@@ -16,7 +16,10 @@ import jakarta.persistence.ManyToOne;
 import java.util.Locale;
 
 @Entity
-@Table(name = "sys_user", uniqueConstraints = @UniqueConstraint(name = "uk_sys_user_email", columnNames = "normalized_email"))
+@Table(name = "sys_user", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_sys_user_email", columnNames = "normalized_email"),
+        @UniqueConstraint(name = "uk_sys_user_username", columnNames = "normalized_username")
+})
 public class UserAccount extends AuditableEntity {
 
     @Column(name = "tenant_id")
@@ -29,6 +32,10 @@ public class UserAccount extends AuditableEntity {
 
     @Column(name = "normalized_email", nullable = false, length = 320)
     private String normalizedEmail;
+
+    /** 登录用户名（全局唯一，小写规范化存储） */
+    @Column(name = "normalized_username", length = 64)
+    private String normalizedUsername;
 
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
@@ -53,7 +60,8 @@ public class UserAccount extends AuditableEntity {
     protected UserAccount() {
     }
 
-    private UserAccount(Long tenantId, String email, String passwordHash, String displayName, RoleCode roleCode) {
+    private UserAccount(Long tenantId, String email, String username, String passwordHash, String displayName,
+                        RoleCode roleCode) {
         if (roleCode == null) {
             throw new IllegalArgumentException("Role code must not be null");
         }
@@ -65,6 +73,7 @@ public class UserAccount extends AuditableEntity {
         }
         this.tenantId = tenantId;
         this.normalizedEmail = normalizeEmail(email);
+        this.normalizedUsername = resolveUsername(email, username);
         this.passwordHash = require(passwordHash, "Password hash");
         this.displayName = require(displayName, "Display name");
         this.roleCode = roleCode;
@@ -73,18 +82,35 @@ public class UserAccount extends AuditableEntity {
     }
 
     public static UserAccount platformAdmin(String email, String passwordHash, String displayName) {
-        return new UserAccount(null, email, passwordHash, displayName, RoleCode.PLATFORM_ADMIN);
+        return platformAdmin(email, null, passwordHash, displayName);
+    }
+
+    public static UserAccount platformAdmin(String email, String username, String passwordHash, String displayName) {
+        return new UserAccount(null, email, username, passwordHash, displayName, RoleCode.PLATFORM_ADMIN);
     }
 
     public static UserAccount tenantUser(Long tenantId, String email, String passwordHash, String displayName) {
-        return new UserAccount(tenantId, email, passwordHash, displayName, RoleCode.MEMBER);
+        return tenantUser(tenantId, email, passwordHash, displayName, RoleCode.MEMBER);
     }
 
-    public static UserAccount tenantUser(Long tenantId, String email, String passwordHash, String displayName, RoleCode roleCode) {
+    public static UserAccount tenantUser(Long tenantId, String email, String passwordHash, String displayName,
+                                         RoleCode roleCode) {
+        return tenantUser(tenantId, email, null, passwordHash, displayName, roleCode);
+    }
+
+    public static UserAccount tenantUser(Long tenantId, String email, String username, String passwordHash,
+                                         String displayName, RoleCode roleCode) {
         if (roleCode == RoleCode.PLATFORM_ADMIN) {
             throw new IllegalArgumentException("Platform admin is not a tenant user");
         }
-        return new UserAccount(tenantId, email, passwordHash, displayName, roleCode);
+        return new UserAccount(tenantId, email, username, passwordHash, displayName, roleCode);
+    }
+
+    /** 为历史数据补全用户名（仅当尚未设置时写入） */
+    public void backfillUsername(String preferred) {
+        if (normalizedUsername == null || normalizedUsername.isBlank()) {
+            normalizedUsername = normalizeUsername(preferred);
+        }
     }
 
     public void activate() {
@@ -129,6 +155,7 @@ public class UserAccount extends AuditableEntity {
 
     public Long getTenantId() { return tenantId; }
     public String getNormalizedEmail() { return normalizedEmail; }
+    public String getNormalizedUsername() { return normalizedUsername; }
     public String getPasswordHash() { return passwordHash; }
     public String getDisplayName() { return displayName; }
     public UserStatus getStatus() { return status; }
@@ -137,6 +164,24 @@ public class UserAccount extends AuditableEntity {
 
     public static String normalizeEmail(String value) {
         return require(value, "Email").trim().toLowerCase(Locale.ROOT);
+    }
+
+    public static String normalizeUsername(String value) {
+        return require(value, "Username").trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** 未显式指定用户名时，默认取邮箱 @ 前一段 */
+    public static String defaultUsernameFromEmail(String email) {
+        String normalized = normalizeEmail(email);
+        int at = normalized.indexOf('@');
+        return at > 0 ? normalized.substring(0, at) : normalized;
+    }
+
+    private static String resolveUsername(String email, String username) {
+        if (username == null || username.isBlank()) {
+            return defaultUsernameFromEmail(email);
+        }
+        return normalizeUsername(username);
     }
 
     private static String require(String value, String label) {

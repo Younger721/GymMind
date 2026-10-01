@@ -1,4 +1,4 @@
 package com.gymmind.iam.application.command;
 
-public record LoginCommand(String email, String password) {
+public record LoginCommand(String username, String password) {
 }

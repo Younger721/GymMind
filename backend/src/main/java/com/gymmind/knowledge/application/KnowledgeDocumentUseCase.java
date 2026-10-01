@@ -10,7 +10,7 @@ public interface KnowledgeDocumentUseCase {
 
     KnowledgeDocumentView update(CurrentActor actor, Long id, UpdateKnowledgeDocumentCommand command);
 
-    KnowledgeDocumentView reindex(CurrentActor actor, Long id);
+    KnowledgeDocumentView publish(CurrentActor actor, Long id, boolean published);
 
     KnowledgeDocumentView delete(CurrentActor actor, Long id);
 

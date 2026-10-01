@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { hasMenuPermission, MENU_CODES } from '@/utils/menuPermissions'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -21,25 +22,28 @@ const router = createRouter({
       component: () => import('@/layouts/MainLayout.vue'),
       meta: { requiresAuth: true },
       children: [
-        { path: '', redirect: '/dashboard' },
-        { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue') },
-        { path: 'assistant', name: 'assistant', component: () => import('@/views/AssistantView.vue') },
-        { path: 'knowledge', name: 'knowledge', component: () => import('@/views/KnowledgeView.vue') },
-        { path: 'plan', name: 'plan', component: () => import('@/views/PlanGeneratorView.vue') },
-        { path: 'agents/manage', name: 'agent-manage', component: () => import('@/views/AgentManageView.vue') },
-        { path: 'ai-tools', name: 'ai-tools', component: () => import('@/views/business/AiToolsView.vue') },
-        { path: 'operations', name: 'operations', component: () => import('@/views/business/OperationsView.vue') },
-        { path: 'membership', name: 'membership', component: () => import('@/views/business/MembershipManageView.vue') },
-        { path: 'training', name: 'training', component: () => import('@/views/business/TrainingView.vue') },
-        { path: 'analytics', name: 'analytics', component: () => import('@/views/business/AnalyticsHubView.vue') },
-        { path: 'search', name: 'search', component: () => import('@/views/business/SearchToolsView.vue') },
-        { path: 'admin', name: 'admin', component: () => import('@/views/business/AdminView.vue') },
-        { path: 'tenant-settings', name: 'tenant-settings', component: () => import('@/views/business/TenantSettingsView.vue') },
-        { path: 'platform', name: 'platform', component: () => import('@/views/business/PlatformView.vue') },
-        { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue') },
-        { path: 'plan-generator', redirect: '/plan' },
+        { path: '', redirect: '/assistant' },
+        { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { menuPermission: MENU_CODES.DASHBOARD } },
+        { path: 'assistant', name: 'assistant', component: () => import('@/views/AssistantView.vue'), meta: { menuPermission: MENU_CODES.ASSISTANT } },
+        { path: 'knowledge', name: 'knowledge', component: () => import('@/views/KnowledgeView.vue'), meta: { menuPermission: MENU_CODES.KNOWLEDGE } },
+        { path: 'plan', name: 'plan', redirect: '/assistant?mode=workout-plan', meta: { menuPermission: MENU_CODES.ASSISTANT } },
+        { path: 'operations', name: 'operations', component: () => import('@/views/business/OperationsView.vue'), meta: { menuPermission: MENU_CODES.OPERATIONS } },
+        { path: 'check-ins', name: 'check-ins', component: () => import('@/views/business/CheckInView.vue'), meta: { menuPermission: MENU_CODES.OPERATIONS } },
+        { path: 'membership', name: 'membership', component: () => import('@/views/business/MembershipManageView.vue'), meta: { menuPermission: MENU_CODES.OPERATIONS } },
+        { path: 'training', name: 'training', component: () => import('@/views/business/TrainingView.vue'), meta: { menuPermission: MENU_CODES.TRAINING } },
+        { path: 'analytics', name: 'analytics', component: () => import('@/views/business/AnalyticsHubView.vue'), meta: { menuPermission: MENU_CODES.ANALYTICS } },
+        { path: 'member-risks', name: 'member-risks', component: () => import('@/views/business/MemberRiskView.vue'), meta: { menuPermission: MENU_CODES.ANALYTICS } },
+        { path: 'admin', name: 'admin', component: () => import('@/views/business/AdminView.vue'), meta: { menuPermission: MENU_CODES.ADMIN } },
+        { path: 'tenant-settings', name: 'tenant-settings', component: () => import('@/views/business/TenantSettingsView.vue'), meta: { menuPermission: MENU_CODES.TENANT_SETTINGS } },
+        { path: 'platform', name: 'platform', component: () => import('@/views/business/PlatformView.vue'), meta: { menuPermission: MENU_CODES.PLATFORM } },
+        { path: 'role-permissions', name: 'role-permissions', component: () => import('@/views/business/RolePermissionView.vue'), meta: { menuPermission: MENU_CODES.ROLE_PERMISSIONS, platformAdminOnly: true } },
+        { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue'), meta: { menuPermission: MENU_CODES.PROFILE } },
+        { path: 'plan-generator', redirect: '/assistant?mode=workout-plan', meta: { menuPermission: MENU_CODES.ASSISTANT } },
+        { path: 'agents/manage', name: 'agents-manage', component: () => import('@/views/AgentManageView.vue'), meta: { menuPermission: MENU_CODES.ASSISTANT } },
+        { path: 'ai-tools', redirect: '/assistant' },
+        { path: 'search', redirect: '/knowledge' },
         { path: 'members', redirect: '/operations' },
-        { path: 'courses', redirect: '/operations' },
+        { path: 'courses', name: 'courses', component: () => import('@/views/business/CourseCenterView.vue'), meta: { menuPermission: MENU_CODES.COURSES } },
         { path: 'bookings', redirect: '/operations' },
         { path: 'exercises', redirect: '/training' },
         { path: 'workouts', redirect: '/training' },
@@ -51,17 +55,35 @@ const router = createRouter({
   ]
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.matched.some(r => r.meta.requiresAuth)
 
   if (requiresAuth && !authStore.isAuthenticated) {
     next('/login')
-  } else if (!requiresAuth && authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
-    next('/dashboard')
-  } else {
-    next()
+    return
   }
+  if (!requiresAuth && authStore.isAuthenticated && (to.path === '/login' || to.path === '/register')) {
+    next('/dashboard')
+    return
+  }
+  const menuPermission = to.matched
+    .map(record => record.meta.menuPermission as string | undefined)
+    .find(Boolean)
+  if (requiresAuth && to.matched.some(record => record.meta.platformAdminOnly) && !authStore.isPlatformAdmin) {
+    next('/dashboard')
+    return
+  }
+  if (requiresAuth && menuPermission && !hasMenuPermission(menuPermission)) {
+    const fallback = MENU_CODES.DASHBOARD
+    if (to.path !== '/dashboard' && hasMenuPermission(fallback)) {
+      next('/dashboard')
+    } else {
+      next(false)
+    }
+    return
+  }
+  next()
 })
 
 export default router

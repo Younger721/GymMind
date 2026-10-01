@@ -6,6 +6,7 @@ import com.gymmind.ai.application.AiUsageRecord;
 import com.gymmind.audit.domain.OperationAudit;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,6 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/audits")
+@SecurityRequirement(name = "bearerAuth")
 public class AuditQueryController {
     private final AuditQueryService service;
     private final CurrentActorProvider actors;

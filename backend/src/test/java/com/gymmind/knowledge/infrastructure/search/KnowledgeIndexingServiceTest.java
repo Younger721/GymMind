@@ -3,6 +3,7 @@ package com.gymmind.knowledge.infrastructure.search;
 import com.gymmind.ai.domain.EmbeddingGateway;
 import com.gymmind.knowledge.infrastructure.parser.DeterministicChunker;
 import com.gymmind.knowledge.infrastructure.parser.DocumentParserRegistry;
+import com.gymmind.knowledge.domain.model.KnowledgeChunk;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -30,5 +31,24 @@ class KnowledgeIndexingServiceTest {
         verify(embedding).embed(argThat(xs -> xs.size() == 1 && xs.get(0).contains("training tips")));
         verify(index).publish(eq(7L), startsWith("document-3-"),
                 argThat(xs -> xs.size() == 1 && xs.get(0).vector().length == 1024));
+    }
+
+    @Test
+    void removesPreviousDocumentChunksOnlyAfterNewGenerationIsPublished() {
+        var index = mock(IndexGenerationService.class);
+        var embedding = mock(EmbeddingGateway.class);
+        var chunks = mock(com.gymmind.knowledge.application.KnowledgeChunkRepository.class);
+        var old = KnowledgeChunk.create(7L, 3L, "old-chunk", 1L, "old text");
+        when(chunks.findByTenantIdAndDocumentId(7L, 3L)).thenReturn(List.of(old));
+        when(embedding.embed(anyList())).thenReturn(List.of(new float[1024]));
+        when(index.publish(eq(7L), startsWith("document-3-"), anyList())).thenReturn(true);
+
+        var service = new KnowledgeIndexingService(index, embedding,
+                DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180), chunks);
+
+        assertThat(service.publish(7L, 3L, 11L, "guide.txt", "text/plain", "new text".getBytes())).isTrue();
+
+        verify(index).delete(7L, "old-chunk");
+        verify(chunks).deleteByTenantIdAndDocumentId(7L, 3L);
     }
 }

@@ -6,7 +6,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -15,7 +14,11 @@ import java.io.IOException;
 import java.util.Objects;
 
 /**
- * 为平台管理员解析门店租户上下文（请求头 X-Tenant-Id 或首个活跃租户）。
+ * Establishes an explicit tenant context for platform-admin requests.
+ *
+ * A platform request without a tenant header stays outside tenant scope. A
+ * supplied header is accepted only for an active tenant and only for a
+ * platform administrator; there is no implicit first-tenant fallback.
  */
 @Component
 public class PlatformTenantContextFilter extends OncePerRequestFilter {
@@ -34,47 +37,45 @@ public class PlatformTenantContextFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         try {
-            resolvePlatformTenant(request);
+            if (!resolvePlatformTenant(request, response)) {
+                return;
+            }
             filterChain.doFilter(request, response);
         } finally {
             TenantContextHolder.clear();
         }
     }
 
-    private void resolvePlatformTenant(HttpServletRequest request) {
+    private boolean resolvePlatformTenant(HttpServletRequest request, HttpServletResponse response) {
+        String rawHeader = request.getHeader(TENANT_HEADER);
+        if (rawHeader == null || rawHeader.isBlank()) {
+            return true;
+        }
+
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null
-                || !(authentication.getPrincipal() instanceof GymMindPrincipal principal)) {
-            return;
-        }
-        CurrentActor actor = principal.actor();
-        if (!actor.isPlatformAdmin()) {
-            return;
+                || !(authentication.getPrincipal() instanceof GymMindPrincipal principal)
+                || !principal.actor().isPlatformAdmin()) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            return false;
         }
 
-        Long tenantId = parseHeaderTenantId(request.getHeader(TENANT_HEADER));
-        if (tenantId == null) {
-            tenantId = tenants.findAll(PageRequest.of(0, 1))
-                    .stream()
-                    .filter(Tenant::isActive)
-                    .map(Tenant::getId)
-                    .findFirst()
-                    .orElse(null);
+        Long tenantId = parseTenantId(rawHeader);
+        if (tenantId == null || tenants.findById(tenantId).filter(Tenant::isActive).isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            return false;
         }
-        if (tenantId != null) {
-            TenantContextHolder.set(tenantId);
-        }
+        TenantContextHolder.set(tenantId);
+        return true;
     }
 
-    private static Long parseHeaderTenantId(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
+    private static Long parseTenantId(String raw) {
         try {
-            long tenantId = Long.parseLong(raw.trim());
-            return tenantId > 0 ? tenantId : null;
+            long value = Long.parseLong(raw.trim());
+            return value > 0 ? value : null;
         } catch (NumberFormatException ignored) {
             return null;
         }
     }
+
 }

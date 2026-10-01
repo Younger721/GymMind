@@ -4,6 +4,7 @@ import com.gymmind.mcp.application.McpTool;
 import com.gymmind.mcp.application.McpToolService;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/mcp")
+@SecurityRequirement(name = "bearerAuth")
 public class McpController {
 
     private final McpToolService service;

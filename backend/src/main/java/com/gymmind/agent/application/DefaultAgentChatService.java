@@ -16,7 +16,9 @@ import com.gymmind.mcp.application.McpToolService;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.tenancy.application.TenantQuotaService;
+import com.gymmind.tenancy.application.TenantQuotaServices;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -42,7 +44,7 @@ public class DefaultAgentChatService implements AgentChatService {
             KnowledgeSearchService knowledgeSearch,
             ChatModelGateway model,
             McpToolService mcpTools) {
-        this(agents, knowledgeSearch, model, mcpTools, null, null, null);
+        this(agents, knowledgeSearch, model, mcpTools, null, null, TenantQuotaServices.unboundedForLegacyConstruction());
     }
 
     @Autowired
@@ -60,23 +62,22 @@ public class DefaultAgentChatService implements AgentChatService {
         this.mcpTools = mcpTools;
         this.memory = memory;
         this.usage = usage;
-        this.quotas = quotas;
+        this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
     }
 
     @Override
     public AiChatView chat(CurrentActor actor, Long agentId, String sessionId, String question) {
-        if (actor == null || actor.tenantId() == null || !actor.hasPermission("agent:chat")) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (tenantId == null || !(actor.hasPermission("menu:assistant") || actor.hasPermission("agent:chat"))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (agentId == null || sessionId == null || sessionId.isBlank()
                 || question == null || question.isBlank() || guard.isBlocked(question)) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        if (quotas != null) {
-            quotas.ensureAiChatAllowed(actor.tenantId());
-        }
+        quotas.ensureAiChatAllowed(tenantId);
 
-        TenantAgent agent = agents.findByTenantIdAndId(actor.tenantId(), agentId)
+        TenantAgent agent = agents.findByTenantIdAndId(tenantId, agentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (agent.getStatus() != AgentStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.FORBIDDEN);

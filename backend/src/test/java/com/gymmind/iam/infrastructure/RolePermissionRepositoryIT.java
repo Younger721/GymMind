@@ -9,6 +9,7 @@ import com.gymmind.iam.domain.model.UserRole;
 import com.gymmind.iam.domain.repository.PermissionRepository;
 import com.gymmind.iam.domain.repository.RoleRepository;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
+import com.gymmind.iam.domain.repository.UserRoleRepository;
 import com.gymmind.support.MySqlIntegrationTest;
 import com.gymmind.tenancy.domain.model.Tenant;
 import com.gymmind.tenancy.domain.repository.TenantRepository;
@@ -30,13 +31,15 @@ class RolePermissionRepositoryIT extends MySqlIntegrationTest {
     @Autowired private RoleRepository roleRepository;
     @Autowired private PermissionRepository permissionRepository;
     @Autowired private UserAccountRepository userRepository;
+    @Autowired private UserRoleRepository userRoleRepository;
     @Autowired private TenantRepository tenantRepository;
     @PersistenceContext private EntityManager entityManager;
 
     @Test
     void persistsRolePermissionAndUserRoleAssociations() {
         Role role = roleRepository.findByCode(RoleCode.COACH).orElseThrow();
-        Permission permission = permissionRepository.save(Permission.of("workout:read", "Read workouts"));
+        Permission permission = permissionRepository.save(
+                Permission.of("association-test:workout-read", "Read workouts"));
         Long tenantId = tenantRepository.save(Tenant.create("role-gym", "Role Gym")).getId();
         UserAccount user = userRepository.save(UserAccount.tenantUser(tenantId, "coach@example.com", "$hash", "Coach"));
         entityManager.flush();
@@ -74,5 +77,35 @@ class RolePermissionRepositoryIT extends MySqlIntegrationTest {
         entityManager.persist(RolePermission.link(managedRole, managedPermission));
         assertThatThrownBy(() -> entityManager.flush())
                 .isInstanceOfAny(DataIntegrityViolationException.class, ConstraintViolationException.class);
+    }
+
+    @Test
+    void disabledRoleDoesNotContributeRoleCodesOrPermissions() {
+        Role role = roleRepository.findByCode(RoleCode.COACH).orElseThrow();
+        Permission permission = permissionRepository.save(
+                Permission.of("role-status-test:read", "Role status test permission"));
+        Long tenantId = tenantRepository.save(Tenant.create("disabled-role-gym", "Disabled Role Gym")).getId();
+        UserAccount user = userRepository.save(
+                UserAccount.tenantUser(tenantId, "disabled-coach@example.com", "$hash", "Disabled Coach"));
+        entityManager.flush();
+
+        entityManager.persist(RolePermission.link(role, permission));
+        entityManager.persist(UserRole.assign(user, role));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(userRoleRepository.findRoleCodesByUserId(user.getId())).contains(RoleCode.COACH);
+        assertThat(userRoleRepository.findPermissionCodesByUserId(user.getId()))
+                .contains("role-status-test:read");
+
+        Role managedRole = entityManager.find(Role.class, role.getId());
+        managedRole.disable();
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(userRoleRepository.findRoleCodesByUserId(user.getId()))
+                .doesNotContain(RoleCode.COACH);
+        assertThat(userRoleRepository.findPermissionCodesByUserId(user.getId()))
+                .doesNotContain("role-status-test:read");
     }
 }

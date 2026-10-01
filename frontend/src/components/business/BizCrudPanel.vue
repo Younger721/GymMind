@@ -16,16 +16,21 @@
           @keyup.enter="load"
         />
         <el-button size="small" :loading="loading" @click="load">刷新</el-button>
-        <el-button v-if="createFields.length" size="small" type="primary" @click="openCreate">
+        <el-button v-if="createFields.length && (!createPermission || hasPermission(createPermission))" size="small" type="primary" @click="openCreate">
           新建
         </el-button>
       </div>
     </div>
 
-    <BizTable :rows="rows" :loading="loading" :column-keys="columnKeys">
+    <BizTable
+      :rows="rows"
+      :loading="loading"
+      :column-keys="columnKeys"
+      :column-labels="columnLabels"
+    >
       <template v-if="rowActions.length" #actions="{ row }">
         <el-button
-          v-for="act in rowActions"
+          v-for="act in rowActions.filter(item => !item.permission || hasPermission(item.permission))"
           :key="act.label"
           size="small"
           text
@@ -67,6 +72,7 @@ import { ElMessage } from 'element-plus'
 import BizTable from './BizTable.vue'
 import JsonBlock from './JsonBlock.vue'
 import { useBizList } from '@/composables/useBizList'
+import { hasPermission } from '@/utils/permissions'
 
 export interface FieldDef {
   key: string
@@ -74,10 +80,12 @@ export interface FieldDef {
   placeholder?: string
   type?: 'text' | 'number' | 'select'
   options?: { label: string; value: string }[]
+  optionsLoader?: () => Promise<{ label: string; value: string }[]>
 }
 
 export interface RowAction {
   label: string
+  permission?: string
   handler: (row: Record<string, unknown>) => Promise<unknown>
 }
 
@@ -86,10 +94,12 @@ const props = defineProps<{
   desc?: string
   searchable?: boolean
   columnKeys?: string[]
+  columnLabels?: Record<string, string>
   createFields?: FieldDef[]
   rowActions?: RowAction[]
   loader: (keyword?: string) => Promise<unknown>
   creator?: (payload: Record<string, string>) => Promise<unknown>
+  createPermission?: string
 }>()
 
 const { rows, loading, result, runLoader } = useBizList()
@@ -101,13 +111,22 @@ const form = reactive<Record<string, string>>({})
 const createFields = props.createFields ?? []
 const rowActions = props.rowActions ?? []
 
-function openCreate() {
-  createFields.forEach(f => { form[f.key] = '' })
-  createVisible.value = true
-}
-
 async function load() {
   await runLoader(() => props.loader(keyword.value || undefined) as Promise<{ data?: Record<string, unknown>[] }>)
+}
+
+async function openCreate() {
+  createFields.forEach(f => { form[f.key] = '' })
+  try {
+    for (const field of createFields) {
+      if (field.optionsLoader) {
+        field.options = await field.optionsLoader()
+      }
+    }
+    createVisible.value = true
+  } catch {
+    ElMessage.error('选项加载失败，请重试')
+  }
 }
 
 async function submitCreate() {
@@ -176,3 +195,4 @@ defineExpose({ reload: load })
   flex-wrap: wrap;
 }
 </style>
+

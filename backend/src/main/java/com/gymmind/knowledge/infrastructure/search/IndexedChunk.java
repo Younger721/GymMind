@@ -1,1 +1,15 @@
-package com.gymmind.knowledge.infrastructure.search; public record IndexedChunk(String id,Long tenantId,Long ownerUserId,String text,float[] vector) { public IndexedChunk(String id,Long tenantId,String text,float[] vector){this(id,tenantId,null,text,vector);} public boolean visibleTo(Long userId){return ownerUserId==null||ownerUserId.equals(userId);} }
+package com.gymmind.knowledge.infrastructure.search;
+
+public record IndexedChunk(String id, Long tenantId, Long documentId, Long ownerUserId, String text, float[] vector) {
+    public IndexedChunk(String id, Long tenantId, Long ownerUserId, String text, float[] vector) {
+        this(id, tenantId, null, ownerUserId, text, vector);
+    }
+
+    public IndexedChunk(String id, Long tenantId, String text, float[] vector) {
+        this(id, tenantId, null, null, text, vector);
+    }
+
+    public boolean visibleTo(Long userId) {
+        return ownerUserId == null || ownerUserId.equals(userId);
+    }
+}

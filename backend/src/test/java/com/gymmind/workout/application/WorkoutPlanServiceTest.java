@@ -56,6 +56,55 @@ class WorkoutPlanServiceTest {
                 .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
     }
 
+    @Test
+    void memberCanSaveOwnValidatedDraft() {
+        WorkoutPlanRepository plans = mock(WorkoutPlanRepository.class);
+        WorkoutPlanItemRepository items = mock(WorkoutPlanItemRepository.class);
+        ExerciseRepository exercises = mock(ExerciseRepository.class);
+        MemberRepository members = mock(MemberRepository.class);
+        CoachAssignmentService assignments = mock(CoachAssignmentService.class);
+        var member = mock(com.gymmind.member.domain.model.Member.class);
+        when(member.getId()).thenReturn(41L);
+        when(members.findByTenantIdAndUserId(11L, 9L)).thenReturn(Optional.of(member));
+        when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(member));
+        when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(mock(com.gymmind.exercise.domain.model.Exercise.class)));
+        when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(items.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        WorkoutPlanService service = new DefaultWorkoutPlanService(plans, items, exercises, members, assignments,
+                mock(AuditRecorder.class));
+        WorkoutPlanView view = service.saveValidatedDraft(memberActor(11L, 9L), validCommand(41L));
+
+        assertThat(view.memberId()).isEqualTo(41L);
+        verify(assignments, never()).canAccess(any(), anyLong());
+        verify(plans).save(any());
+    }
+
+    @Test
+    void memberCannotSaveDraftForAnotherMember() {
+        MemberRepository members = mock(MemberRepository.class);
+        var ownMember = mock(com.gymmind.member.domain.model.Member.class);
+        when(ownMember.getId()).thenReturn(41L);
+        when(members.findByTenantIdAndUserId(11L, 9L)).thenReturn(Optional.of(ownMember));
+        WorkoutPlanRepository plans = mock(WorkoutPlanRepository.class);
+        WorkoutPlanService service = new DefaultWorkoutPlanService(plans, mock(WorkoutPlanItemRepository.class),
+                mock(ExerciseRepository.class), members, mock(CoachAssignmentService.class), mock(AuditRecorder.class));
+
+        assertThatThrownBy(() -> service.saveValidatedDraft(memberActor(11L, 9L), validCommand(42L)))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+        verifyNoInteractions(plans);
+    }
+
+    private static CreateWorkoutPlanCommand validCommand(long memberId) {
+        return new CreateWorkoutPlanCommand(null, memberId, null, "Strength", "muscle gain", LocalDate.now(),
+                LocalDate.now().plusDays(30), "notes",
+                java.util.List.of(new WorkoutPlanItemCommand(8L, 1, 4, 10, 90, 20.0, "controlled")));
+    }
+
+    private static CurrentActor memberActor(long tenantId, long userId) {
+        return new CurrentActor(userId, tenantId, Set.of(RoleCode.MEMBER), Set.of("ai:plan"), 0L, "member-token");
+    }
+
     private static CurrentActor admin(long tenantId) {
         return new CurrentActor(1L, tenantId, Set.of(RoleCode.GYM_ADMIN),
                 Set.of("workout:write"), 0L, "token");

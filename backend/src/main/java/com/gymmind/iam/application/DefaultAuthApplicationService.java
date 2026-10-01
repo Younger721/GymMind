@@ -76,13 +76,13 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
         if (command == null) {
             throw invalidCredentials();
         }
-        String normalizedEmail;
+        String normalizedUsername;
         try {
-            normalizedEmail = UserAccount.normalizeEmail(command.email());
+            normalizedUsername = UserAccount.normalizeUsername(command.username());
         } catch (IllegalArgumentException exception) {
             throw invalidCredentials();
         }
-        UserAccount user = userRepository.findByNormalizedEmail(normalizedEmail)
+        UserAccount user = userRepository.findByNormalizedUsername(normalizedUsername)
                 .orElseThrow(DefaultAuthApplicationService::invalidCredentials);
         if (!passwordMatches(command.password(), user.getPasswordHash())) {
             throw invalidCredentials();
@@ -182,7 +182,8 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
         return new AuthResult(
                 new AuthResult.AuthenticatedUser(
                         account.user().getId(), account.user().getTenantId(),
-                        account.user().getNormalizedEmail(), account.user().getDisplayName(),
+                        account.user().getNormalizedUsername(), account.user().getNormalizedEmail(),
+                        account.user().getDisplayName(),
                         account.actor().roles(), account.actor().permissions()),
                 tokens);
     }
@@ -201,8 +202,6 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
     private static boolean matchesActor(JwtClaims claims, CurrentActor actor) {
         return Objects.equals(claims.userId(), actor.userId())
                 && Objects.equals(claims.tenantId(), actor.tenantId())
-                && claims.roles().equals(actor.roles())
-                && claims.permissions().equals(actor.permissions())
                 && claims.tokenVersion() == actor.tokenVersion()
                 && claims.tokenId().equals(actor.tokenId());
     }

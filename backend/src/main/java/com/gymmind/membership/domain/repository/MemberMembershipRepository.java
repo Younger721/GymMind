@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface MemberMembershipRepository {
     MemberMembership save(MemberMembership m);
@@ -13,4 +14,6 @@ public interface MemberMembershipRepository {
     Page<MemberMembership> findAllByTenantIdAndMemberId(Long t, Long m, Pageable p);
 
     List<MemberMembership> findAllByTenantIdAndMemberIdAndStatus(Long t, Long m, MemberMembershipStatus status);
+
+    Optional<MemberMembership> findActiveByTenantIdAndMemberId(Long t, Long m);
 }

@@ -8,8 +8,10 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "账号或密码错误"),
     UNAUTHENTICATED(HttpStatus.UNAUTHORIZED, "未登录或登录已失效"),
     FORBIDDEN(HttpStatus.FORBIDDEN, "没有权限执行此操作"),
+    TENANT_CONTEXT_REQUIRED(HttpStatus.FORBIDDEN, "请先选择租户"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "资源不存在"),
     CONFLICT(HttpStatus.CONFLICT, "资源冲突"),
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "请求过于频繁，请稍后重试"),
     DEPENDENCY_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "依赖服务不可用"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "服务器内部错误");
 

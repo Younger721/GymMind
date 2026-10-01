@@ -2,8 +2,8 @@ import apiClient from './client'
 import type { ApiResponse } from '@/types/api'
 
 export const coursesApi = {
-  list() {
-    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/courses')
+  list(params?: { scope?: 'all' | 'mine' | 'managed'; from?: string; to?: string; type?: string; coachId?: number; availableOnly?: boolean }) {
+    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/courses', { params })
   },
   find(id: number) {
     return apiClient.get<any, ApiResponse<unknown>>(`/v1/courses/${id}`)

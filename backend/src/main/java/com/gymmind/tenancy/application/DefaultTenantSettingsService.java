@@ -2,6 +2,7 @@ package com.gymmind.tenancy.application;
 
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.tenancy.api.response.TenantSettingsView;
 import com.gymmind.tenancy.application.command.UpdateTenantSettingsCommand;
@@ -22,12 +23,12 @@ public class DefaultTenantSettingsService implements TenantSettingsService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public TenantSettingsView getCurrent(CurrentActor actor) {
         Long tenantId = requireGymAdmin(actor, "tenant:settings:read");
-        return settingsRepository.findByTenantId(tenantId)
-                .map(TenantSettingsView::from)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        TenantSettings settings = settingsRepository.findByTenantId(tenantId)
+                .orElseGet(() -> settingsRepository.save(TenantSettings.create(tenantId)));
+        return TenantSettingsView.from(settings);
     }
 
     @Override
@@ -47,12 +48,47 @@ public class DefaultTenantSettingsService implements TenantSettingsService {
         return TenantSettingsView.from(settingsRepository.save(settings));
     }
 
-    private static Long requireGymAdmin(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null
-                || !actor.roles().contains(com.gymmind.iam.domain.model.RoleCode.GYM_ADMIN)
-                || !actor.hasPermission(permission)) {
+    @Override
+    @Transactional
+    public TenantSettingsView getForPlatform(Long tenantId, CurrentActor actor) {
+        requirePlatform(actor, "platform:tenant:read");
+        Long id = requireTenantId(tenantId);
+        TenantSettings settings = settingsRepository.findByTenantId(id)
+                .orElseGet(() -> settingsRepository.save(TenantSettings.create(id)));
+        return TenantSettingsView.from(settings);
+    }
+
+    @Override
+    @Transactional
+    public TenantSettingsView updateForPlatform(Long tenantId, CurrentActor actor, UpdateTenantSettingsCommand command) {
+        requirePlatform(actor, "platform:tenant:write");
+        Objects.requireNonNull(command, "command");
+        if (command.reservationEnabled() == null || command.checkInEnabled() == null
+                || command.timezone() == null || command.timezone().isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        Long id = requireTenantId(tenantId);
+        TenantSettings settings = settingsRepository.findByTenantId(id)
+                .orElseGet(() -> TenantSettings.create(id));
+        settings.setReservationEnabled(command.reservationEnabled());
+        settings.setCheckInEnabled(command.checkInEnabled());
+        settings.setTimezone(command.timezone());
+        return TenantSettingsView.from(settingsRepository.save(settings));
+    }
+
+    private static void requirePlatform(CurrentActor actor, String permission) {
+        if (actor == null || !actor.isPlatformAdmin() || !actor.hasPermission(permission)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return actor.tenantId();
+    }
+
+    private static Long requireTenantId(Long tenantId) {
+        if (tenantId == null || tenantId <= 0) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        return tenantId;
+    }
+
+    private static Long requireGymAdmin(CurrentActor actor, String permission) {
+        ActorAccess.requireGymAdmin(actor, permission);
+        return ActorAccess.requireTenantId(actor);
     }
 }

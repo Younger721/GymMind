@@ -82,4 +82,16 @@ class TenantAccessGuardTest {
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.FORBIDDEN);
     }
+
+    @Test
+    void platformAdminCanUsePermissionGuardWithTenantContext() {
+        CurrentActor platform = SecurityTestActors.platformAdmin();
+        TenantContextHolder.set(10L);
+        try {
+            assertThatCode(() -> guard.requirePermission(platform, "member:write"))
+                    .doesNotThrowAnyException();
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
 }

@@ -86,16 +86,17 @@ class AuthApplicationServiceTest {
     }
 
     @Test
-    void loginNormalizesEmailAndUsesRepositoryRoleAssignments() {
+    void loginNormalizesUsernameAndUsesRepositoryRoleAssignments() {
         Tenant tenant = tenant(7L, "new-gym", "New Gym");
         UserAccount user = user(42L, tenant.getId(), RoleCode.MEMBER);
-        when(users.findByNormalizedEmail("owner@example.com")).thenReturn(Optional.of(user));
+        when(users.findByNormalizedUsername("owner")).thenReturn(Optional.of(user));
         when(tenants.findById(7L)).thenReturn(Optional.of(tenant));
         when(userRoles.findRoleCodesByUserId(42L)).thenReturn(Set.of(RoleCode.GYM_ADMIN));
         when(userRoles.findPermissionCodesByUserId(42L)).thenReturn(Set.of("tenant:settings:write"));
 
-        AuthResult result = service.login(new LoginCommand(" Owner@Example.COM ", "correct-password"));
+        AuthResult result = service.login(new LoginCommand(" Owner ", "correct-password"));
 
+        assertThat(result.user().username()).isEqualTo("owner");
         assertThat(result.user().email()).isEqualTo("owner@example.com");
         assertThat(result.user().roles()).containsExactly(RoleCode.GYM_ADMIN);
         assertThat(result.user().permissions()).containsExactly("tenant:settings:write");
@@ -103,21 +104,21 @@ class AuthApplicationServiceTest {
 
     @Test
     void loginFailuresDoNotRevealEmailPasswordUserOrTenant() {
-        assertInvalidCredentials(() -> service.login(new LoginCommand("missing@example.com", "wrong")));
+        assertInvalidCredentials(() -> service.login(new LoginCommand("missing", "wrong")));
 
         UserAccount user = user(42L, 7L, RoleCode.GYM_ADMIN);
-        when(users.findByNormalizedEmail("owner@example.com")).thenReturn(Optional.of(user));
-        assertInvalidCredentials(() -> service.login(new LoginCommand("owner@example.com", "wrong")));
+        when(users.findByNormalizedUsername("owner")).thenReturn(Optional.of(user));
+        assertInvalidCredentials(() -> service.login(new LoginCommand("owner", "wrong")));
 
         user.disable();
-        assertUnauthenticated(() -> service.login(new LoginCommand("owner@example.com", "correct-password")));
+        assertUnauthenticated(() -> service.login(new LoginCommand("owner", "correct-password")));
 
         UserAccount activeUser = user(43L, 8L, RoleCode.GYM_ADMIN);
-        when(users.findByNormalizedEmail("other@example.com")).thenReturn(Optional.of(activeUser));
+        when(users.findByNormalizedUsername("second")).thenReturn(Optional.of(activeUser));
         Tenant disabledTenant = tenant(8L, "disabled", "Disabled");
         disabledTenant.disable();
         when(tenants.findById(8L)).thenReturn(Optional.of(disabledTenant));
-        assertUnauthenticated(() -> service.login(new LoginCommand("other@example.com", "correct-password")));
+        assertUnauthenticated(() -> service.login(new LoginCommand("second", "correct-password")));
     }
 
     @Test
@@ -125,7 +126,7 @@ class AuthApplicationServiceTest {
         Tenant tenant = tenant(7L, "new-gym", "New Gym");
         UserAccount user = user(42L, 7L, RoleCode.MEMBER);
         stubActiveAccount(user, tenant);
-        AuthResult login = service.login(new LoginCommand("owner@example.com", "correct-password"));
+        AuthResult login = service.login(new LoginCommand("owner", "correct-password"));
         String originalRefresh = login.tokens().refreshToken();
 
         AuthResult refreshed = service.refresh(new RefreshCommand(originalRefresh));
@@ -142,7 +143,7 @@ class AuthApplicationServiceTest {
         UserAccount user = user(42L, 7L, RoleCode.GYM_ADMIN);
         stubActiveAccount(user, tenant);
         String disabledUserToken = service.login(
-                new LoginCommand("owner@example.com", "correct-password")).tokens().refreshToken();
+                new LoginCommand("owner", "correct-password")).tokens().refreshToken();
         user.disable();
         int consumeAttempts = sessionStore.consumeAttempts;
         assertUnauthenticated(() -> service.refresh(new RefreshCommand(disabledUserToken)));
@@ -150,13 +151,13 @@ class AuthApplicationServiceTest {
 
         UserAccount second = user(43L, 8L, RoleCode.GYM_ADMIN);
         Tenant secondTenant = tenant(8L, "second", "Second");
-        when(users.findByNormalizedEmail("second@example.com")).thenReturn(Optional.of(second));
+        when(users.findByNormalizedUsername("second")).thenReturn(Optional.of(second));
         when(users.findById(43L)).thenReturn(Optional.of(second));
         when(tenants.findById(8L)).thenReturn(Optional.of(secondTenant));
         when(userRoles.findRoleCodesByUserId(43L)).thenReturn(Set.of(RoleCode.GYM_ADMIN));
         when(userRoles.findPermissionCodesByUserId(43L)).thenReturn(Set.of());
         String disabledTenantToken = service.login(
-                new LoginCommand("second@example.com", "correct-password")).tokens().refreshToken();
+                new LoginCommand("second", "correct-password")).tokens().refreshToken();
         secondTenant.disable();
         consumeAttempts = sessionStore.consumeAttempts;
         assertUnauthenticated(() -> service.refresh(new RefreshCommand(disabledTenantToken)));
@@ -164,13 +165,13 @@ class AuthApplicationServiceTest {
 
         UserAccount third = user(44L, 9L, RoleCode.GYM_ADMIN);
         Tenant thirdTenant = tenant(9L, "third", "Third");
-        when(users.findByNormalizedEmail("third@example.com")).thenReturn(Optional.of(third));
+        when(users.findByNormalizedUsername("third")).thenReturn(Optional.of(third));
         when(users.findById(44L)).thenReturn(Optional.of(third));
         when(tenants.findById(9L)).thenReturn(Optional.of(thirdTenant));
         when(userRoles.findRoleCodesByUserId(44L)).thenReturn(Set.of(RoleCode.GYM_ADMIN));
         when(userRoles.findPermissionCodesByUserId(44L)).thenReturn(Set.of());
         String staleToken = service.login(
-                new LoginCommand("third@example.com", "correct-password")).tokens().refreshToken();
+                new LoginCommand("third", "correct-password")).tokens().refreshToken();
         third.incrementTokenVersion();
         consumeAttempts = sessionStore.consumeAttempts;
         assertUnauthenticated(() -> service.refresh(new RefreshCommand(staleToken)));
@@ -182,7 +183,7 @@ class AuthApplicationServiceTest {
         Tenant tenant = tenant(7L, "new-gym", "New Gym");
         UserAccount user = user(42L, 7L, RoleCode.GYM_ADMIN);
         stubActiveAccount(user, tenant);
-        AuthResult login = service.login(new LoginCommand("owner@example.com", "correct-password"));
+        AuthResult login = service.login(new LoginCommand("owner", "correct-password"));
         JwtClaims access = jwt.verify(login.tokens().accessToken(), TokenType.ACCESS);
 
         service.logout(access.toCurrentActor(),
@@ -206,11 +207,26 @@ class AuthApplicationServiceTest {
     }
 
     @Test
+    void logoutAcceptsValidTokensAfterCurrentPermissionsExpand() {
+        CurrentActor tokenActor = new CurrentActor(
+                1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of("platform:tenant:read"), 0L, "source");
+        TokenPair tokens = jwt.issue(tokenActor);
+        JwtClaims access = jwt.verify(tokens.accessToken(), TokenType.ACCESS);
+        CurrentActor currentActor = new CurrentActor(
+                access.userId(), access.tenantId(), access.roles(),
+                Set.of("platform:tenant:read", "knowledge:read"), access.tokenVersion(), access.tokenId());
+
+        service.logout(currentActor, new LogoutCommand(tokens.accessToken(), tokens.refreshToken()));
+
+        assertThat(sessionStore.revokedTokenId).endsWith(":access:" + access.tokenId());
+    }
+
+    @Test
     void logoutValidatesRefreshTokenBeforeRevokingAccess() {
         Tenant tenant = tenant(7L, "new-gym", "New Gym");
         UserAccount user = user(42L, 7L, RoleCode.GYM_ADMIN);
         stubActiveAccount(user, tenant);
-        AuthResult login = service.login(new LoginCommand("owner@example.com", "correct-password"));
+        AuthResult login = service.login(new LoginCommand("owner", "correct-password"));
         JwtClaims access = jwt.verify(login.tokens().accessToken(), TokenType.ACCESS);
 
         assertUnauthenticated(() -> service.logout(access.toCurrentActor(),
@@ -221,7 +237,7 @@ class AuthApplicationServiceTest {
     }
 
     private void stubActiveAccount(UserAccount user, Tenant tenant) {
-        when(users.findByNormalizedEmail(user.getNormalizedEmail())).thenReturn(Optional.of(user));
+        when(users.findByNormalizedUsername(user.getNormalizedUsername())).thenReturn(Optional.of(user));
         when(users.findById(user.getId())).thenReturn(Optional.of(user));
         when(tenants.findById(tenant.getId())).thenReturn(Optional.of(tenant));
         when(userRoles.findRoleCodesByUserId(user.getId())).thenReturn(Set.of(RoleCode.GYM_ADMIN));

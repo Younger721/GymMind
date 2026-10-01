@@ -2,8 +2,9 @@ package com.gymmind.ai.api;
 import com.gymmind.ai.application.*;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.web.bind.annotation.*;
-@RestController @RequestMapping("/api/v1/ai")
+@RestController @RequestMapping("/api/v1/ai") @SecurityRequirement(name = "bearerAuth")
 public class CoachAssistantController {
     private final DefaultCoachAssistantService service; private final CurrentActorProvider actors;
     public CoachAssistantController(DefaultCoachAssistantService service, CurrentActorProvider actors){this.service=service;this.actors=actors;}

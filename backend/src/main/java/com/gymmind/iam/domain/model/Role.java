@@ -18,6 +18,10 @@ public class Role extends AuditableEntity {
     @Column(nullable = false, length = 128)
     private String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private RoleStatus status = RoleStatus.ACTIVE;
+
     protected Role() {}
 
     private Role(RoleCode code, String name) {
@@ -32,4 +36,8 @@ public class Role extends AuditableEntity {
     public Long getId() { return super.getId(); }
     public RoleCode getCode() { return code; }
     public String getName() { return name; }
+    public RoleStatus getStatus() { return status; }
+    public boolean isActive() { return status == RoleStatus.ACTIVE; }
+    public void disable() { status = RoleStatus.DISABLED; }
+    public void activate() { status = RoleStatus.ACTIVE; }
 }

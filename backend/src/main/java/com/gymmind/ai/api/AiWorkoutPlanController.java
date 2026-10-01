@@ -1,16 +1,22 @@
 package com.gymmind.ai.api;
 
 import com.gymmind.ai.application.AiWorkoutPlanDraftService;
+import com.gymmind.ai.application.AiWorkoutPlanDraftResponse;
+import com.gymmind.ai.application.AiWorkoutPlanTarget;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
 import com.gymmind.workout.application.CreateWorkoutPlanCommand;
 import com.gymmind.workout.application.WorkoutPlanService;
 import com.gymmind.workout.application.WorkoutPlanView;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/ai")
+@SecurityRequirement(name = "bearerAuth")
 public class AiWorkoutPlanController {
     private final AiWorkoutPlanDraftService service;
     private final CurrentActorProvider actors;
@@ -27,9 +33,15 @@ public class AiWorkoutPlanController {
         this.workoutPlans = workoutPlans;
     }
 
+    @GetMapping("/workout-plan-targets")
+    public ApiResponse<List<AiWorkoutPlanTarget>> targets() {
+        return ApiResponse.success(service.targets(actors.requireCurrent()));
+    }
+
     @PostMapping("/workout-plan-drafts")
-    public ApiResponse<CreateWorkoutPlanCommand> generate(@RequestBody DraftRequest request) {
-        return ApiResponse.success(service.generate(actors.requireCurrent(), request.memberId(), request.request()));
+    public ApiResponse<AiWorkoutPlanDraftResponse> generateDraft(@RequestBody DraftRequest request) {
+        boolean includeHistory = request.includeHistory() == null || request.includeHistory();
+        return ApiResponse.success(service.generateDraft(actors.requireCurrent(), request.memberId(), request.request(), includeHistory));
     }
 
     @PostMapping("/workout-plan")
@@ -40,5 +52,9 @@ public class AiWorkoutPlanController {
         return ApiResponse.success(workoutPlans.saveValidatedDraft(actor, draft));
     }
 
-    public record DraftRequest(Long memberId, String request) {}
+    public record DraftRequest(Long memberId, String request, Boolean includeHistory) {
+        public DraftRequest(Long memberId, String request) {
+            this(memberId, request, true);
+        }
+    }
 }

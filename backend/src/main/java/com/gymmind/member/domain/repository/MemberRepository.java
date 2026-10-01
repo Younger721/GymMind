@@ -11,6 +11,7 @@ public interface MemberRepository {
     Optional<Member> findByTenantIdAndUserId(Long tenantId, Long userId);
     Optional<Member> findByUserId(Long userId);
     Optional<Member> findByTenantIdAndMemberNumber(Long tenantId, String memberNumber);
+    Optional<Member> findByTenantIdAndCheckInToken(Long tenantId, String token);
     boolean existsByTenantIdAndPhone(Long tenantId, String phone);
     Page<Member> findAllByTenantId(Long tenantId, Pageable pageable);
     Page<Member> searchByTenantId(Long tenantId, String query, Pageable pageable);

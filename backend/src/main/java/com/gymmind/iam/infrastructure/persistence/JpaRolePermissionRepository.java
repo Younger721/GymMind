@@ -21,4 +21,6 @@ class JpaRolePermissionRepository implements RolePermissionRepository {
     public boolean exists(Long roleId, Long permissionId) {
         return delegate.existsById_RoleIdAndId_PermissionId(roleId, permissionId);
     }
+    public java.util.Set<String> findPermissionCodesByRoleId(Long roleId) { return delegate.findPermissionCodesByRoleId(roleId); }
+    public void deleteByRoleId(Long roleId) { delegate.deleteById_RoleId(roleId); }
 }

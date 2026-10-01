@@ -7,14 +7,30 @@ public interface KnowledgeDocumentRepository {
 
     Optional<KnowledgeDocument> findByTenantIdAndId(Long tenantId, Long id);
 
-    Optional<KnowledgeDocument> findById(Long id);
+    default Optional<KnowledgeDocument> findById(Long id) {
+        return Optional.empty();
+    }
+
+    default Optional<KnowledgeDocument> findForUpdateById(Long id) {
+        return findById(id);
+    }
+
+    default Optional<KnowledgeDocument> findForUpdateByTenantIdAndId(Long tenantId, Long id) {
+        return findByTenantIdAndId(tenantId, id);
+    }
 
     default List<KnowledgeDocument> findByTenantId(Long tenantId) {
         return List.of();
     }
-
-    /** 平台管理员白名单：跨租户读取全部未删除文档 */
-    default List<KnowledgeDocument> findAllAccessible() {
+    default List<KnowledgeDocument> findByTenantIdAndIdIn(Long tenantId, java.util.Collection<Long> ids) {
         return List.of();
     }
+    default List<KnowledgeDocument> findPlatformDocuments() { return List.of(); }
+
+    /** Compatibility alias for callers that need the platform-wide document list. */
+    default List<KnowledgeDocument> findAllAccessible() { return findAllDocuments(); }
+
+    default List<KnowledgeDocument> findAllDocuments() { return List.of(); }
+    default List<Long> findTenantIds() { return List.of(); }
+
 }

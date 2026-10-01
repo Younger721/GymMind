@@ -13,5 +13,9 @@ public interface TenantQuotaService {
 
     void ensureAiChatAllowed(Long tenantId);
 
+    void ensureAiModuleEnabled(Long tenantId);
+
+    void ensureKnowledgeModuleEnabled(Long tenantId);
+
     void ensureKnowledgeUploadAllowed(Long tenantId);
 }

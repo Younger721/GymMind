@@ -14,6 +14,7 @@ import com.gymmind.iam.domain.repository.UserInvitationRepository;
 import com.gymmind.iam.domain.repository.UserRoleRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.jwt.JwtService;
 import com.gymmind.tenancy.domain.model.Tenant;
@@ -62,7 +63,7 @@ public class DefaultUserInvitationService implements UserInvitationService {
     @Override
     @Transactional
     public InvitationIssued invite(CurrentActor actor, InviteUserCommand command) {
-        requireGymAdmin(actor, "user:write");
+        Long tenantId = requireGymAdmin(actor, "user:write");
         Objects.requireNonNull(command, "command");
         RoleCode role = command.role();
         if (role != RoleCode.COACH && role != RoleCode.MEMBER) {
@@ -75,7 +76,7 @@ public class DefaultUserInvitationService implements UserInvitationService {
         String rawToken = randomToken();
         Instant expiresAt = clock.instant().plus(Duration.ofHours(24));
         UserInvitation saved = invitations.save(UserInvitation.issue(
-                actor.tenantId(), email, role, UserInvitation.sha256(rawToken), expiresAt));
+                tenantId, email, role, UserInvitation.sha256(rawToken), expiresAt));
         return new InvitationIssued(rawToken, saved.getTenantId(), saved.getEmail(), saved.getRole(), saved.getExpiresAt());
     }
 
@@ -114,14 +115,13 @@ public class DefaultUserInvitationService implements UserInvitationService {
         sessions.store(sessions.refreshSession(refreshClaims.tenantId(), refreshClaims.userId(),
                 refreshClaims.tokenId(), refreshClaims.expiresAt()), pair.refreshToken());
         return new AuthResult(new AuthResult.AuthenticatedUser(user.getId(), user.getTenantId(),
-                user.getNormalizedEmail(), user.getDisplayName(), roleCodes, permissions), pair);
+                user.getNormalizedUsername(), user.getNormalizedEmail(), user.getDisplayName(), roleCodes, permissions),
+                pair);
     }
 
-    private static void requireGymAdmin(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission(permission)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+    private static Long requireGymAdmin(CurrentActor actor, String permission) {
+        ActorAccess.requireGymAdmin(actor, permission);
+        return ActorAccess.requireTenantId(actor);
     }
 
     private String randomToken() {

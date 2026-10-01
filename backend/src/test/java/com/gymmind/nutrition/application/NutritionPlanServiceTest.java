@@ -4,6 +4,7 @@ import com.gymmind.audit.application.AuditRecorder;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.member.domain.repository.MemberRepository;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import com.gymmind.nutrition.domain.repository.NutritionPlanRepository;
 import org.junit.jupiter.api.Test;
 import java.util.Optional;
@@ -33,5 +34,31 @@ class NutritionPlanServiceTest {
         assertThatThrownBy(() -> service.create(memberActor(11L), new CreateNutritionPlanCommand(null, 41L, -1, 0, 0, 0, "bad")))
                 .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
     }
+
+    @Test
+    void platformAdminCreatesPlanInsideSelectedTenant() {
+        NutritionPlanRepository plans = mock(NutritionPlanRepository.class);
+        MemberRepository members = mock(MemberRepository.class);
+        var member = mock(com.gymmind.member.domain.model.Member.class);
+        when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(member));
+        when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        TenantContextHolder.set(11L);
+        try {
+            NutritionPlanView view = new DefaultNutritionPlanService(plans, members, mock(AuditRecorder.class)).create(platform(),
+                    new CreateNutritionPlanCommand(null, 41L, 2200, 165, 220, 73.3, "gain"));
+            assertThat(view.tenantId()).isEqualTo(11L);
+            assertThat(view.memberId()).isEqualTo(41L);
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
+
+    @Test
+    void platformAdminWithoutSelectedTenantIsForbidden() {
+        assertThatThrownBy(() -> new DefaultNutritionPlanService(mock(NutritionPlanRepository.class), mock(MemberRepository.class), mock(AuditRecorder.class))
+                .create(platform(), new CreateNutritionPlanCommand(null, 41L, 2200, 165, 220, 73.3, "gain")))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+    }
     private static CurrentActor memberActor(long t){return new CurrentActor(2L,t,Set.of(RoleCode.MEMBER),Set.of("nutrition:write"),0L,"token");}
+    private static CurrentActor platform(){return new CurrentActor(1L,null,Set.of(RoleCode.PLATFORM_ADMIN),Set.of(),0L,"platform-token");}
 }

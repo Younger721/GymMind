@@ -43,8 +43,16 @@ function Get-EnvValue($Map, [string]$Key, [string]$Default) {
 }
 
 function Test-DockerDaemon {
-    & docker info 1>$null 2>$null
-    return ($LASTEXITCODE -eq 0)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    try {
+        & docker info 1>$null 2>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        $ErrorActionPreference = $previous
+    }
 }
 
 function Invoke-Compose([string[]]$ComposeArgs) {

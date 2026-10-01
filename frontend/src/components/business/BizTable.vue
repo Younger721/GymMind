@@ -4,15 +4,16 @@
       v-for="col in columns"
       :key="col"
       :prop="col"
-      :label="col"
-      min-width="120"
+      :label="columnLabel(col)"
+      :width="columnWidth(col)"
+      :min-width="columnMinWidth(col)"
       show-overflow-tooltip
     >
       <template #default="{ row }">
-        {{ formatCell(row[col]) }}
+        {{ formatCell(col, row[col]) }}
       </template>
     </el-table-column>
-    <el-table-column v-if="$slots.actions" label="操作" fixed="right" width="220">
+    <el-table-column v-if="$slots.actions" label="操作" fixed="right" width="156">
       <template #default="scope">
         <slot name="actions" v-bind="scope" />
       </template>
@@ -23,14 +24,49 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import {
+  DEFAULT_COLUMN_LABELS,
+  formatRoleList,
+  formatUserStatus
+} from '@/utils/displayLabels'
+
 const props = defineProps<{
   rows: Record<string, unknown>[]
   loading?: boolean
   columnKeys?: string[]
+  columnLabels?: Record<string, string>
 }>()
 
-function formatCell(value: unknown) {
+function columnLabel(key: string) {
+  return props.columnLabels?.[key] ?? DEFAULT_COLUMN_LABELS[key] ?? key
+}
+
+const compactColumnWidths: Record<string, number> = {
+  id: 56,
+  tenantId: 76,
+  status: 76,
+  role: 88,
+  roles: 108
+}
+
+const flexibleColumnMinWidths: Record<string, number> = {
+  username: 108,
+  email: 138,
+  displayName: 112
+}
+
+function columnWidth(key: string) {
+  return compactColumnWidths[key]
+}
+
+function columnMinWidth(key: string) {
+  return flexibleColumnMinWidths[key] ?? (compactColumnWidths[key] ? undefined : 96)
+}
+
+function formatCell(key: string, value: unknown) {
   if (value == null) return '—'
+  if (key === 'status') return formatUserStatus(value)
+  if (key === 'roles') return formatRoleList(value)
   if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }

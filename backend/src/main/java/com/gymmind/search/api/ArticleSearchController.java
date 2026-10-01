@@ -3,6 +3,7 @@ package com.gymmind.search.api;
 import com.gymmind.search.application.*;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/search/articles")
+@SecurityRequirement(name = "bearerAuth")
 public class ArticleSearchController {
     private final ArticleSearchService service;
     private final CurrentActorProvider actors;

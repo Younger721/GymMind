@@ -18,6 +18,12 @@ export const tenancyApi = {
   disableTenant(id: number) {
     return apiClient.patch(`/v1/platform/tenants/${id}/disable`)
   },
+  getTenantSettings(tenantId: number) {
+    return apiClient.get<any, ApiResponse<unknown>>(`/v1/platform/tenants/${tenantId}/settings`)
+  },
+  updateTenantSettings(tenantId: number, body: Record<string, unknown>) {
+    return apiClient.put(`/v1/platform/tenants/${tenantId}/settings`, body)
+  },
   getTenantQuota(tenantId: number) {
     return apiClient.get<any, ApiResponse<unknown>>(`/v1/platform/tenants/${tenantId}/quota`)
   },

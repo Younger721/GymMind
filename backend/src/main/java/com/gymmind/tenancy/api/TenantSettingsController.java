@@ -1,10 +1,8 @@
 package com.gymmind.tenancy.api;
 
 import com.gymmind.shared.api.ApiResponse;
-import com.gymmind.shared.error.BusinessException;
-import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
-import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.security.CurrentActorProvider;
 import com.gymmind.tenancy.api.request.UpdateTenantSettingsRequest;
 import com.gymmind.tenancy.api.response.TenantSettingsView;
@@ -44,10 +42,7 @@ public class TenantSettingsController {
 
     private CurrentActor requireGymAdmin(String permission) {
         CurrentActor actor = actors.requireCurrent();
-        if (actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission(permission)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        ActorAccess.requireGymAdmin(actor, permission);
         return actor;
     }
 }

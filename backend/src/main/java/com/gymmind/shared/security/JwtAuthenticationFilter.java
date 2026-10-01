@@ -1,5 +1,6 @@
 package com.gymmind.shared.security;
 
+import com.gymmind.platform.bootstrap.PermissionCatalog;
 import com.gymmind.shared.security.jwt.JwtClaims;
 import com.gymmind.shared.security.jwt.JwtService;
 import com.gymmind.shared.security.jwt.TokenType;
@@ -93,9 +94,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private static java.util.List<GrantedAuthority> authorities(CurrentActor actor) {
+        Stream<String> permissions = actor.isPlatformAdmin()
+                ? PermissionCatalog.entries().stream().map(PermissionCatalog.Entry::code)
+                : actor.permissions().stream();
         return Stream.concat(
                         actor.roles().stream().map(role -> "ROLE_" + role.name()),
-                        actor.permissions().stream())
+                        permissions)
                 .distinct()
                 .sorted()
                 .map(SimpleGrantedAuthority::new)

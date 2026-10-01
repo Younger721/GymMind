@@ -11,4 +11,8 @@ public interface BookingService {
     BookingView confirm(CurrentActor actor, Long bookingId);
 
     java.util.List<BookingView> list(CurrentActor actor);
+
+    default java.util.List<BookingView> list(CurrentActor actor, Long courseId) {
+        return list(actor);
+    }
 }

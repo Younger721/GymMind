@@ -52,7 +52,7 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ApiResponse.success(AuthResponse.from(
-                authService.login(new LoginCommand(request.email(), request.password()))));
+                authService.login(new LoginCommand(request.username(), request.password()))));
     }
 
     @PostMapping("/refresh")

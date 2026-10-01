@@ -4,6 +4,7 @@ import com.gymmind.audit.application.AuditRecorder;
 import com.gymmind.exercise.domain.repository.ExerciseRepository;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -29,6 +30,22 @@ class ExerciseServiceTest {
         assertThat(view.tenantId()).isEqualTo(11L);
         assertThat(view.name()).isEqualTo("Barbell squat");
         verify(exercises).save(any());
+    }
+
+    @Test
+    void platformAdminCreatesExerciseInsideSelectedTenant() {
+        ExerciseRepository exercises = mock(ExerciseRepository.class);
+        when(exercises.existsByTenantIdAndName(11L, "Barbell squat")).thenReturn(false);
+        when(exercises.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        TenantContextHolder.set(11L);
+        try {
+            ExerciseView view = new DefaultExerciseService(exercises, mock(AuditRecorder.class)).create(platform(),
+                    new CreateExerciseCommand(null, "Barbell squat", "LEGS", "QUADRICEPS", "INTERMEDIATE",
+                            "BARBELL", "Squat down", "Brace core", "Knees track toes", "Stop if pain", "legs,squat"));
+            assertThat(view.tenantId()).isEqualTo(11L);
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 
     @Test
@@ -59,5 +76,9 @@ class ExerciseServiceTest {
     private static CurrentActor admin(long tenantId) {
         return new CurrentActor(1L, tenantId, Set.of(RoleCode.GYM_ADMIN),
                 Set.of("exercise:read", "exercise:write"), 0L, "token");
+    }
+
+    private static CurrentActor platform() {
+        return new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token");
     }
 }

@@ -13,6 +13,7 @@ import com.gymmind.iam.domain.repository.UserRoleRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import com.gymmind.shared.security.jwt.JwtClaims;
 import com.gymmind.shared.security.jwt.JwtService;
 import com.gymmind.shared.security.jwt.TokenPair;
@@ -52,6 +53,7 @@ class UserInvitationServiceTest {
 
     @BeforeEach
     void setUp() {
+        TenantContextHolder.clear();
         invitations = mock(UserInvitationRepository.class);
         tenants = mock(TenantRepository.class);
         users = mock(UserAccountRepository.class);
@@ -62,6 +64,11 @@ class UserInvitationServiceTest {
                 Clock.fixed(NOW, ZoneOffset.UTC), "test");
         service = new DefaultUserInvitationService(invitations, tenants, users, roles, userRoles, jwt, sessions,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearTenantContext() {
+        TenantContextHolder.clear();
     }
 
     @Test
@@ -108,7 +115,7 @@ class UserInvitationServiceTest {
     }
 
     @Test
-    void platformAdminCannotIssueInvitationAndExpiredInvitationIsRejected() {
+    void platformAdminCannotIssueInvitationWithoutTenantContextAndExpiredInvitationIsRejected() {
         CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
                 Set.of("platform:tenant:write"), 0L, "platform-token");
         assertThatThrownBy(() -> service.invite(platform,
@@ -121,5 +128,20 @@ class UserInvitationServiceTest {
         assertThatThrownBy(() -> service.accept(
                 new AcceptInvitationCommand("expired", "ValidPassword123!", "Expired")))
                 .extracting("errorCode").isEqualTo(ErrorCode.UNAUTHENTICATED);
+    }
+
+    @Test
+    void platformAdminCanIssueInvitationForSelectedTenant() {
+        CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:tenant:write"), 0L, "platform-token");
+        when(users.findByNormalizedEmail("member@example.com")).thenReturn(Optional.empty());
+        when(invitations.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        TenantContextHolder.set(10L);
+
+        UserInvitationService.InvitationIssued issued = service.invite(platform,
+                new InviteUserCommand("member@example.com", RoleCode.MEMBER));
+
+        assertThat(issued.tenantId()).isEqualTo(10L);
+        assertThat(issued.role()).isEqualTo(RoleCode.MEMBER);
     }
 }

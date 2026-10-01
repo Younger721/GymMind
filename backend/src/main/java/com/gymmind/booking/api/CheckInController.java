@@ -32,5 +32,13 @@ public class CheckInController {
         return ApiResponse.success(null);
     }
 
+    @PostMapping("/scan")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public ApiResponse<Void> scan(@Valid @RequestBody ScanRequest request) {
+        service.checkInByToken(actors.requireCurrent(), request.token(), request.courseId());
+        return ApiResponse.success(null);
+    }
+
     public record CheckInRequest(@NotNull Long memberId, @NotNull Long courseId) {}
+    public record ScanRequest(@jakarta.validation.constraints.NotBlank String token, Long courseId) {}
 }

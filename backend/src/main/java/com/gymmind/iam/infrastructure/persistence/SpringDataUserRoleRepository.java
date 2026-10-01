@@ -17,6 +17,7 @@ interface SpringDataUserRoleRepository extends JpaRepository<UserRole, UserRole.
             select distinct userRole.role.code
             from UserRole userRole
             where userRole.user.id = :userId
+              and userRole.role.status = com.gymmind.iam.domain.model.RoleStatus.ACTIVE
             """)
     Set<RoleCode> findRoleCodesByUserId(@Param("userId") Long userId);
 
@@ -25,6 +26,15 @@ interface SpringDataUserRoleRepository extends JpaRepository<UserRole, UserRole.
             from UserRole userRole, RolePermission rolePermission
             where userRole.user.id = :userId
               and rolePermission.role.id = userRole.role.id
+              and userRole.role.status = com.gymmind.iam.domain.model.RoleStatus.ACTIVE
             """)
     Set<String> findPermissionCodesByUserId(@Param("userId") Long userId);
+
+    @Query("""
+            select distinct userRole.user.id
+            from UserRole userRole
+            where userRole.role.code in :roleCodes
+              and userRole.role.status = com.gymmind.iam.domain.model.RoleStatus.ACTIVE
+            """)
+    Set<Long> findUserIdsByRoleCodes(@Param("roleCodes") Set<RoleCode> roleCodes);
 }

@@ -7,6 +7,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Instant;
 
 @Entity
 @Table(name = "course_booking",
@@ -24,6 +25,9 @@ public class Booking extends TenantScopedEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private BookingStatus status = BookingStatus.CONFIRMED;
+
+    @Column(name = "checked_in_at")
+    private Instant checkedInAt;
 
     protected Booking() {
     }
@@ -45,6 +49,14 @@ public class Booking extends TenantScopedEntity {
         status = BookingStatus.CANCELLED;
     }
 
+    public void reactivate() {
+        if (status != BookingStatus.CANCELLED) {
+            throw new IllegalStateException("Only cancelled booking can be reactivated");
+        }
+        status = BookingStatus.CONFIRMED;
+        checkedInAt = null;
+    }
+
     public void confirm() {
         if (status != BookingStatus.PENDING) {
             throw new IllegalStateException("Only pending booking can be confirmed");
@@ -52,8 +64,12 @@ public class Booking extends TenantScopedEntity {
         status = BookingStatus.CONFIRMED;
     }
 
-    public void complete() {
+    public void complete(Instant checkedInAt) {
+        if (checkedInAt == null) {
+            throw new IllegalArgumentException("Check-in time is required");
+        }
         status = BookingStatus.COMPLETED;
+        this.checkedInAt = checkedInAt;
     }
 
     public void markNoShow() {
@@ -73,5 +89,9 @@ public class Booking extends TenantScopedEntity {
 
     public BookingStatus getStatus() {
         return status;
+    }
+
+    public Instant getCheckedInAt() {
+        return checkedInAt;
     }
 }

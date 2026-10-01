@@ -4,7 +4,7 @@
     <p class="simple-page-desc">会员、教练、课程、预约与签到</p>
 
     <el-tabs v-model="tab">
-      <el-tab-pane label="会员" name="members">
+      <el-tab-pane v-if="canManage" label="会员" name="members">
         <BizCrudPanel
           title="会员列表"
           searchable
@@ -12,9 +12,10 @@
           :row-actions="memberActions"
           :loader="loadMembers"
           :creator="createMember"
+          create-permission="member:write"
         />
       </el-tab-pane>
-      <el-tab-pane label="教练" name="coaches">
+      <el-tab-pane v-if="canManage" label="教练" name="coaches">
         <div class="simple-card lookup-box">
           <el-form inline>
             <el-form-item label="教练 ID">
@@ -24,7 +25,7 @@
           </el-form>
           <JsonBlock v-if="coachLookupResult" :data="coachLookupResult" />
         </div>
-        <BizCrudPanel title="新建教练" :create-fields="coachFields" :loader="emptyLoader" :creator="createCoach" />
+        <BizCrudPanel title="新建教练" :create-fields="coachFields" :loader="emptyLoader" :creator="createCoach" create-permission="coach:write" />
       </el-tab-pane>
       <el-tab-pane v-if="isMember || isCoach" label="教练关系" name="relations">
         <BizCrudPanel title="当前关系" :loader="loadRelations" :row-actions="relationActions" />
@@ -36,25 +37,20 @@
         </div>
       </el-tab-pane>
       <el-tab-pane label="课程" name="courses">
-        <BizCrudPanel
-          title="课程排期"
-          :create-fields="courseFields"
-          :row-actions="courseActions"
-          :loader="loadCourses"
-          :creator="createCourse"
-        />
+        <CourseCenterView />
       </el-tab-pane>
-      <el-tab-pane label="预约" name="bookings">
+      <el-tab-pane v-if="canManage || isCoach || isMember" label="预约" name="bookings">
         <BizCrudPanel
           title="预约记录"
           :create-fields="bookingFields"
           :row-actions="bookingActions"
           :loader="loadBookings"
           :creator="createBooking"
+          create-permission="booking:write"
         />
       </el-tab-pane>
-      <el-tab-pane label="签到" name="checkins">
-        <BizCrudPanel title="课程签到" :create-fields="checkInFields" :creator="doCheckIn" :loader="emptyLoader" />
+      <el-tab-pane v-if="canManage || isCoach" label="签到" name="checkins">
+        <BizCrudPanel title="课程签到" :create-fields="checkInFields" :creator="doCheckIn" :loader="emptyLoader" create-permission="checkin:write" />
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -70,6 +66,7 @@ import { coachesApi } from '@/api/coaches'
 import { coursesApi } from '@/api/courses'
 import { bookingsApi, checkInsApi } from '@/api/bookings'
 import { useAuthStore } from '@/stores/auth'
+import CourseCenterView from './CourseCenterView.vue'
 
 const tab = ref('members')
 const coachLookupId = ref('')
@@ -79,6 +76,7 @@ const relationCoachId = ref('')
 const auth = useAuthStore()
 const isMember = computed(() => auth.roles.includes('MEMBER'))
 const isCoach = computed(() => auth.roles.includes('COACH'))
+const canManage = computed(() => auth.roles.includes('GYM_ADMIN') || auth.roles.includes('PLATFORM_ADMIN'))
 
 const memberFields: FieldDef[] = [
   { key: 'memberNumber', label: '会员号', placeholder: 'M001' },

@@ -13,7 +13,7 @@ import java.util.Optional;
 @Component
 @ConditionalOnProperty(name = "gymmind.search.vector-backend", havingValue = "milvus")
 public class MilvusVectorIndex implements VectorIndexPort {
-    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "ownerUserId", "text");
+    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "documentId", "ownerUserId", "text");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final RestClient client;
     private final String collection;
@@ -30,6 +30,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
         var fields = List.of(
                 field("id", "VarChar", true, Map.of("max_length", "128")),
                 field("tenantId", "Int64", false, Map.of()),
+                field("documentId", "Int64", false, Map.of()),
                 field("ownerUserId", "Int64", false, Map.of()),
                 field("text", "VarChar", false, Map.of("max_length", "65535")),
                 field("vector", "FloatVector", false, Map.of("dim", "1024")));
@@ -47,6 +48,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
     public static Map<String, Object> insertBody(String name, IndexedChunk chunk) {
         return Map.of("collectionName", name, "data", List.of(Map.of(
                 "id", chunk.id(), "tenantId", chunk.tenantId(),
+                "documentId", chunk.documentId() == null ? 0L : chunk.documentId(),
                 "ownerUserId", chunk.ownerUserId() == null ? 0L : chunk.ownerUserId(),
                 "text", chunk.text(), "vector", chunk.vector())));
     }
@@ -67,7 +69,9 @@ public class MilvusVectorIndex implements VectorIndexPort {
             var chunks = new ArrayList<IndexedChunk>();
             for (var row : rows) {
                 long owner = row.path("ownerUserId").asLong();
+                long documentId = row.path("documentId").asLong();
                 chunks.add(new IndexedChunk(row.path("id").asText(), row.path("tenantId").asLong(),
+                        documentId == 0 ? null : documentId,
                         owner == 0 ? null : owner, row.path("text").asText(), null));
             }
             return chunks;

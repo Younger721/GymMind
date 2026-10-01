@@ -8,4 +8,5 @@ package com.gymmind.booking.domain.repository; import com.gymmind.booking.domain
     List<Booking> findAllByTenantIdAndStatus(Long tenantId, BookingStatus status);
 
     List<Booking> findAllByTenantId(Long tenantId);
+    List<Booking> findAll();
 }

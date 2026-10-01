@@ -16,6 +16,7 @@ public record AuthResult(AuthenticatedUser user, TokenPair tokens) {
     public record AuthenticatedUser(
             Long id,
             Long tenantId,
+            String username,
             String email,
             String displayName,
             Set<RoleCode> roles,
@@ -23,6 +24,7 @@ public record AuthResult(AuthenticatedUser user, TokenPair tokens) {
 
         public AuthenticatedUser {
             Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(username, "username");
             Objects.requireNonNull(email, "email");
             Objects.requireNonNull(displayName, "displayName");
             roles = Set.copyOf(Objects.requireNonNull(roles, "roles"));

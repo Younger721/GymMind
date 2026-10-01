@@ -1,5 +1,6 @@
 import apiClient from './client'
 import type { ApiResponse } from '@/types/api'
+import { consumeSseStream } from '@/utils/sseStream'
 
 export interface HarnessPluginDescriptor {
   id: string
@@ -21,7 +22,15 @@ export interface HarnessConfigView {
 export interface HarnessChatResponse {
   answer: string
   sources: string[]
-  citations: Array<{ chunkId?: string; documentId?: string; text?: string }>
+  citations: Array<{ chunkId?: string; documentId?: string; text?: string; excerpt?: string }>
+}
+
+export interface HarnessProgressEvent {
+  pluginId: string
+  stage: string
+  status: 'STARTED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  message: string
+  resultCount?: number | null
 }
 
 export const harnessApi = {
@@ -43,5 +52,35 @@ export const harnessApi = {
 
   chat(body: { sessionId: string; question: string; plugins?: string[] }) {
     return apiClient.post<any, ApiResponse<HarnessChatResponse>>('/v1/ai/harness/chat', body)
+  },
+
+  async stream(body: { sessionId: string; question: string; plugins?: string[]; history?: Array<{ role: string; content: string }> }, onToken: (token: string) => void, onDone?: (result: HarnessChatResponse) => void, onProgress?: (event: HarnessProgressEvent) => void) {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), 120000)
+    const response = await fetch('/api/v1/ai/harness/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', Authorization: `Bearer ${localStorage.getItem('token') || ''}` }, body: JSON.stringify(body), signal: controller.signal })
+    if (!response.ok || !response.body) throw new Error('stream failed')
+    try {
+      await consumeSseStream(response.body.getReader(), ({ type: eventType, data }) => {
+        if (eventType === 'error') {
+          let message = data
+          try { message = (JSON.parse(data) as { message?: string }).message || message } catch { /* plain text error */ }
+          throw new Error(message)
+        }
+        if (eventType === 'done') {
+          onDone?.(JSON.parse(data) as HarnessChatResponse)
+        } else if (eventType === 'progress') {
+          onProgress?.(JSON.parse(data) as HarnessProgressEvent)
+        } else if (eventType === 'token' || !eventType) {
+          try {
+            const parsed = JSON.parse(data)
+            if (parsed && typeof parsed === 'object' && 'answer' in parsed) onDone?.(parsed as HarnessChatResponse)
+            else onToken(data)
+          } catch { onToken(data) }
+        }
+      })
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw new Error('AI 响应超时，请稍后重试')
+      throw error
+    } finally { window.clearTimeout(timeout) }
   }
 }

@@ -2,7 +2,7 @@ import apiClient from './client'
 import type { ApiResponse } from '@/types/api'
 
 export interface LoginRequest {
-  email: string
+  username: string
   password: string
 }
 
@@ -18,6 +18,7 @@ export interface RegisterRequest {
 export interface AuthResponseData {
   userId: number
   tenantId: number | null
+  username: string
   email: string
   displayName: string
   roles: string[]

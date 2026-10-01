@@ -30,4 +30,9 @@ class JpaBookingRepository implements BookingRepository {
     public List<Booking> findAllByTenantId(Long tenantId) {
         return delegate.findAllByTenantId(tenantId);
     }
+
+    @Override
+    public List<Booking> findAll() {
+        return delegate.findAll();
+    }
 }

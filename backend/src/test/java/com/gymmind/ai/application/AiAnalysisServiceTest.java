@@ -6,6 +6,7 @@ import com.gymmind.analytics.domain.ChurnRiskLevel;
 import com.gymmind.analytics.domain.ChurnRiskResult;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.tenancy.application.TenantQuotaService;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -47,6 +48,19 @@ class AiAnalysisServiceTest {
         assertThatThrownBy(() -> service.memberAnalysis(new CurrentActor(1L, null,
                 Set.of(RoleCode.PLATFORM_ADMIN), Set.of("ai:analysis"), 0, "t"),
                 new MemberAnalysisInput(1, 1, 1, 1, false))).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void analysisChecksTenantAiQuotaBeforeCallingModel() {
+        var model = mock(ChatModelGateway.class);
+        var quotas = mock(TenantQuotaService.class);
+        doThrow(new com.gymmind.shared.error.BusinessException(com.gymmind.shared.error.ErrorCode.CONFLICT, "quota"))
+                .when(quotas).ensureAiChatAllowed(7L);
+        var service = new DefaultAiAnalysisService(mock(DashboardQueryService.class), model, quotas, null);
+
+        assertThatThrownBy(() -> service.memberAnalysis(actor(), new MemberAnalysisInput(1, 1, 1, 1, false)))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+        verifyNoInteractions(model);
     }
 
     private CurrentActor actor() {

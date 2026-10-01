@@ -1,0 +1,3 @@
+package com.gymmind.analytics.api;
+import com.gymmind.analytics.application.*; import com.gymmind.shared.api.ApiResponse; import com.gymmind.shared.security.CurrentActorProvider; import org.springframework.web.bind.annotation.*; import java.util.List;
+@RestController @RequestMapping("/api/v1/analytics/member-risks") public class MemberChurnRiskController { private final MemberChurnRiskService service; private final CurrentActorProvider actors; public MemberChurnRiskController(MemberChurnRiskService s,CurrentActorProvider a){service=s;actors=a;} @GetMapping public ApiResponse<List<MemberChurnRiskView>> list(){return ApiResponse.success(service.list(actors.requireCurrent()));} }

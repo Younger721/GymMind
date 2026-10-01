@@ -2,39 +2,202 @@ package com.gymmind.ai.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gymmind.coach.domain.model.Coach;
+import com.gymmind.coach.domain.repository.CoachAssignmentRepository;
+import com.gymmind.coach.domain.repository.CoachRepository;
+import com.gymmind.exercise.domain.model.Exercise;
+import com.gymmind.exercise.domain.repository.ExerciseRepository;
+import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.member.domain.model.Member;
+import com.gymmind.member.domain.repository.MemberRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
-import com.gymmind.workout.application.*;
+import com.gymmind.tenancy.application.TenantQuotaService;
+import com.gymmind.tenancy.application.TenantQuotaServices;
+import com.gymmind.workout.application.CreateWorkoutPlanCommand;
+import com.gymmind.workout.application.WorkoutHistoryQueryService;
+import com.gymmind.workout.application.WorkoutHistorySummary;
+import com.gymmind.workout.application.WorkoutPlanItemCommand;
+import com.gymmind.workout.application.WorkoutPlanValidator;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftService {
     private final ChatModelGateway model;
     private final ObjectMapper mapper;
     private final WorkoutPlanValidator validator = new WorkoutPlanValidator();
+    private final TenantQuotaService quotas;
+    private final MemberRepository members;
+    private final CoachRepository coaches;
+    private final CoachAssignmentRepository assignments;
+    private final WorkoutHistoryQueryService history;
+    private final ExerciseRepository exercises;
 
+    /** Kept for existing integrations and unit tests; Spring uses the complete constructor below. */
     public DefaultAiWorkoutPlanDraftService(ChatModelGateway model, ObjectMapper mapper) {
-        this.model = model;
-        this.mapper = mapper;
+        this(model, mapper, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null, null, null);
+    }
+
+    /** Kept for existing integrations and unit tests. */
+    public DefaultAiWorkoutPlanDraftService(ChatModelGateway model, ObjectMapper mapper, TenantQuotaService quotas) {
+        this(model, mapper, quotas, null, null, null, null, null);
+    }
+
+    @Autowired
+    public DefaultAiWorkoutPlanDraftService(ChatModelGateway model, ObjectMapper mapper, TenantQuotaService quotas,
+                                            MemberRepository members, CoachRepository coaches,
+                                            CoachAssignmentRepository assignments, WorkoutHistoryQueryService history,
+                                            ExerciseRepository exercises) {
+        this.model = Objects.requireNonNull(model, "model");
+        this.mapper = Objects.requireNonNull(mapper, "mapper");
+        this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
+        this.members = members;
+        this.coaches = coaches;
+        this.assignments = assignments;
+        this.history = history;
+        this.exercises = exercises;
     }
 
     @Override
     public CreateWorkoutPlanCommand generate(CurrentActor actor, Long memberId, String request) {
-        if (actor == null || actor.tenantId() == null || !actor.hasPermission("ai:plan") || memberId == null || request == null || request.isBlank()) {
+        return generateDraft(actor, memberId, request, true).plan();
+    }
+
+    @Override
+    public AiWorkoutPlanDraftResponse generateDraft(CurrentActor actor, Long requestedMemberId,
+                                                    String request, boolean includeHistory) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (actor == null || tenantId == null || !actor.hasPermission("ai:plan")
+                || request == null || request.isBlank()) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        Long memberId = resolveTarget(actor, tenantId, requestedMemberId);
+        quotas.ensureAiChatAllowed(tenantId);
+
+        WorkoutHistorySummary historySummary = null;
+        if (includeHistory && history != null) {
+            historySummary = history.summarize(tenantId, memberId,
+                    LocalDate.now().minusWeeks(8), LocalDate.now(), 30);
+        }
+        String prompt = buildPrompt(tenantId, request, includeHistory, historySummary);
         final String response;
         try {
-            response = model.complete("请仅输出结构化训练计划JSON，不要输出解释：" + request, List.of());
+            response = model.complete(prompt, List.of());
         } catch (RuntimeException ex) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         }
-        if (response == null || response.isBlank()) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        if (response == null || response.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        CreateWorkoutPlanCommand plan = parsePlan(response, tenantId, memberId);
+        AiWorkoutPlanDraftResponse.History historyView;
+        if (!includeHistory) {
+            historyView = new AiWorkoutPlanDraftResponse.History(false, 0, "未参考训练记录（用户已关闭）。");
+        } else if (historySummary == null) {
+            historyView = new AiWorkoutPlanDraftResponse.History(true, 0, "近期暂无可参考训练记录。");
+        } else {
+            historyView = new AiWorkoutPlanDraftResponse.History(true, historySummary.recordCount(), historySummary.promptText());
+        }
+        return new AiWorkoutPlanDraftResponse(plan, historyView);
+    }
+
+    @Override
+    public List<AiWorkoutPlanTarget> targets(CurrentActor actor) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (actor == null || tenantId == null || !actor.hasPermission("ai:plan")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (actor.roles().contains(RoleCode.MEMBER)) {
+            return List.of(target(memberForUser(tenantId, actor.userId())));
+        }
+        if (actor.roles().contains(RoleCode.COACH)) {
+            if (coaches == null || assignments == null || members == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            Coach coach = coaches.findByTenantIdAndUserId(tenantId, actor.userId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+            List<AiWorkoutPlanTarget> result = new ArrayList<>();
+            for (Long memberId : assignments.findActiveMemberIdsByTenantIdAndCoachId(tenantId, coach.getId())) {
+                members.findByTenantIdAndId(tenantId, memberId).map(this::target).ifPresent(result::add);
+            }
+            return result;
+        }
+        if (ActorAccess.canManageTenant(actor) && actor.hasPermission("member:read") && members != null) {
+            return members.findAllByTenantId(tenantId, Pageable.unpaged()).stream().map(this::target).toList();
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private Long resolveTarget(CurrentActor actor, Long tenantId, Long requestedMemberId) {
+        if (actor.roles().contains(RoleCode.MEMBER)) {
+            if (members == null) {
+                // Legacy constructor is used only by old isolated tests/integrations.
+                if (requestedMemberId == null) throw new BusinessException(ErrorCode.FORBIDDEN);
+                return requestedMemberId;
+            }
+            Member self = memberForUser(tenantId, actor.userId());
+            if (requestedMemberId != null && !Objects.equals(requestedMemberId, self.getId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return self.getId();
+        }
+        if (actor.roles().contains(RoleCode.COACH)) {
+            if (requestedMemberId == null || coaches == null || assignments == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            Coach coach = coaches.findByTenantIdAndUserId(tenantId, actor.userId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+            if (!assignments.existsByTenantIdAndCoachIdAndMemberIdAndActive(tenantId, coach.getId(), requestedMemberId)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return requestedMemberId;
+        }
+        if (ActorAccess.canManageTenant(actor) && actor.hasPermission("member:read")
+                && requestedMemberId != null && members != null) {
+            members.findByTenantIdAndId(tenantId, requestedMemberId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+            return requestedMemberId;
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private Member memberForUser(Long tenantId, Long userId) {
+        if (members == null) throw new BusinessException(ErrorCode.FORBIDDEN);
+        return members.findByTenantIdAndUserId(tenantId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private String buildPrompt(Long tenantId, String request, boolean includeHistory, WorkoutHistorySummary summary) {
+        StringBuilder prompt = new StringBuilder("请仅输出结构化训练计划JSON，不要输出解释。\n用户需求：").append(request);
+        if (exercises != null) {
+            prompt.append("\n动作目录（只能使用以下动作ID）：");
+            for (Exercise exercise : exercises.findAllByTenantId(tenantId)) {
+                if (exercise != null && exercise.getId() != null) {
+                    prompt.append("\n").append(exercise.getId()).append("=").append(exercise.getName());
+                }
+            }
+        }
+        prompt.append("\n训练历史：");
+        if (!includeHistory) {
+            prompt.append("未参考训练记录（用户已关闭）。");
+        } else if (summary == null) {
+            prompt.append("近期暂无可参考训练记录。");
+        } else {
+            prompt.append(summary.promptText());
+        }
+        return prompt.toString();
+    }
+
+    private CreateWorkoutPlanCommand parsePlan(String response, Long tenantId, Long memberId) {
         try {
             JsonNode root = mapper.readTree(stripFences(response));
             List<WorkoutPlanItemCommand> items = new ArrayList<>();
@@ -43,7 +206,7 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
                         item.path("sets").asInt(), item.path("reps").asInt(), item.path("restSeconds").asInt(),
                         item.path("weight").asDouble(), item.path("notes").asText("")));
             }
-            var command = new CreateWorkoutPlanCommand(actor.tenantId(), memberId, null,
+            var command = new CreateWorkoutPlanCommand(tenantId, memberId, null,
                     root.path("name").asText(), root.path("goal").asText(),
                     LocalDate.parse(root.path("startDate").asText()), LocalDate.parse(root.path("endDate").asText()),
                     root.path("description").asText(), items);
@@ -56,12 +219,18 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
         }
     }
 
+    private AiWorkoutPlanTarget target(Member member) {
+        return new AiWorkoutPlanTarget(member.getId(), member.getFullName(), member.getMemberNumber());
+    }
+
     private String stripFences(String response) {
         String value = response.trim();
         if (value.startsWith("```")) {
             int firstNewline = value.indexOf('\n');
             int lastFence = value.lastIndexOf("```");
-            if (firstNewline > 0 && lastFence > firstNewline) value = value.substring(firstNewline + 1, lastFence).trim();
+            if (firstNewline > 0 && lastFence > firstNewline) {
+                value = value.substring(firstNewline + 1, lastFence).trim();
+            }
         }
         return value;
     }

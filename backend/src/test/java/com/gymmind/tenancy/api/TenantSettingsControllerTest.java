@@ -3,6 +3,7 @@ package com.gymmind.tenancy.api;
 import com.gymmind.shared.api.TraceIdFilter;
 import com.gymmind.shared.error.GlobalExceptionHandler;
 import com.gymmind.shared.security.CurrentActorProvider;
+import com.gymmind.shared.security.TenantContextHolder;
 import com.gymmind.tenancy.application.TenantSettingsService;
 import com.gymmind.tenancy.api.response.TenantSettingsView;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,12 +68,39 @@ class TenantSettingsControllerTest {
     }
 
     @Test
-    void platformAdminCannotReadTenantSettings() throws Exception {
+    void platformAdminCanReadTenantSettingsWhenTenantContextIsSelected() throws Exception {
+        when(actors.requireCurrent()).thenReturn(platformAdmin());
+        when(service.getCurrent(any())).thenReturn(new TenantSettingsView(10L, true, true, "Asia/Shanghai"));
+        when(service.updateCurrent(any(), any())).thenReturn(new TenantSettingsView(10L, false, true, "Asia/Shanghai"));
+
+        TenantContextHolder.set(10L);
+        try {
+            mockMvc.perform(get("/api/v1/tenant/settings"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.tenantId").value(10));
+
+            mockMvc.perform(put("/api/v1/tenant/settings")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"reservationEnabled\":false,\"checkInEnabled\":true,\"timezone\":\"Asia/Shanghai\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.tenantId").value(10));
+
+            verify(service).getCurrent(platformAdmin());
+            verify(service).updateCurrent(platformAdmin(),
+                    new com.gymmind.tenancy.application.command.UpdateTenantSettingsCommand(
+                            false, true, "Asia/Shanghai"));
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
+
+    @Test
+    void platformAdminCannotReadTenantSettingsWithoutTenantContext() throws Exception {
         when(actors.requireCurrent()).thenReturn(platformAdmin());
 
         mockMvc.perform(get("/api/v1/tenant/settings"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.code").value("TENANT_CONTEXT_REQUIRED"));
 
         verify(service, never()).getCurrent(any());
     }

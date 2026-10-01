@@ -9,4 +9,8 @@ public interface TenantSettingsService {
     TenantSettingsView getCurrent(CurrentActor actor);
 
     TenantSettingsView updateCurrent(CurrentActor actor, UpdateTenantSettingsCommand command);
+
+    TenantSettingsView getForPlatform(Long tenantId, CurrentActor actor);
+
+    TenantSettingsView updateForPlatform(Long tenantId, CurrentActor actor, UpdateTenantSettingsCommand command);
 }

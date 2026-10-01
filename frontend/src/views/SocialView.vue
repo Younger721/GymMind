@@ -75,7 +75,7 @@
         <div class="post-actions-bar">
           <div class="action-item" @click="handleLike(post)">
             <el-icon :class="{ liked: post.isLiked }">
-              <component :is="post.isLiked ? 'HeartFilled' : 'Heart'" />
+              <component :is="post.isLiked ? 'StarFilled' : 'Star'" />
             </el-icon>
             <span>{{ post.likes }}</span>
           </div>
@@ -133,11 +133,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import {
-  Heart,
-  HeartFilled,
-  ChatDotRound
-} from '@element-plus/icons-vue'
+import { ChatDotRound } from '@element-plus/icons-vue'
 import {
   getPostFeed,
   getTrendingPosts,

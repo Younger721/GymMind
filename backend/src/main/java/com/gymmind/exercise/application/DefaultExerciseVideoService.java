@@ -10,6 +10,7 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,16 +32,17 @@ public class DefaultExerciseVideoService implements ExerciseVideoService {
     @Transactional
     public ExerciseVideoView create(CurrentActor actor, CreateExerciseVideoCommand command) {
         require(actor, "video:write");
-        if (command == null || command.tenantId() != null && !actor.tenantId().equals(command.tenantId())) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (command == null || command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        exercises.findByTenantIdAndId(actor.tenantId(), command.exerciseId())
+        exercises.findByTenantIdAndId(tenantId, command.exerciseId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         ExerciseVideo saved;
         try {
             String objectKey = command.sourceType() == com.gymmind.exercise.domain.model.ExerciseVideoSourceType.INTERNAL
-                    ? requireTenantObjectKey(actor.tenantId(), command.objectKey()) : command.objectKey();
-            saved = videos.save(ExerciseVideo.create(actor.tenantId(), command.exerciseId(), command.title(),
+                    ? requireTenantObjectKey(tenantId, command.objectKey()) : command.objectKey();
+            saved = videos.save(ExerciseVideo.create(tenantId, command.exerciseId(), command.title(),
                     command.platform(), command.videoUrl(), null, objectKey, command.author(), command.duration(),
                     command.description(), command.sourceType()));
         } catch (IllegalArgumentException ex) {
@@ -55,7 +57,7 @@ public class DefaultExerciseVideoService implements ExerciseVideoService {
     @Transactional(readOnly = true)
     public ExerciseVideoView find(CurrentActor actor, Long id) {
         require(actor, "video:read");
-        ExerciseVideo video = videos.findByTenantIdAndId(actor.tenantId(), id)
+        ExerciseVideo video = videos.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         return ExerciseVideoView.from(video);
     }
@@ -64,7 +66,7 @@ public class DefaultExerciseVideoService implements ExerciseVideoService {
     @Transactional
     public void delete(CurrentActor actor, Long id) {
         require(actor, "video:write");
-        ExerciseVideo video = videos.findByTenantIdAndId(actor.tenantId(), id)
+        ExerciseVideo video = videos.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         videos.delete(video);
         audit.record(new AuditEvent("EXERCISE_VIDEO_DELETED", "EXERCISE_VIDEO", id, AuditResult.SUCCESS,
@@ -80,7 +82,6 @@ public class DefaultExerciseVideoService implements ExerciseVideoService {
     }
 
     private static void require(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || !actor.hasPermission(permission)) throw new BusinessException(ErrorCode.FORBIDDEN);
+        ActorAccess.requireGymAdmin(actor, permission);
     }
 }

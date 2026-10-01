@@ -10,6 +10,7 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.tenancy.application.TenantQuotaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,16 +38,17 @@ public class DefaultAgentManagementService implements AgentManagementService {
     @Transactional(readOnly = true)
     public List<AgentView> list(CurrentActor actor) {
         if (canBrowseAllTenants(actor)) {
-            return agents.findAllAccessible().stream().map(AgentView::from).toList();
+            return agents.findTop200ByOrderByIdDesc().stream().map(AgentView::from).toList();
         }
         requireTenant(actor);
+        Long tenantId = ActorAccess.tenantId(actor);
         if (canManage(actor)) {
-            return agents.findAllByTenantId(actor.tenantId()).stream().map(AgentView::from).toList();
+            return agents.findAllByTenantId(tenantId).stream().map(AgentView::from).toList();
         }
-        if (!actor.hasPermission("agent:chat")) {
+        if (!hasAgentMenu(actor)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return agents.findAllByTenantIdAndStatus(actor.tenantId(), AgentStatus.ACTIVE).stream()
+        return agents.findAllByTenantIdAndStatus(tenantId, AgentStatus.ACTIVE).stream()
                 .map(AgentView::from)
                 .toList();
     }
@@ -54,12 +56,8 @@ public class DefaultAgentManagementService implements AgentManagementService {
     @Override
     @Transactional(readOnly = true)
     public AgentView find(CurrentActor actor, Long agentId) {
-        if (canBrowseAllTenants(actor)) {
-            return agents.findById(agentId)
-                    .map(AgentView::from)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        }
         requireTenant(actor);
+        Long tenantId = ActorAccess.tenantId(actor);
         TenantAgent agent = getScoped(actor, agentId);
         if (!canManage(actor) && agent.getStatus() != AgentStatus.ACTIVE) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -72,9 +70,10 @@ public class DefaultAgentManagementService implements AgentManagementService {
     public AgentView create(CurrentActor actor, CreateAgentCommand command) {
         requireManage(actor);
         validate(command);
-        quotas.ensureAgentCreationAllowed(actor.tenantId());
+        Long tenantId = ActorAccess.tenantId(actor);
+        quotas.ensureAgentCreationAllowed(tenantId);
         TenantAgent agent = TenantAgent.create(
-                actor.tenantId(),
+                tenantId,
                 command.name(),
                 command.description(),
                 command.systemPrompt(),
@@ -124,14 +123,12 @@ public class DefaultAgentManagementService implements AgentManagementService {
     }
 
     private TenantAgent getScoped(CurrentActor actor, Long agentId) {
-        return agents.findByTenantIdAndId(actor.tenantId(), agentId)
+        return agents.findByTenantIdAndId(ActorAccess.tenantId(actor), agentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
     private static void requireTenant(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null || actor.isPlatformAdmin()) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        ActorAccess.requireTenantId(actor);
     }
 
     private static void requireManage(CurrentActor actor) {
@@ -142,12 +139,19 @@ public class DefaultAgentManagementService implements AgentManagementService {
     }
 
     private static boolean canManage(CurrentActor actor) {
-        return actor.roles().contains(RoleCode.GYM_ADMIN) && actor.hasPermission("agent:write");
+        return ActorAccess.canManageTenant(actor) && hasAgentMenu(actor);
+    }
+
+    private static boolean hasAgentMenu(CurrentActor actor) {
+        return actor != null && (actor.isPlatformAdmin()
+                || actor.hasPermission("menu:assistant")
+                || actor.hasPermission("agent:chat")
+                || actor.hasPermission("agent:write"));
     }
 
     /** 平台管理员跨租户只读白名单 */
     private static boolean canBrowseAllTenants(CurrentActor actor) {
-        return actor != null && actor.isPlatformAdmin() && actor.hasPermission("platform:agent:read");
+        return actor != null && actor.isPlatformAdmin() && ActorAccess.tenantId(actor) == null;
     }
 
     private static void validate(CreateAgentCommand command) {

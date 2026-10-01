@@ -55,6 +55,22 @@ class MembershipEntitlementPortTest {
     }
 
     @Test
+    void releaseRestoresCountBasedEntitlementWhenReservationUsedLastCount() {
+        MemberMembershipRepository memberships = mock(MemberMembershipRepository.class);
+        MemberMembership membership = MemberMembership.create(11L, 41L, 8L, 0,
+                FIXED_NOW.minusSeconds(3600), FIXED_NOW.plusSeconds(3600));
+        when(memberships.findAllByTenantIdAndMemberIdAndStatus(11L, 41L, MemberMembershipStatus.ACTIVE))
+                .thenReturn(List.of(membership));
+        when(memberships.save(any(MemberMembership.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DefaultMembershipEntitlementPort port = new DefaultMembershipEntitlementPort(memberships, CLOCK);
+        port.release(11L, 41L);
+
+        assertThat(membership.getRemainingCount()).isEqualTo(1);
+        verify(memberships).save(membership);
+    }
+
+    @Test
     void reserveFailsWhenNoActiveMembership() {
         MemberMembershipRepository memberships = mock(MemberMembershipRepository.class);
         when(memberships.findAllByTenantIdAndMemberIdAndStatus(11L, 41L, MemberMembershipStatus.ACTIVE))

@@ -25,20 +25,21 @@ class MilvusVectorIndexTest {
         assertThat(body.get("indexParams").toString()).contains("COSINE", "HNSW", "vector");
         assertThat(body.get("schema")).isInstanceOf(Map.class);
         assertThat(body.get("schema").toString())
-                .contains("id", "tenantId", "ownerUserId", "text", "vector", "1024");
+                .contains("id", "tenantId", "documentId", "ownerUserId", "text", "vector", "1024");
     }
 
     @Test
     void insertCarriesTenantOwnerTextAndVector() {
         float[] vector = new float[1024];
         Map<String, Object> body = MilvusVectorIndex.insertBody(
-                "gymmind_knowledge", new IndexedChunk("chunk-1", 7L, 11L, "private text", vector));
+                "gymmind_knowledge", new IndexedChunk("chunk-1", 7L, 99L, 11L, "private text", vector));
 
         assertThat(body).containsEntry("collectionName", "gymmind_knowledge");
         assertThat((List<?>) body.get("data")).singleElement().satisfies(row ->
                 assertThat((Map<String, Object>) row)
                         .containsEntry("id", "chunk-1")
                         .containsEntry("tenantId", 7L)
+                        .containsEntry("documentId", 99L)
                         .containsEntry("ownerUserId", 11L)
                         .containsEntry("text", "private text")
                         .containsEntry("vector", vector));
@@ -51,17 +52,17 @@ class MilvusVectorIndexTest {
 
         assertThat(body).containsEntry("filter", "tenantId == 7 && (ownerUserId == 0 || ownerUserId == 11)");
         assertThat(body).containsEntry("limit", 30);
-        assertThat(body.get("outputFields")).isEqualTo(List.of("id", "tenantId", "ownerUserId", "text"));
+        assertThat(body.get("outputFields")).isEqualTo(List.of("id", "tenantId", "documentId", "ownerUserId", "text"));
     }
 
     @Test
     void mapsMilvusSearchRowsBackToChunks() {
         String response = """
-                {"code":0,"data":[{"id":"chunk-1","tenantId":7,"ownerUserId":11,"text":"private text","distance":0.91}]}
+                {"code":0,"data":[{"id":"chunk-1","tenantId":7,"documentId":99,"ownerUserId":11,"text":"private text","distance":0.91}]}
                 """;
 
         assertThat(MilvusVectorIndex.parseSearchResponse(response)).containsExactly(
-                new IndexedChunk("chunk-1", 7L, 11L, "private text", null));
+                new IndexedChunk("chunk-1", 7L, 99L, 11L, "private text", null));
     }
 
     @Test

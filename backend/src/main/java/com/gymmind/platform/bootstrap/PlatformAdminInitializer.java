@@ -50,7 +50,10 @@ public class PlatformAdminInitializer implements ApplicationRunner {
         UserAccount user = userRepository.findByNormalizedEmail(UserAccount.normalizeEmail(properties.getEmail()))
                 .map(existing -> syncPlatformAdminPassword(requirePlatformAccount(existing)))
                 .orElseGet(() -> userRepository.save(UserAccount.platformAdmin(
-                        properties.getEmail(), passwordEncoder.encode(properties.getPassword()), "Platform administrator")));
+                        properties.getEmail(),
+                        properties.getUsername(),
+                        passwordEncoder.encode(properties.getPassword()),
+                        "Platform administrator")));
         if (!userRoleRepository.existsByUserIdAndRoleId(user.getId(), role.getId())) {
             userRoleRepository.save(UserRole.assign(user, role));
         }

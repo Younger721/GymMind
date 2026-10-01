@@ -30,4 +30,47 @@ class KnowledgeDocumentTest {
         d.markReady();
         assertThat(d.status()).isEqualTo(DocumentStatus.READY);
     }
+
+    @Test void readyDocumentCanBeMarkedForReindexing() {
+        var d = KnowledgeDocument.create(7L, null, "x", "text/plain", DocumentVisibility.TENANT, 1L);
+        d.markParsing();
+        d.markReady();
+
+        d.markParsing();
+
+        assertThat(d.status()).isEqualTo(DocumentStatus.PARSING);
+    }
+
+    @Test void objectKeyUsesOnlySafeBaseFileName() {
+        var d = KnowledgeDocument.create(7L, null, "../private\\secret.txt", "text/plain",
+                DocumentVisibility.TENANT, 1L);
+
+        assertThat(d.fileName()).isEqualTo("secret.txt");
+        assertThat(d.objectKey()).isEqualTo("tenant/7/knowledge/1/secret.txt");
+    }
+
+    @Test void newDocumentsExposeGeneralChunkStrategyVersionOne() {
+        var d = KnowledgeDocument.create(7L, null, "guide.txt", "text/plain", DocumentVisibility.TENANT, 1L);
+
+        assertThat(d.chunkStrategy()).isEqualTo("GENERAL");
+        assertThat(d.chunkStrategyVersion()).isEqualTo(1);
+    }
+
+    @Test void chunkStrategyCanBeUpdatedAndNormalizesItsName() {
+        var d = KnowledgeDocument.create(7L, null, "guide.txt", "text/plain", DocumentVisibility.TENANT, 1L);
+
+        d.updateChunkStrategy(" procedure ", 2);
+
+        assertThat(d.chunkStrategy()).isEqualTo("PROCEDURE");
+        assertThat(d.chunkStrategyVersion()).isEqualTo(2);
+    }
+
+    @Test void chunkStrategyRejectsBlankNamesAndNonPositiveVersions() {
+        var d = KnowledgeDocument.create(7L, null, "guide.txt", "text/plain", DocumentVisibility.TENANT, 1L);
+
+        assertThatThrownBy(() -> d.updateChunkStrategy(" ", 1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> d.updateChunkStrategy("GENERAL", 0))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

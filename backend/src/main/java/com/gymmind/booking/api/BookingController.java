@@ -31,8 +31,8 @@ public class BookingController {
     }
 
     @GetMapping
-    public ApiResponse<java.util.List<BookingView>> list() {
-        return ApiResponse.success(service.list(actors.requireCurrent()));
+    public ApiResponse<java.util.List<BookingView>> list(Long courseId) {
+        return ApiResponse.success(service.list(actors.requireCurrent(), courseId));
     }
 
     @PostMapping
@@ -53,6 +53,6 @@ public class BookingController {
         return ApiResponse.success(service.confirm(actors.requireCurrent(), bookingId));
     }
 
-    public record BookRequest(@NotNull Long memberId, @NotNull Long courseId) {
+    public record BookRequest(Long memberId, @NotNull Long courseId) {
     }
 }

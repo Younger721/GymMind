@@ -5,6 +5,12 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
+import com.gymmind.tenancy.application.TenantQuotaService;
+import com.gymmind.tenancy.application.TenantQuotaServices;
+import com.gymmind.workout.application.WorkoutHistoryQueryService;
+import com.gymmind.workout.application.WorkoutHistorySummary;
+import java.time.LocalDate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -14,15 +20,30 @@ public class DefaultCoachAssistantService {
 
     private final ChatModelGateway model;
     private final CoachAssignmentService assignments;
+    private final TenantQuotaService quotas;
+    private final WorkoutHistoryQueryService history;
 
     public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments) {
+        this(model, assignments, TenantQuotaServices.unboundedForLegacyConstruction(), null);
+    }
+
+    public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments,
+                                        TenantQuotaService quotas) {
+        this(model, assignments, quotas, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments,
+                                        TenantQuotaService quotas, WorkoutHistoryQueryService history) {
         this.model = model;
         this.assignments = assignments;
+        this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
+        this.history = history;
     }
 
     public AiAnalysisResult assist(CurrentActor actor, Long memberId, String request) {
-        if (actor == null || actor.tenantId() == null
-                || (!actor.roles().contains(RoleCode.COACH) && !actor.roles().contains(RoleCode.GYM_ADMIN))
+        if (ActorAccess.tenantId(actor) == null
+                || (!actor.roles().contains(RoleCode.COACH) && !ActorAccess.canManageTenant(actor))
                 || !actor.hasPermission("ai:analysis")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
@@ -33,8 +54,14 @@ public class DefaultCoachAssistantService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        String prompt = "请作为健身教练助手，基于会员训练记录设计安全、渐进的恢复方案。会员编号="
+        String prompt = "请作为健身教练助手，基于会员训练记录给出安全、渐进、可执行的建议。会员编号="
                 + memberId + "；教练请求=" + request.trim();
+        if (history != null) {
+            WorkoutHistorySummary summary = history.summarize(ActorAccess.tenantId(actor), memberId,
+                    LocalDate.now().minusWeeks(8), LocalDate.now(), 30);
+            prompt += "\n请只使用以下已完成训练记录作为参考，不要编造记录：\n" + summary.promptText();
+        }
+        quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
         try {
             String answer = model.complete(prompt, List.of());
             return new AiAnalysisResult(answer == null || answer.isBlank()

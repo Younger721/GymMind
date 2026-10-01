@@ -43,6 +43,6 @@ public class MySqlPersistentJobQueue implements PersistentJobQueue {
     public void recoverExpired(Instant now) { jdbc.update("update async_job set status=?,lease_until=null where status=? and lease_until<=?", JobStatus.PENDING.name(), JobStatus.RUNNING.name(), Timestamp.from(now)); }
     public PersistentJob find(Long id) { return jdbc.queryForObject("select id,type,tenant_id,status,attempts,next_attempt_at,lease_until,last_error from async_job where id=?", (rs,n)->row(rs.getLong(1),rs.getString(2),rs.getLong(3),rs.getString(4),rs.getInt(5),rs.getTimestamp(6),rs.getTimestamp(7),rs.getString(8)), id); }
     private void updateStatus(Long id, JobStatus status) { if (jdbc.update("update async_job set status=? where id=?",status.name(),id)==0) throw new NoSuchElementException("job"); }
-    private static PersistentJob row(long id,String type,long tenant,String status,int attempts,Timestamp next,Timestamp lease,String error){return new PersistentJob(id,type,tenant,JobStatus.valueOf(status),attempts,next==null?null:next.toInstant(),lease==null?null:lease.toInstant(),error);}
-    private static void validate(String type,Long tenant){if(type==null||type.isBlank()||tenant==null||tenant<=0)throw new IllegalArgumentException("invalid job");}
+    private static PersistentJob row(long id,String type,long tenant,String status,int attempts,Timestamp next,Timestamp lease,String error){return new PersistentJob(id,type,tenant == 0 ? null : tenant,JobStatus.valueOf(status),attempts,next==null?null:next.toInstant(),lease==null?null:lease.toInstant(),error);}
+    private static void validate(String type,Long tenant){if(type==null||type.isBlank()||tenant != null && tenant<=0)throw new IllegalArgumentException("invalid job");}
 }

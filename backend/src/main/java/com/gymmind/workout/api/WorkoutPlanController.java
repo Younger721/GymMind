@@ -2,6 +2,7 @@ package com.gymmind.workout.api;
 
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import com.gymmind.workout.application.CreateWorkoutPlanCommand;
 import com.gymmind.workout.application.WorkoutPlanItemCommand;
 import com.gymmind.workout.application.WorkoutPlanService;
@@ -26,6 +27,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/workout-plans")
+@SecurityRequirement(name = "bearerAuth")
 public class WorkoutPlanController {
 
     private final WorkoutPlanService service;

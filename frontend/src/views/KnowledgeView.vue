@@ -4,7 +4,7 @@
       <div>
         <h2 class="simple-page-title">知识库</h2>
         <p class="simple-page-desc">
-          {{ authStore.isPlatformAdmin ? '按门店租户隔离管理文档，请在顶部选择门店' : '上传文档后自动解析，数据仅在本健身房内可见' }}
+          {{ authStore.isPlatformAdmin ? '先上传平台基础文档，所有租户的 AI 助手都可使用' : '上传文档后自动解析，数据仅在本健身房内可见' }}
         </p>
       </div>
       <el-upload
@@ -12,18 +12,15 @@
         :http-request="handleUpload"
         :disabled="uploading || !canManage"
       >
+        <el-select v-model="uploadCategory" placeholder="资料分类" style="width: 150px; margin-right: 8px" @click.stop>
+          <el-option label="通用资料" value="GENERAL" /><el-option label="动作规范" value="ACTION_STANDARD" /><el-option label="训练基础" value="TRAINING_BASICS" /><el-option label="器械说明" value="EQUIPMENT" /><el-option label="课程资料" value="COURSE" /><el-option label="饮食知识" value="NUTRITION" /><el-option label="门店制度" value="GYM_RULES" /><el-option label="常见问题" value="FAQ" />
+        </el-select>
+        <el-select v-model="uploadAudienceRoles" multiple collapse-tags collapse-tags-tooltip placeholder="面向角色" style="width: 220px; margin-right: 8px" @click.stop>
+          <el-option v-for="option in audienceRoleOptions" :key="option.value" :label="option.label" :value="option.value" />
+        </el-select>
         <el-button type="primary" :loading="uploading" :disabled="!canManage">上传文档</el-button>
       </el-upload>
     </div>
-
-    <el-alert
-      v-if="authStore.isPlatformAdmin && !authStore.platformContextTenantId"
-      type="warning"
-      :closable="false"
-      show-icon
-      title="请先在顶部选择要管理的门店租户"
-      class="tenant-hint"
-    />
 
     <el-table :data="documents" v-loading="loading" class="simple-card" style="padding: 0; overflow: hidden">
       <el-table-column v-if="authStore.isPlatformAdmin" prop="tenantId" label="租户ID" width="90" />
@@ -31,6 +28,23 @@
       <el-table-column prop="status" label="状态" width="120">
         <template #default="{ row }">
           <el-tag size="small" :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="发布状态" width="110"><template #default="{ row }"><el-tag size="small" :type="row.published ? 'success' : 'warning'">{{ row.published ? '已发布' : '待发布' }}</el-tag></template></el-table-column>
+      <el-table-column label="资料来源" width="120">
+        <template #default="{ row }">
+          <el-tag size="small" :type="row.tenantId == null ? 'info' : 'success'">{{ row.tenantId == null ? '平台默认' : '本店资料' }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="面向角色" min-width="180">
+        <template #default="{ row }">
+          <el-tag v-for="role in row.audienceRoles || []" :key="role" size="small" type="info" class="role-tag">{{ audienceRoleLabel(role) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="切分策略" width="130">
+        <template #default="{ row }">
+          <el-tag size="small" type="info">{{ chunkStrategyText(row.chunkStrategy) }}</el-tag>
+          <span v-if="row.chunkStrategyVersion" class="strategy-version">v{{ row.chunkStrategyVersion }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="visibility" label="可见范围" width="120">
@@ -41,7 +55,7 @@
       <el-table-column v-if="canManage" label="操作" width="220" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-          <el-button link type="warning" @click="reindex(row.id)">重新解析</el-button>
+          <el-button v-if="row.status === 'READY'" link type="success" @click="togglePublication(row)">{{ row.published ? '撤回' : '发布' }}</el-button>
           <el-button link type="danger" @click="remove(row.id)">删除</el-button>
         </template>
       </el-table-column>
@@ -58,6 +72,11 @@
             <el-option label="仅本人可见" value="PRIVATE_USER" />
           </el-select>
         </el-form-item>
+        <el-form-item label="面向角色" required>
+          <el-select v-model="editForm.audienceRoles" multiple collapse-tags collapse-tags-tooltip style="width: 100%">
+            <el-option v-for="option in audienceRoleOptions" :key="option.value" :label="option.label" :value="option.value" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
@@ -68,36 +87,37 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { knowledgeApi, type KnowledgeDocumentView } from '@/api/knowledge'
 import { useAuthStore } from '@/stores/auth'
+import { hasMenuPermission, MENU_CODES } from '@/utils/menuPermissions'
 
 const authStore = useAuthStore()
 const documents = ref<KnowledgeDocumentView[]>([])
 const loading = ref(false)
 const uploading = ref(false)
+const uploadCategory = ref('GENERAL')
+const allAudienceRoles = ['PLATFORM_ADMIN', 'GYM_ADMIN', 'COACH', 'MEMBER']
+const tenantAudienceRoles = ['GYM_ADMIN', 'COACH', 'MEMBER']
+const audienceRoleLabels: Record<string, string> = { PLATFORM_ADMIN: '平台管理员', GYM_ADMIN: '健身房管理员', COACH: '教练', MEMBER: '会员' }
+const audienceRoleOptions = computed(() => (authStore.isPlatformAdmin ? allAudienceRoles : tenantAudienceRoles).map(value => ({ value, label: audienceRoleLabels[value] })))
+const uploadAudienceRoles = ref<string[]>(authStore.isPlatformAdmin ? [...allAudienceRoles] : [...tenantAudienceRoles])
 const saving = ref(false)
 const editVisible = ref(false)
 const editForm = reactive({
   id: 0,
   fileName: '',
-  visibility: 'TENANT' as 'TENANT' | 'PRIVATE_USER'
+  visibility: 'TENANT' as 'TENANT' | 'PRIVATE_USER',
+  audienceRoles: [] as string[]
 })
 
-const canManage = computed(() => {
-  if (authStore.isPlatformAdmin) {
-    return authStore.platformContextTenantId != null
-  }
-  return true
-})
+const canManage = computed(() => authStore.isPlatformAdmin
+  || (authStore.roles.includes('GYM_ADMIN')
+    && hasMenuPermission(MENU_CODES.KNOWLEDGE)))
 
 const load = async () => {
-  if (authStore.isPlatformAdmin && !authStore.platformContextTenantId) {
-    documents.value = []
-    return
-  }
   loading.value = true
   try {
     const res = await knowledgeApi.listDocuments()
@@ -110,13 +130,14 @@ const load = async () => {
 }
 
 const handleUpload = async (options: UploadRequestOptions) => {
+  if (!uploadAudienceRoles.value.length) { ElMessage.warning('至少选择一个面向角色'); return }
   uploading.value = true
   try {
-    await knowledgeApi.uploadDocument(options.file as File)
+    await knowledgeApi.uploadDocument(options.file as File, 'TENANT', uploadCategory.value, uploadAudienceRoles.value)
     ElMessage.success('上传成功，正在解析')
     await load()
-  } catch {
-    ElMessage.error('上传失败')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '上传失败')
   } finally {
     uploading.value = false
   }
@@ -126,13 +147,15 @@ const openEdit = (row: KnowledgeDocumentView) => {
   editForm.id = row.id
   editForm.fileName = row.fileName
   editForm.visibility = row.visibility as 'TENANT' | 'PRIVATE_USER'
+  editForm.audienceRoles = [...(row.audienceRoles || [])]
   editVisible.value = true
 }
 
 const saveEdit = async () => {
+  if (!editForm.audienceRoles.length) { ElMessage.warning('至少选择一个面向角色'); return }
   saving.value = true
   try {
-    await knowledgeApi.updateDocument(editForm.id, editForm.visibility)
+    await knowledgeApi.updateDocument(editForm.id, editForm.visibility, editForm.audienceRoles)
     ElMessage.success('已更新')
     editVisible.value = false
     await load()
@@ -140,16 +163,6 @@ const saveEdit = async () => {
     ElMessage.error('更新失败')
   } finally {
     saving.value = false
-  }
-}
-
-const reindex = async (id: number) => {
-  try {
-    await knowledgeApi.reindexDocument(id)
-    ElMessage.success('已提交重新解析')
-    await load()
-  } catch {
-    ElMessage.error('重新解析失败')
   }
 }
 
@@ -162,6 +175,11 @@ const remove = async (id: number) => {
   } catch {
     /* 取消或失败 */
   }
+}
+
+const togglePublication = async (row: KnowledgeDocumentView) => {
+  try { await knowledgeApi.setPublication(row.id, !row.published); ElMessage.success(row.published ? '已撤回' : '已发布'); await load() }
+  catch { ElMessage.error('更新发布状态失败') }
 }
 
 const statusText = (s: string) => {
@@ -178,6 +196,18 @@ const statusText = (s: string) => {
 const visibilityText = (v: string) => {
   return v === 'PRIVATE_USER' ? '仅本人' : '全店'
 }
+const audienceRoleLabel = (role: string) => audienceRoleLabels[role] || role
+
+const chunkStrategyText = (strategy?: string) => {
+  const map: Record<string, string> = {
+    PROCEDURE: '动作步骤',
+    KNOWLEDGE: '知识说明',
+    FAQ_RULE: '问答规则',
+    RECORD: '记录表格',
+    GENERAL: '通用切分'
+  }
+  return map[strategy || 'GENERAL'] || strategy || '通用切分'
+}
 
 const statusType = (s: string) => {
   if (s === 'READY') return 'success'
@@ -185,11 +215,6 @@ const statusType = (s: string) => {
   if (s === 'PARSING' || s === 'UPLOADING') return 'warning'
   return 'info'
 }
-
-watch(
-  () => authStore.platformContextTenantId,
-  () => load()
-)
 
 onMounted(load)
 </script>
@@ -209,5 +234,11 @@ onMounted(load)
 
 .tenant-hint {
   margin-bottom: 16px;
+}
+
+.strategy-version {
+  margin-left: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

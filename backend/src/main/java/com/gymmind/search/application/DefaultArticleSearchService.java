@@ -4,6 +4,7 @@ import com.gymmind.search.domain.PublicUrlValidator;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -30,7 +31,7 @@ public class DefaultArticleSearchService implements ArticleSearchService {
                 || !urlValidator.isAllowed(command.url())) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        var view = new ArticleView(ids.incrementAndGet(), actor.tenantId(), command.url().trim(),
+        var view = new ArticleView(ids.incrementAndGet(), ActorAccess.tenantId(actor), command.url().trim(),
                 command.title().trim(), command.summary() == null ? "" : command.summary().trim());
         articles.put(view.id(), view);
         return view;
@@ -39,10 +40,11 @@ public class DefaultArticleSearchService implements ArticleSearchService {
     @Override
     public List<ArticleView> search(CurrentActor actor, String query) {
         require(actor, "search:read");
+        Long tenantId = ActorAccess.tenantId(actor);
         if (query == null || query.isBlank()) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         var needle = query.trim().toLowerCase(Locale.ROOT);
         return articles.values().stream()
-                .filter(a -> a.tenantId() == actor.tenantId())
+                .filter(a -> java.util.Objects.equals(a.tenantId(), tenantId))
                 .filter(a -> (a.title() + " " + a.summary() + " " + a.url()).toLowerCase(Locale.ROOT).contains(needle))
                 .sorted(Comparator.comparingLong(ArticleView::id).reversed())
                 .limit(20)
@@ -50,7 +52,7 @@ public class DefaultArticleSearchService implements ArticleSearchService {
     }
 
     private static void require(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null || !actor.hasPermission(permission)) {
+        if (ActorAccess.tenantId(actor) == null || !actor.hasPermission(permission)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

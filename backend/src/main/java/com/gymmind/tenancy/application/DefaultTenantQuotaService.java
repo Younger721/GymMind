@@ -5,6 +5,7 @@ import com.gymmind.knowledge.application.KnowledgeDocumentRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.tenancy.domain.model.TenantQuota;
 import com.gymmind.tenancy.domain.repository.TenantQuotaRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,7 +39,7 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
     @Transactional(readOnly = true)
     public TenantQuotaView getForTenant(CurrentActor actor) {
         requireTenant(actor, "tenant:quota:read");
-        return buildView(requireQuota(actor.tenantId()));
+        return buildView(requireQuota(ActorAccess.tenantId(actor)));
     }
 
     @Override
@@ -77,9 +78,7 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
     @Transactional(readOnly = true)
     public void ensureAiChatAllowed(Long tenantId) {
         TenantQuota quota = requireQuota(tenantId);
-        if (!quota.isAiModuleEnabled()) {
-            throw quotaExceeded("AI 模块未开通");
-        }
+        ensureAiModuleEnabled(quota);
         if (countAiCallsThisMonth(tenantId) >= quota.getMaxAiCallsPerMonth()) {
             throw quotaExceeded("本月 AI 调用次数已达上限");
         }
@@ -87,14 +86,39 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
 
     @Override
     @Transactional(readOnly = true)
-    public void ensureKnowledgeUploadAllowed(Long tenantId) {
+    public void ensureAiModuleEnabled(Long tenantId) {
+        ensureAiModuleEnabled(requireQuota(tenantId));
+    }
+
+    private void ensureAiModuleEnabled(TenantQuota quota) {
+        if (!quota.isAiModuleEnabled()) {
+            throw quotaExceeded("AI 模块未开通");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void ensureKnowledgeModuleEnabled(Long tenantId) {
         TenantQuota quota = requireQuota(tenantId);
         if (!quota.isKnowledgeModuleEnabled()) {
             throw quotaExceeded("知识库模块未开通");
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void ensureKnowledgeUploadAllowed(Long tenantId) {
+        TenantQuota quota = requireQuota(tenantId);
+        ensureKnowledgeModuleEnabled(quota);
         long used = documents.findByTenantId(tenantId).size();
         if (used >= quota.getMaxKnowledgeDocuments()) {
             throw quotaExceeded("知识文档数量已达上限");
+        }
+    }
+
+    private void ensureKnowledgeModuleEnabled(TenantQuota quota) {
+        if (!quota.isKnowledgeModuleEnabled()) {
+            throw quotaExceeded("知识库模块未开通");
         }
     }
 
@@ -123,9 +147,7 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
     }
 
     private static void requireTenant(CurrentActor actor, String permission) {
-        if (actor == null || actor.tenantId() == null || !actor.hasPermission(permission)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        ActorAccess.requireGymAdmin(actor, permission);
     }
 
     private static void requirePlatform(CurrentActor actor, String permission) {

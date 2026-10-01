@@ -11,12 +11,12 @@
         :closable="false"
         show-icon
         title="开发测试账号"
-        description="平台管理员：admin@qq.com / 123456"
+        description="平台管理员：admin / 123456（用户名登录）"
       />
 
       <el-form @submit.prevent="handleLogin" label-position="top">
-        <el-form-item label="邮箱">
-          <el-input v-model="email" placeholder="admin@qq.com" />
+        <el-form-item label="用户名">
+          <el-input v-model="username" placeholder="admin" autocomplete="username" />
         </el-form-item>
         <el-form-item label="密码">
           <el-input v-model="password" type="password" placeholder="123456" show-password />
@@ -41,7 +41,7 @@ import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const isDev = import.meta.env.DEV
-const email = ref('')
+const username = ref('')
 const password = ref('')
 
 /** 进入登录页时清除失效的旧 token，避免残留会话触发 401 弹窗 */
@@ -56,13 +56,13 @@ onMounted(() => {
 const loading = ref(false)
 
 const handleLogin = async () => {
-  if (!email.value || !password.value) {
-    ElMessage.warning('请填写账号和密码')
+  if (!username.value || !password.value) {
+    ElMessage.warning('请填写用户名和密码')
     return
   }
   loading.value = true
   try {
-    await authStore.login({ email: email.value.trim(), password: password.value })
+    await authStore.login({ username: username.value.trim(), password: password.value })
   } catch {
     /* 错误已由拦截器或 store 提示 */
   } finally {

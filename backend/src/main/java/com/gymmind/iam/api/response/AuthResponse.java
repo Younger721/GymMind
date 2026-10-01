@@ -10,6 +10,7 @@ import java.util.Set;
 public record AuthResponse(
         Long userId,
         Long tenantId,
+        String username,
         String email,
         String displayName,
         Set<RoleCode> roles,
@@ -24,6 +25,7 @@ public record AuthResponse(
         return new AuthResponse(
                 result.user().id(),
                 result.user().tenantId(),
+                result.user().username(),
                 result.user().email(),
                 result.user().displayName(),
                 result.user().roles(),

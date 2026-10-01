@@ -4,12 +4,14 @@ import com.gymmind.nutrition.domain.NutritionCalculator;
 import com.gymmind.nutrition.domain.Sex;
 import com.gymmind.nutrition.domain.MacroTargets;
 import com.gymmind.shared.api.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/nutrition/profiles")
+@SecurityRequirement(name = "bearerAuth")
 public class NutritionProfileController {
     private final NutritionCalculator calculator;
     public NutritionProfileController(NutritionCalculator calculator) { this.calculator = calculator; }

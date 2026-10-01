@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 class JpaMemberMembershipRepository implements MemberMembershipRepository {
@@ -23,5 +24,10 @@ class JpaMemberMembershipRepository implements MemberMembershipRepository {
 
     public List<MemberMembership> findAllByTenantIdAndMemberIdAndStatus(Long t, Long m, MemberMembershipStatus status) {
         return d.findAllByTenantIdAndMemberIdAndStatus(t, m, status);
+    }
+
+    public Optional<MemberMembership> findActiveByTenantIdAndMemberId(Long t, Long m) {
+        return d.findFirstByTenantIdAndMemberIdAndStatusOrderByExpiresAtDesc(
+                t, m, MemberMembershipStatus.ACTIVE);
     }
 }

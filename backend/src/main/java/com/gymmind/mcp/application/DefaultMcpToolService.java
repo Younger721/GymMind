@@ -7,6 +7,7 @@ import com.gymmind.search.application.ImportArticleCommand;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -32,13 +33,13 @@ public class DefaultMcpToolService implements McpToolService {
     public List<McpTool> list(CurrentActor actor) {
         requireTenant(actor);
         List<McpTool> tools = new ArrayList<>();
-        if (actor.hasPermission(SEARCH.permission())) {
+        if (hasExplicitPermission(actor, SEARCH.permission())) {
             tools.add(SEARCH);
         }
-        if (actor.hasPermission(IMPORT.permission())) {
+        if (hasExplicitPermission(actor, IMPORT.permission())) {
             tools.add(IMPORT);
         }
-        if (actor.hasPermission(KNOWLEDGE.permission())) {
+        if (hasExplicitPermission(actor, KNOWLEDGE.permission())) {
             tools.add(KNOWLEDGE);
         }
         return tools;
@@ -48,19 +49,19 @@ public class DefaultMcpToolService implements McpToolService {
     public Object invoke(CurrentActor actor, String name, String input) {
         requireTenant(actor);
         if (SEARCH.name().equals(name)) {
-            if (!actor.hasPermission(SEARCH.permission())) {
+            if (!hasExplicitPermission(actor, SEARCH.permission())) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             return articles.search(actor, input);
         }
         if (IMPORT.name().equals(name)) {
-            if (!actor.hasPermission(IMPORT.permission())) {
+            if (!hasExplicitPermission(actor, IMPORT.permission())) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             return importArticle(actor, input);
         }
         if (KNOWLEDGE.name().equals(name)) {
-            if (!actor.hasPermission(KNOWLEDGE.permission())) {
+            if (!hasExplicitPermission(actor, KNOWLEDGE.permission())) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             return knowledge.search(actor, input);
@@ -95,8 +96,10 @@ public class DefaultMcpToolService implements McpToolService {
     }
 
     private static void requireTenant(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        ActorAccess.requireTenantId(actor);
+    }
+
+    private static boolean hasExplicitPermission(CurrentActor actor, String permission) {
+        return actor != null && permission != null && actor.hasPermission(permission);
     }
 }

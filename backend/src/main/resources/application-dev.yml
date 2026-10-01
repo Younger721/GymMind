@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/gymmind?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:}
+    password: ${MYSQL_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -18,6 +18,6 @@ gymmind:
   object-store: local
   ai:
     harness:
-      platform-default-plugins: basic_chat
+      platform-default-plugins: basic_chat,knowledge_search
       tenant-default-plugins: basic_chat,knowledge_search
       default-system-prompt: 你是 GymMind 智能健身助手，回答要专业、简洁、安全，不要编造不存在的服务。

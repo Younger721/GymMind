@@ -16,6 +16,16 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 class KnowledgeDocumentUseCaseTest {
     private final InMemoryKnowledgeDocumentRepository repository = new InMemoryKnowledgeDocumentRepository();
@@ -24,6 +34,21 @@ class KnowledgeDocumentUseCaseTest {
     private final CurrentActor admin = new CurrentActor(11L, 7L, Set.of(RoleCode.GYM_ADMIN), Set.of("knowledge:write"), 0, "t1");
     private final CurrentActor member = new CurrentActor(12L, 7L, Set.of(RoleCode.MEMBER), Set.of("knowledge:read"), 0, "t2");
     private final CurrentActor otherTenant = new CurrentActor(13L, 8L, Set.of(RoleCode.GYM_ADMIN), Set.of("knowledge:write"), 0, "t3");
+
+    @Test
+    void platformUploadRemainsUploadingUntilAsyncIngestCompletes() {
+        var indexing = mock(com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService.class);
+        var worker = mock(KnowledgeIngestWorker.class);
+        var asyncUseCase = new DefaultKnowledgeDocumentUseCase(repository, objectStore, indexing, worker,
+                com.gymmind.tenancy.application.TenantQuotaServices.unboundedForLegacyConstruction());
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
+
+        KnowledgeDocumentView view = asyncUseCase.upload(platformAdmin,
+                new UploadKnowledgeDocumentCommand("platform.txt", "text/plain", "platform".getBytes(), DocumentVisibility.TENANT));
+
+        assertThat(view.status()).isEqualTo(DocumentStatus.UPLOADING);
+        verify(worker).enqueue(null, view.id());
+    }
 
     @Test
     void uploadValidPdfCreatesUploadingDocumentWithTenantObjectKey() {
@@ -37,6 +62,41 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
+    void uploadStoresSelectedAudienceRoles() {
+        KnowledgeDocumentView view = useCase.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.txt", "text/plain", "guide".getBytes(),
+                        DocumentVisibility.TENANT, "GENERAL", List.of(RoleCode.COACH, RoleCode.MEMBER)));
+
+        assertThat(view.audienceRoles()).containsExactly(RoleCode.COACH, RoleCode.MEMBER);
+    }
+
+    @Test
+    void gymAdminCannotTargetPlatformAdministratorRole() {
+        assertThatThrownBy(() -> useCase.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.txt", "text/plain", "guide".getBytes(),
+                        DocumentVisibility.TENANT, "GENERAL", List.of(RoleCode.PLATFORM_ADMIN))))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void platformDocumentDefaultsToAllAudienceRoles() {
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
+        KnowledgeDocumentView view = useCase.upload(platformAdmin,
+                new UploadKnowledgeDocumentCommand("platform.txt", "text/plain", "platform".getBytes(), DocumentVisibility.TENANT));
+
+        assertThat(view.audienceRoles()).containsExactly(RoleCode.COACH, RoleCode.GYM_ADMIN, RoleCode.MEMBER, RoleCode.PLATFORM_ADMIN);
+    }
+
+    @Test
+    void ordinaryDocumentListHonorsAudienceRoles() {
+        useCase.upload(admin, new UploadKnowledgeDocumentCommand("coach.txt", "text/plain", "coach".getBytes(),
+                DocumentVisibility.TENANT, "GENERAL", List.of(RoleCode.COACH)));
+
+        assertThat(useCase.list(member)).isEmpty();
+    }
+
+    @Test
     void privateDocumentIsVisibleOnlyToUploaderWithinSameTenant() {
         KnowledgeDocumentView view = useCase.upload(admin,
                 new UploadKnowledgeDocumentCommand("notes.txt", "text/plain", "private".getBytes(), DocumentVisibility.PRIVATE_USER));
@@ -47,22 +107,29 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
-    void platformAdminListsOnlySelectedTenantDocuments() {
+    void platformAdminListsAllDocumentsWithoutTenantContext() {
         useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
         var otherTenantAdmin = new CurrentActor(13L, 8L, Set.of(RoleCode.GYM_ADMIN), Set.of("knowledge:write"), 0, "t3");
         useCase.upload(otherTenantAdmin, new UploadKnowledgeDocumentCommand("other.md", "text/markdown", "# other".getBytes(), DocumentVisibility.TENANT));
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
+        var platformDocument = useCase.upload(platformAdmin, new UploadKnowledgeDocumentCommand("platform.md", "text/markdown", "# platform".getBytes(), DocumentVisibility.TENANT));
 
-        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
-                Set.of("platform:knowledge:read"), 0, "platform");
-        assertThatThrownBy(() -> useCase.list(platformAdmin)).isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        assertThat(useCase.list(platformAdmin)).hasSize(3);
+        assertThat(platformDocument.tenantId()).isNull();
+        assertThat(platformDocument.objectKey()).startsWith("platform/knowledge/");
+        assertThat(TenantContextHolder.get()).isNull();
+    }
 
-        TenantContextHolder.set(7L);
-        try {
-            assertThat(useCase.list(platformAdmin)).hasSize(1);
-        } finally {
-            TenantContextHolder.clear();
-        }
+    @Test
+    void platformAdminCanManageTenantDocumentWithoutTenantContext() {
+        var document = useCase.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
+
+        assertThat(useCase.update(platformAdmin, document.id(),
+                new UpdateKnowledgeDocumentCommand(DocumentVisibility.TENANT)).id()).isEqualTo(document.id());
+        assertThat(useCase.publish(platformAdmin, document.id(), false).published()).isFalse();
+        assertThat(useCase.delete(platformAdmin, document.id()).status()).isEqualTo(DocumentStatus.DELETED);
     }
 
     @Test
@@ -75,12 +142,51 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
+    void tighteningVisibilityRemovesExistingIndexBeforeQueueingReindex() {
+        var indexing = mock(com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService.class);
+        var ingestWorker = mock(KnowledgeIngestWorker.class);
+        var repository = new InMemoryKnowledgeDocumentRepository();
+        var service = new DefaultKnowledgeDocumentUseCase(repository, new RecordingObjectStore(), indexing,
+                ingestWorker, null);
+        KnowledgeDocumentView view = service.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
+        KnowledgeDocument document = repository.findByTenantIdAndId(7L, view.id()).orElseThrow();
+        document.markParsing();
+        document.markReady();
+        reset(indexing, ingestWorker);
+
+        service.update(admin, view.id(), new UpdateKnowledgeDocumentCommand(DocumentVisibility.PRIVATE_USER));
+
+        var order = inOrder(indexing, ingestWorker);
+        order.verify(indexing).deleteDocument(7L, view.id());
+        order.verify(ingestWorker).enqueue(7L, view.id());
+    }
+
+    @Test
+    void changingAudienceRolesRemovesExistingIndexBeforeQueueingReindex() {
+        var indexing = mock(com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService.class);
+        var ingestWorker = mock(KnowledgeIngestWorker.class);
+        var repository = new InMemoryKnowledgeDocumentRepository();
+        var service = new DefaultKnowledgeDocumentUseCase(repository, new RecordingObjectStore(), indexing,
+                ingestWorker, null);
+        KnowledgeDocumentView view = service.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(),
+                        DocumentVisibility.TENANT, "GENERAL", List.of(RoleCode.COACH)));
+        reset(indexing, ingestWorker);
+
+        service.update(admin, view.id(), new UpdateKnowledgeDocumentCommand(DocumentVisibility.TENANT, List.of(RoleCode.MEMBER)));
+
+        var order = inOrder(indexing, ingestWorker);
+        order.verify(indexing).deleteDocument(7L, view.id());
+        order.verify(ingestWorker).enqueue(7L, view.id());
+    }
+
+    @Test
     void listRequiresReadPermissionAndReturnsTenantDocuments() {
         useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
         var reader = new CurrentActor(12L, 7L, Set.of(RoleCode.MEMBER), Set.of("knowledge:read"), 0, "t2");
         assertThat(useCase.list(reader)).hasSize(1);
-        assertThatThrownBy(() -> useCase.list(otherTenant)).isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        assertThat(useCase.list(otherTenant)).isEmpty();
     }
 
     @Test
@@ -95,10 +201,9 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
-    void reindexAndDeleteRejectCrossTenantAccessAndFollowStatusTransitions() {
+    void deleteRejectsCrossTenantAccess() {
         KnowledgeDocumentView view = useCase.upload(admin,
                 new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
-        assertThat(useCase.reindex(admin, view.id()).status()).isEqualTo(DocumentStatus.PARSING);
         assertThatThrownBy(() -> useCase.delete(otherTenant, view.id()))
                 .isInstanceOf(BusinessException.class).extracting("errorCode").isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
         assertThat(useCase.delete(admin, view.id()).status()).isEqualTo(DocumentStatus.DELETED);
@@ -124,14 +229,17 @@ class KnowledgeDocumentUseCaseTest {
             return Optional.ofNullable(values.get(id));
         }
 
+        public Optional<KnowledgeDocument> findForUpdateById(Long id) {
+            return findById(id);
+        }
+
         public List<KnowledgeDocument> findByTenantId(Long tenantId) {
             return values.values().stream().filter(d -> tenantId.equals(d.tenantId())).toList();
         }
 
-        public List<KnowledgeDocument> findAllAccessible() {
-            return values.values().stream()
-                    .filter(d -> d.status() != DocumentStatus.DELETED)
-                    .toList();
+        public List<KnowledgeDocument> findAllDocuments() {
+            return values.values().stream().sorted((left, right) -> Long.compare(right.id(), left.id())).toList();
         }
+
     }
 }

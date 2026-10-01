@@ -41,10 +41,9 @@ class KnowledgeDocumentControllerTest {
     }
 
     @Test
-    void reindexesAndDeletesThroughTenantScopedUseCase() throws Exception {
-        mvc.perform(post("/api/v1/knowledge/documents/3/reindex")).andExpect(status().isAccepted());
+    void manualReindexEndpointIsNoLongerExposed() throws Exception {
+        mvc.perform(post("/api/v1/knowledge/documents/3/reindex")).andExpect(status().isNotFound());
         mvc.perform(delete("/api/v1/knowledge/documents/3")).andExpect(status().isNoContent());
-        verify(useCase).reindex(actor, 3L);
         verify(useCase).delete(actor, 3L);
     }
 }

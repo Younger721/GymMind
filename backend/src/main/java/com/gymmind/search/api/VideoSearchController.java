@@ -3,10 +3,12 @@ package com.gymmind.search.api;
 import com.gymmind.exercise.application.*;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/search/videos")
+@SecurityRequirement(name = "bearerAuth")
 public class VideoSearchController {
     private final VideoSearchService service; private final CurrentActorProvider actors;
     public VideoSearchController(VideoSearchService service, CurrentActorProvider actors) { this.service = service; this.actors = actors; }

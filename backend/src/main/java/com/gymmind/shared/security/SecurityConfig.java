@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.DispatcherType;
 
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
@@ -18,6 +19,7 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter,
             PlatformTenantContextFilter platformTenantContextFilter,
+            TenantRateLimitFilter tenantRateLimitFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler) throws Exception {
         return http
@@ -31,10 +33,14 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(authorize -> authorize
+                        // SseEmitter completes on an ASYNC dispatch after the
+                        // original authenticated request has already passed JWT validation.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/auth/register",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/refresh").permitAll()
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/invitations/accept").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/actuator/health",
                                 "/actuator/health/**",
@@ -44,6 +50,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(platformTenantContextFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(tenantRateLimitFilter, PlatformTenantContextFilter.class)
                 .build();
     }
 }

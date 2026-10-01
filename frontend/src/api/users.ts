@@ -6,6 +6,16 @@ export const usersApi = {
   list(page = 0, size = 20) {
     return apiClient.get<any, ApiResponse<PageResponse<unknown>>>('/v1/users', { params: { page, size } })
   },
+  statistics() {
+    return apiClient.get<any, ApiResponse<{
+      totalUsers: number
+      memberCount: number
+      coachCount: number
+      gymAdminCount: number
+      platformAdminCount: number
+      membershipTypeCounts: Record<string, number>
+    }>>('/v1/users/statistics')
+  },
   create(body: Record<string, unknown>) {
     return apiClient.post('/v1/users', body)
   },
@@ -18,6 +28,8 @@ export const usersApi = {
   listRoles() {
     return apiClient.get<any, ApiResponse<unknown[]>>('/v1/roles')
   },
+  disableRole(role: string) { return apiClient.patch(`/v1/roles/${role}/disable`) },
+  enableRole(role: string) { return apiClient.patch(`/v1/roles/${role}/enable`) },
   invite(body: Record<string, unknown>) {
     return apiClient.post('/v1/users/invitations', body)
   },

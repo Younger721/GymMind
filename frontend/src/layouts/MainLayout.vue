@@ -23,17 +23,21 @@
         <div class="user-area">
           <el-select
             v-if="authStore.isPlatformAdmin"
-            v-model="selectedTenantId"
+            :model-value="authStore.platformContextTenantId"
+            class="tenant-context-select"
+            clearable
+            filterable
+            placeholder="选择门店上下文"
             size="small"
-            placeholder="选择门店租户"
-            style="width: 160px"
-            @change="onTenantChange"
+            @visible-change="onTenantSelectVisible"
+            @change="onTenantContextChange"
           >
             <el-option
-              v-for="t in tenantOptions"
-              :key="t.id"
-              :label="t.label"
-              :value="t.id"
+              v-for="tenant in tenants"
+              :key="tenant.id"
+              :label="`${tenant.name}（ID: ${tenant.id}）`"
+              :value="Number(tenant.id)"
+              :disabled="tenant.status !== 'ACTIVE'"
             />
           </el-select>
           <span class="username">{{ authStore.username }}</span>
@@ -41,98 +45,76 @@
         </div>
       </header>
       <main class="content">
-        <router-view />
+        <router-view :key="tenantContextKey" />
       </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { tenancyApi } from '@/api/tenancy'
 import { ElMessageBox } from 'element-plus'
+import { hasMenuPermission, MENU_CATALOG } from '@/utils/menuPermissions'
+import { tenancyApi } from '@/api/tenancy'
 
 const route = useRoute()
 const authStore = useAuthStore()
-const tenantOptions = ref<{ id: number; label: string }[]>([])
-const selectedTenantId = ref<number | null>(authStore.platformContextTenantId)
+const tenantContextKey = computed(() => authStore.isPlatformAdmin
+  ? `platform:${authStore.platformContextTenantId ?? 'none'}`
+  : `tenant:${authStore.tenantId ?? 'none'}`)
+const tenants = ref<Array<{ id: number; name: string; status: string }>>([])
+const tenantsLoaded = ref(false)
+const allMenuGroups = ['概览', '智能', '门店运营', '系统管理'].map(title => ({
+  title,
+  items: (title === '智能'
+    ? [...MENU_CATALOG.filter(item => item.group === title), { code: 'menu:assistant', label: 'AI 配置', group: '智能', path: '/agents/manage' }]
+    : [...MENU_CATALOG.filter(item => item.group === title), ...(title === '门店运营' ? [{ code: 'menu:operations', label: '签到管理', group: title, path: '/check-ins' }, { code: 'menu:analytics', label: '会员预警', group: title, path: '/member-risks' }] : [])])
+}))
 
-async function loadTenants() {
-  if (!authStore.isPlatformAdmin) return
-  try {
-    const res = await tenancyApi.listTenants(0, 100)
-    const items = (res.data?.content ?? []) as Array<{ id: number; name?: string; code?: string }>
-    tenantOptions.value = items.map(t => ({
-      id: t.id,
-      label: t.name || t.code || `租户 #${t.id}`
-    }))
-    if (!selectedTenantId.value && tenantOptions.value.length > 0) {
-      selectedTenantId.value = tenantOptions.value[0].id
-      authStore.setPlatformContextTenantId(selectedTenantId.value)
-    }
-  } catch {
-    /* 平台管理接口失败时不阻塞导航 */
-  }
-}
+const menuGroups = computed(() => {
+  return allMenuGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => hasMenuPermission(item.code))
+  })).filter(group => group.items.length > 0)
+})
 
-function onTenantChange(id: number | null) {
-  authStore.setPlatformContextTenantId(id)
-}
-
-onMounted(loadTenants)
-
-const menuGroups = [
-  {
-    title: '概览',
-    items: [{ path: '/dashboard', label: '首页' }]
-  },
-  {
-    title: '智能',
-    items: [
-      { path: '/assistant', label: 'AI 助手' },
-      { path: '/knowledge', label: '知识库' },
-      { path: '/plan', label: '训练计划' },
-      { path: '/agents/manage', label: 'Agent' },
-      { path: '/ai-tools', label: 'AI 工具箱' }
-    ]
-  },
-  {
-    title: '门店运营',
-    items: [
-      { path: '/operations', label: '会员·课程·预约' },
-      { path: '/membership', label: '会籍·支付' },
-      { path: '/training', label: '训练·营养' }
-    ]
-  },
-  {
-    title: '分析搜索',
-    items: [
-      { path: '/analytics', label: '数据分析' },
-      { path: '/search', label: '搜索导入' }
-    ]
-  },
-  {
-    title: '系统管理',
-    items: [
-      { path: '/admin', label: '用户·审计' },
-      { path: '/tenant-settings', label: '租户设置' },
-      { path: '/platform', label: '平台管理' },
-      { path: '/profile', label: '账号设置' }
-    ]
-  }
-]
-
-const flatItems = menuGroups.flatMap(g => g.items)
+const flatItems = computed(() => menuGroups.value.flatMap(g => g.items))
 
 const currentTitle = computed(() => {
-  const hit = flatItems.find(i => isActive(i.path))
+  const hit = flatItems.value.find(i => isActive(i.path))
   return hit?.label ?? 'GymMind'
 })
 
 function isActive(path: string) {
   return route.path === path || route.path.startsWith(path + '/')
+}
+
+async function loadTenants() {
+  if (tenantsLoaded.value) return
+  try {
+    const response = await tenancyApi.listTenants(0, 200)
+    const data = (response as any)?.data
+    const rows = Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : []
+    tenants.value = rows.map((tenant: Record<string, unknown>) => ({
+      id: Number(tenant.id),
+      name: String(tenant.name || tenant.code || `门店 ${tenant.id}`),
+      status: String(tenant.status || '')
+    })).filter((tenant: { id: number }) => Number.isSafeInteger(tenant.id) && tenant.id > 0)
+    tenantsLoaded.value = true
+  } catch {
+    // Keep the selector available so an invalid or disabled saved context can
+    // still be cleared and the list can be retried.
+  }
+}
+
+function onTenantSelectVisible(visible: boolean) {
+  if (visible) void loadTenants()
+}
+
+function onTenantContextChange(value: number | null | undefined) {
+  authStore.setPlatformContextTenantId(value == null ? null : Number(value))
 }
 
 const handleLogout = async () => {
@@ -245,6 +227,10 @@ const handleLogout = async () => {
   gap: 8px;
 }
 
+.tenant-context-select {
+  width: 230px;
+}
+
 .username {
   font-size: 13px;
   color: var(--text-muted);
@@ -297,6 +283,10 @@ const handleLogout = async () => {
 
   .username {
     display: none;
+  }
+
+  .tenant-context-select {
+    width: 190px;
   }
 }
 </style>

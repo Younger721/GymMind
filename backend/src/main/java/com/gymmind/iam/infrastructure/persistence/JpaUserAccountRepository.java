@@ -14,6 +14,12 @@ class JpaUserAccountRepository implements UserAccountRepository {
     public UserAccount save(UserAccount user) { return delegate.save(user); }
     public Optional<UserAccount> findById(Long id) { return delegate.findById(id); }
     public Optional<UserAccount> findByNormalizedEmail(String email) { return delegate.findByNormalizedEmail(email); }
+    public Optional<UserAccount> findByNormalizedUsername(String username) { return delegate.findByNormalizedUsername(username); }
     public Optional<UserAccount> findByTenantIdAndId(Long tenantId, Long id) { return delegate.findByTenantIdAndId(tenantId, id); }
     public Page<UserAccount> findAllByTenantId(Long tenantId, Pageable pageable) { return delegate.findAllByTenantId(tenantId, pageable); }
+    public Page<UserAccount> findAll(Pageable pageable) { return delegate.findAll(pageable); }
+    public Page<UserAccount> findByTenantIdOrTenantIdIsNullOrderByIdAsc(Long tenantId, Pageable pageable) {
+        return delegate.findByTenantIdOrTenantIdIsNullOrderByIdAsc(tenantId, pageable);
+    }
+    public java.util.List<UserAccount> findAll() { return delegate.findAll(); }
 }

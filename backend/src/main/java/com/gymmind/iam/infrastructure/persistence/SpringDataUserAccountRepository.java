@@ -8,6 +8,8 @@ import java.util.Optional;
 
 interface SpringDataUserAccountRepository extends JpaRepository<UserAccount, Long> {
     Optional<UserAccount> findByNormalizedEmail(String normalizedEmail);
+    Optional<UserAccount> findByNormalizedUsername(String normalizedUsername);
     Optional<UserAccount> findByTenantIdAndId(Long tenantId, Long id);
     Page<UserAccount> findAllByTenantId(Long tenantId, Pageable pageable);
+    Page<UserAccount> findByTenantIdOrTenantIdIsNullOrderByIdAsc(Long tenantId, Pageable pageable);
 }

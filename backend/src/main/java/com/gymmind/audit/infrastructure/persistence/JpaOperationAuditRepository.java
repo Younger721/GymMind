@@ -21,6 +21,11 @@ class JpaOperationAuditRepository implements OperationAuditRepository {
     }
 
     @Override
+    public List<OperationAudit> findAll() {
+        return delegate.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Override
     public List<OperationAudit> findAllByTenantId(Long tenantId) {
         if (tenantId == null || tenantId <= 0) {
             throw new IllegalArgumentException("tenantId must be positive");

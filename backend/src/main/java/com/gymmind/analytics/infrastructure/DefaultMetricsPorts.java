@@ -58,7 +58,7 @@ class DefaultBookingMetricsPort implements BookingMetricsPort {
         Instant start = from.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant end = to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         Long count = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM course_booking WHERE tenant_id = ? AND created_at >= ? AND created_at < ? AND status = ?",
+                "SELECT COUNT(*) FROM course_booking WHERE tenant_id = ? AND checked_in_at >= ? AND checked_in_at < ? AND status = ?",
                 Long.class, tenantId, start, end, BookingStatus.COMPLETED.name());
         return count == null ? 0L : count;
     }

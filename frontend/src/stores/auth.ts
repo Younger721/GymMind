@@ -4,6 +4,8 @@ import { authApi, type LoginRequest, type RegisterRequest } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 
+const PLATFORM_CONTEXT_TENANT_KEY = 'platformContextTenantId'
+
 function persistAuth(
   accessToken: string,
   refreshToken: string,
@@ -11,7 +13,8 @@ function persistAuth(
   displayName: string,
   email: string,
   tenantId: number | null,
-  roles: string[]
+  roles: string[],
+  permissions: string[]
 ) {
   localStorage.setItem('token', accessToken)
   localStorage.setItem('refreshToken', refreshToken)
@@ -24,11 +27,18 @@ function persistAuth(
     localStorage.removeItem('tenantId')
   }
   localStorage.setItem('roles', JSON.stringify(roles))
+  localStorage.setItem('permissions', JSON.stringify(permissions))
 }
 
 function readTenantId(): number | null {
   const raw = localStorage.getItem('tenantId')
   return raw ? Number(raw) : null
+}
+
+function readPlatformContextTenantId(): number | null {
+  const raw = localStorage.getItem(PLATFORM_CONTEXT_TENANT_KEY)
+  const value = raw ? Number(raw) : NaN
+  return Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
 function readRoles(): string[] {
@@ -40,9 +50,13 @@ function readRoles(): string[] {
   }
 }
 
-function readPlatformContextTenantId(): number | null {
-  const raw = localStorage.getItem('platformContextTenantId')
-  return raw ? Number(raw) : null
+function readPermissions(): string[] {
+  try {
+    const raw = localStorage.getItem('permissions')
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch {
+    return []
+  }
 }
 
 export const useAuthStore = defineStore('auth', () => {
@@ -52,43 +66,69 @@ export const useAuthStore = defineStore('auth', () => {
   const username = ref<string | null>(localStorage.getItem('username'))
   const email = ref<string | null>(localStorage.getItem('email'))
   const tenantId = ref<number | null>(readTenantId())
-  const roles = ref<string[]>(readRoles())
-  /** 平台管理员当前代管的门店租户 ID */
   const platformContextTenantId = ref<number | null>(readPlatformContextTenantId())
+  const roles = ref<string[]>(readRoles())
+  const permissions = ref<string[]>(readPermissions())
 
-  const isAuthenticated = computed(() => !!token.value)
+  // A token without the role claims persisted by the current login response is
+  // an old or incomplete session. It must not gain platform administrator
+  // access as a fallback.
+  const isAuthenticated = computed(() => !!token.value && roles.value.length > 0)
   const isPlatformAdmin = computed(() => {
-    if (tenantId.value != null) return false
-    if (roles.value.includes('PLATFORM_ADMIN')) return true
-    // 旧会话未持久化 roles 时：无 tenantId 且已登录视为平台管理员
-    return !!token.value
+    return tenantId.value == null && roles.value.includes('PLATFORM_ADMIN')
   })
   const isTenantUser = computed(() => tenantId.value != null)
+  const hasPlatformTenantContext = computed(() => isPlatformAdmin.value && platformContextTenantId.value != null)
+
+  function setPlatformContextTenantId(value: number | null) {
+    if (!isPlatformAdmin.value || value == null) {
+      platformContextTenantId.value = null
+      localStorage.removeItem(PLATFORM_CONTEXT_TENANT_KEY)
+      return
+    }
+    const normalized = Number(value)
+    if (!Number.isSafeInteger(normalized) || normalized <= 0) {
+      platformContextTenantId.value = null
+      localStorage.removeItem(PLATFORM_CONTEXT_TENANT_KEY)
+      return
+    }
+    platformContextTenantId.value = normalized
+    localStorage.setItem(PLATFORM_CONTEXT_TENANT_KEY, String(normalized))
+  }
 
   function applyAuthResponse(data: {
     userId: number
     tenantId?: number | null
+    username?: string
     email: string
     displayName: string
     roles?: string[]
+    permissions?: string[]
     accessToken: string
     refreshToken: string
   }) {
+    const loginName = data.username?.trim() || data.displayName
     token.value = data.accessToken
     refreshToken.value = data.refreshToken
     userId.value = data.userId
-    username.value = data.displayName
+    username.value = loginName
     email.value = data.email
     tenantId.value = data.tenantId ?? null
     roles.value = data.roles ?? []
+    permissions.value = data.permissions ?? []
+    // A new login must choose a tenant explicitly instead of inheriting the
+    // previous platform administrator's tenant context.
+    platformContextTenantId.value = null
+    localStorage.removeItem(PLATFORM_CONTEXT_TENANT_KEY)
     persistAuth(
       data.accessToken,
       data.refreshToken,
       data.userId,
-      data.displayName,
+      loginName,
       data.email,
       tenantId.value,
-      roles.value
+      roles.value,
+      permissions.value
     )
   }
 
@@ -135,15 +175,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  function setPlatformContextTenantId(id: number | null) {
-    platformContextTenantId.value = id
-    if (id != null) {
-      localStorage.setItem('platformContextTenantId', String(id))
-    } else {
-      localStorage.removeItem('platformContextTenantId')
-    }
-  }
-
   async function logout() {
     try {
       if (refreshToken.value) {
@@ -158,16 +189,18 @@ export const useAuthStore = defineStore('auth', () => {
       username.value = null
       email.value = null
       tenantId.value = null
-      roles.value = []
       platformContextTenantId.value = null
+      roles.value = []
+      permissions.value = []
       localStorage.removeItem('token')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('userId')
       localStorage.removeItem('username')
       localStorage.removeItem('email')
       localStorage.removeItem('tenantId')
+      localStorage.removeItem(PLATFORM_CONTEXT_TENANT_KEY)
       localStorage.removeItem('roles')
-      localStorage.removeItem('platformContextTenantId')
+      localStorage.removeItem('permissions')
       ElMessage.success('已退出登录')
       router.push('/login')
     }
@@ -180,12 +213,14 @@ export const useAuthStore = defineStore('auth', () => {
     username,
     email,
     tenantId,
-    roles,
     platformContextTenantId,
-    setPlatformContextTenantId,
+    hasPlatformTenantContext,
+    roles,
+    permissions,
     isPlatformAdmin,
     isTenantUser,
     isAuthenticated,
+    setPlatformContextTenantId,
     login,
     register,
     logout

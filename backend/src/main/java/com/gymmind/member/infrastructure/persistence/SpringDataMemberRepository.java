@@ -11,6 +11,7 @@ interface SpringDataMemberRepository extends JpaRepository<Member, Long> {
     Optional<Member> findByTenantIdAndUserId(Long tenantId, Long userId);
     Optional<Member> findByUserId(Long userId);
     Optional<Member> findByTenantIdAndMemberNumber(Long tenantId, String memberNumber);
+    Optional<Member> findByTenantIdAndCheckInToken(Long tenantId, String checkInToken);
     boolean existsByTenantIdAndPhone(Long tenantId, String phone);
     Page<Member> findAllByTenantId(Long tenantId, Pageable pageable);
     Page<Member> findByTenantIdAndFullNameContainingIgnoreCaseOrTenantIdAndMemberNumberContainingIgnoreCase(Long tenantId, String fullName, Long sameTenantId, String memberNumber, Pageable pageable);

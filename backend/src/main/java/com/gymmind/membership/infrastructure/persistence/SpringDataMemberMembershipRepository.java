@@ -7,9 +7,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 interface SpringDataMemberMembershipRepository extends JpaRepository<MemberMembership, Long> {
     Page<MemberMembership> findAllByTenantIdAndMemberId(Long t, Long m, Pageable p);
 
     List<MemberMembership> findAllByTenantIdAndMemberIdAndStatus(Long t, Long m, MemberMembershipStatus status);
+
+    Optional<MemberMembership> findFirstByTenantIdAndMemberIdAndStatusOrderByExpiresAtDesc(
+            Long t, Long m, MemberMembershipStatus status);
 }

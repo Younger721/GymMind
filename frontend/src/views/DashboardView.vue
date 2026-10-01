@@ -30,25 +30,27 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { knowledgeApi } from '@/api/knowledge'
 import { agentApi } from '@/api/agent'
+import { hasMenuPermission, MENU_CODES } from '@/utils/menuPermissions'
 
 const authStore = useAuthStore()
 const docCount = ref<number | null>(null)
 const agentCount = ref<number | null>(null)
 
-const quickLinks = [
-  { path: '/assistant', icon: '💬', title: 'AI 助手', desc: '健身问答与咨询' },
-  { path: '/operations', icon: '👥', title: '门店运营', desc: '会员·课程·预约' },
-  { path: '/training', icon: '🏋️', title: '训练营养', desc: '动作库与计划' },
-  { path: '/analytics', icon: '📊', title: '数据分析', desc: '看板与周报' },
-  { path: '/knowledge', icon: '📄', title: '知识库', desc: '上传门店文档' },
-  { path: '/plan', icon: '📋', title: '训练计划', desc: 'AI 生成计划' },
-  { path: '/agents/manage', icon: '🤖', title: 'Agent', desc: '配置门店助手' },
-  { path: '/admin', icon: '⚙️', title: '用户审计', desc: '用户与操作日志' }
-]
+const quickLinks = computed(() => [
+  { path: '/assistant', permission: MENU_CODES.ASSISTANT, icon: '💬', title: 'AI 助手', desc: '健身问答与咨询' },
+  { path: '/operations', permission: MENU_CODES.OPERATIONS, icon: '👥', title: '门店运营', desc: '会员·课程·预约' },
+  { path: '/courses', permission: MENU_CODES.COURSES, icon: '📚', title: '课程中心', desc: '课程发布与报名' },
+  { path: '/training', permission: MENU_CODES.TRAINING, icon: '🏋️', title: '训练营养', desc: '动作库与计划' },
+  { path: '/analytics', permission: MENU_CODES.ANALYTICS, icon: '📊', title: '数据分析', desc: '看板与周报' },
+  { path: '/knowledge', permission: MENU_CODES.KNOWLEDGE, icon: '📄', title: '知识库', desc: '上传门店文档' },
+  { path: '/plan', permission: MENU_CODES.ASSISTANT, icon: '📋', title: '训练计划', desc: 'AI 生成计划' },
+  { path: '/agents/manage', permission: MENU_CODES.ASSISTANT, icon: '🤖', title: 'Agent', desc: '配置门店助手' },
+  { path: '/admin', permission: MENU_CODES.ADMIN, icon: '⚙️', title: '用户审计', desc: '用户与操作日志' }
+].filter(item => hasMenuPermission(item.permission)))
 
 onMounted(async () => {
   try {

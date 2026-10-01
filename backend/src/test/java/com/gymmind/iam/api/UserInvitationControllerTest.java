@@ -49,7 +49,7 @@ class UserInvitationControllerTest {
                 "raw-token", 10L, "member@example.com", RoleCode.MEMBER,
                 Instant.parse("2026-09-14T00:00:00Z")));
         when(service.accept(any())).thenReturn(new AuthResult(
-                new AuthResult.AuthenticatedUser(40L, 10L, "member@example.com", "Member",
+                new AuthResult.AuthenticatedUser(40L, 10L, "member", "member@example.com", "Member",
                         Set.of(RoleCode.MEMBER), Set.of()),
                 new TokenPair("access-token", Instant.parse("2026-09-13T01:00:00Z"),
                         "refresh-token", Instant.parse("2026-09-20T01:00:00Z"))));

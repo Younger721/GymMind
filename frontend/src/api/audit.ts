@@ -3,9 +3,9 @@ import type { ApiResponse } from '@/types/api'
 
 export const auditApi = {
   operations() {
-    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/audit/operations')
+    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/audits')
   },
   aiUsage() {
-    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/audit/ai-usage')
+    return apiClient.get<any, ApiResponse<unknown[]>>('/v1/audits/ai-usage')
   }
 }

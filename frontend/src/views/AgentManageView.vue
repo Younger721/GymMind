@@ -5,7 +5,7 @@
         <h2 class="simple-page-title">Agent 管理</h2>
         <p class="simple-page-desc">配置门店 AI 助手（会员仅可使用）</p>
       </div>
-      <el-button v-if="!authStore.isPlatformAdmin" type="primary" @click="openCreate">新建</el-button>
+      <el-button v-if="canWrite" type="primary" @click="openCreate">新建</el-button>
       <el-tag v-else type="info">平台管理员 · 全租户只读</el-tag>
     </div>
 
@@ -51,7 +51,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="!authStore.isPlatformAdmin" label="操作" width="180" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button
@@ -89,14 +89,14 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button v-if="canWrite" type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { agentApi, type AgentView, type TenantQuotaView } from '@/api/agent'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
@@ -117,6 +117,9 @@ const form = reactive({
   knowledgeEnabled: true,
   enabledTools: ['knowledge_search'] as string[]
 })
+// The page itself is the permission boundary. Once visible, all page actions
+// are available; the backend still enforces tenant scope for writes.
+const canWrite = computed(() => !authStore.isPlatformAdmin)
 
 const load = async () => {
   loading.value = true

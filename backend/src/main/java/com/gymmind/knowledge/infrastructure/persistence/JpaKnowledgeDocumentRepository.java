@@ -24,12 +24,26 @@ public class JpaKnowledgeDocumentRepository implements KnowledgeDocumentReposito
         return delegate.findById(id);
     }
 
+    public Optional<KnowledgeDocument> findForUpdateById(Long id) {
+        return delegate.findForUpdateById(id);
+    }
+
+    public Optional<KnowledgeDocument> findForUpdateByTenantIdAndId(Long tenantId, Long id) {
+        return delegate.findForUpdateByTenantIdAndId(tenantId, id);
+    }
+
     public List<KnowledgeDocument> findByTenantId(Long tenantId) {
         return delegate.findTop50ByTenantIdOrderByIdDesc(tenantId);
     }
-
-    public List<KnowledgeDocument> findAllAccessible() {
-        return delegate.findTop200ByStatusNotOrderByIdDesc(
-                com.gymmind.knowledge.domain.model.DocumentStatus.DELETED);
+    public List<KnowledgeDocument> findByTenantIdAndIdIn(Long tenantId, java.util.Collection<Long> ids) {
+        return ids == null || ids.isEmpty() ? List.of() : delegate.findByTenantIdAndIdIn(tenantId, ids);
     }
+    public List<KnowledgeDocument> findPlatformDocuments() { return delegate.findByTenantIdIsNullOrderByIdDesc(); }
+
+    public List<KnowledgeDocument> findAllDocuments() {
+        return delegate.findAllByOrderByIdDesc();
+    }
+
+    public List<Long> findTenantIds() { return delegate.findDistinctTenantIds(); }
+
 }

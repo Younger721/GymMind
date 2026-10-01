@@ -4,8 +4,11 @@ import com.gymmind.ai.application.AiChatView;
 import com.gymmind.ai.harness.application.AiHarnessService;
 import com.gymmind.ai.harness.application.HarnessConfigView;
 import com.gymmind.ai.harness.application.UpdateHarnessConfigCommand;
+import com.gymmind.ai.harness.application.AiChatTurn;
+import com.gymmind.ai.harness.AiProgressEvent;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import com.gymmind.shared.security.CurrentActor;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -15,8 +18,11 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/ai/harness")
@@ -55,12 +61,65 @@ public class AiHarnessController {
                 request.plugins()));
     }
 
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.http.ResponseEntity<SseEmitter> chatStream(@Valid @RequestBody ChatRequest request) {
+        CurrentActor actor = actors.requireCurrent();
+        SseEmitter emitter = new SseEmitter(300_000L);
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
+            Thread thread = new Thread(task, "ai-harness-stream");
+            thread.setDaemon(true);
+            return thread;
+        });
+        emitter.onCompletion(executor::shutdown);
+        emitter.onTimeout(() -> {
+            executor.shutdownNow();
+            emitter.complete();
+        });
+        executor.execute(() -> {
+            try {
+                AiChatView result = service.chat(actor, request.sessionId(), request.question(), request.plugins(), request.history(),
+                        token -> sendToken(emitter, token),
+                        progress -> sendProgress(emitter, progress));
+                emitter.send(SseEmitter.event().name("done").data(result));
+                emitter.complete();
+            } catch (Exception ex) {
+                try {
+                    emitter.send(SseEmitter.event().name("error")
+                            .data(Map.of("message", ex.getMessage() == null ? "AI 服务暂时不可用" : ex.getMessage())));
+                } catch (Exception ignored) {
+                    // 客户端已断开连接
+                }
+                emitter.complete();
+            }
+        });
+        return org.springframework.http.ResponseEntity.status(HttpStatus.OK)
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(emitter);
+    }
+
+    private static void sendToken(SseEmitter emitter, String token) {
+        try {
+            emitter.send(SseEmitter.event().name("token").data(token));
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("Client disconnected during AI response", exception);
+        }
+    }
+
+    private static void sendProgress(SseEmitter emitter, AiProgressEvent progress) {
+        try {
+            emitter.send(SseEmitter.event().name("progress").data(progress));
+        } catch (java.io.IOException exception) {
+            throw new IllegalStateException("Client disconnected during AI progress", exception);
+        }
+    }
+
     public record ConfigRequest(List<String> enabledPlugins, @NotBlank String systemPrompt) {
     }
 
     public record ChatRequest(
             @NotBlank String sessionId,
             @NotBlank String question,
-            List<String> plugins) {
+            List<String> plugins,
+            List<AiChatTurn> history) {
     }
 }

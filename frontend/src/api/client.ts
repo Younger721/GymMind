@@ -17,16 +17,44 @@ const apiClient: AxiosInstance = axios.create({
   }
 })
 
+function hasPlatformAdminRole(): boolean {
+  try {
+    const raw = localStorage.getItem('roles')
+    const roles = raw ? JSON.parse(raw) : []
+    return Array.isArray(roles) && roles.includes('PLATFORM_ADMIN')
+  } catch {
+    return false
+  }
+}
+
+function readPlatformContextTenantId(): number | null {
+  const raw = localStorage.getItem('platformContextTenantId')
+  const value = raw ? Number(raw) : NaN
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token')
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    // 平台管理员代管门店：传递所选租户上下文
-    const platformTenantId = localStorage.getItem('platformContextTenantId')
-    if (platformTenantId && config.headers) {
-      config.headers['X-Tenant-Id'] = platformTenantId
+    if (config.headers) {
+      // Authentication endpoints must establish identity before any tenant
+      // context is applied. A stale platform context header would otherwise
+      // be rejected by PlatformTenantContextFilter as an unauthenticated
+      // request (403), preventing login after switching sessions.
+      if (isAuthRequest(config.url)) {
+        delete config.headers['X-Tenant-Id']
+        return config
+      }
+      const contextTenantId = readPlatformContextTenantId()
+      const tenantId = localStorage.getItem('tenantId')
+      if (hasPlatformAdminRole() && !tenantId && contextTenantId != null) {
+        config.headers['X-Tenant-Id'] = String(contextTenantId)
+      } else {
+        delete config.headers['X-Tenant-Id']
+      }
     }
     return config
   },
@@ -77,7 +105,12 @@ apiClient.interceptors.response.use(
             }
             break
           case 403:
-            ElMessage.error('没有权限执行此操作')
+            if (data && typeof data === 'object' && 'code' in data
+              && (data as { code?: string }).code === 'TENANT_CONTEXT_REQUIRED') {
+              ElMessage.warning('请先选择租户')
+            } else {
+              ElMessage.error('没有权限执行此操作')
+            }
             break
           case 404:
             ElMessage.error('接口不存在，请检查前后端版本')

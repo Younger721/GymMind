@@ -5,6 +5,7 @@ import com.gymmind.search.application.ArticleView;
 import com.gymmind.search.application.ImportArticleCommand;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/search")
+@SecurityRequirement(name = "bearerAuth")
 public class SearchImportController {
 
     private final ArticleSearchService service;

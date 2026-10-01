@@ -34,7 +34,7 @@ public class DefaultMembershipEntitlementPort implements MembershipEntitlementPo
 
     @Override
     public void release(Long tenantId, Long memberId) {
-        MemberMembership membership = activeMembership(tenantId, memberId);
+        MemberMembership membership = activeMembership(tenantId, memberId, true);
         if (membership.getRemainingCount() != null) {
             membership.restore();
             memberships.save(membership);
@@ -48,16 +48,21 @@ public class DefaultMembershipEntitlementPort implements MembershipEntitlementPo
     }
 
     private MemberMembership activeMembership(Long tenantId, Long memberId) {
+        return activeMembership(tenantId, memberId, false);
+    }
+
+    private MemberMembership activeMembership(Long tenantId, Long memberId, boolean allowExhausted) {
         Instant now = clock.instant();
         return memberships.findAllByTenantIdAndMemberIdAndStatus(tenantId, memberId, MemberMembershipStatus.ACTIVE)
                 .stream()
-                .filter(m -> usable(m, now))
+                .filter(m -> usable(m, now, allowExhausted))
                 .max(Comparator.comparing(MemberMembership::getStartsAt))
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONFLICT));
     }
 
-    private static boolean usable(MemberMembership membership, Instant now) {
-        if (membership.getRemainingCount() != null && membership.getRemainingCount() <= 0) {
+    private static boolean usable(MemberMembership membership, Instant now, boolean allowExhausted) {
+        if (membership.getRemainingCount() != null
+                && (membership.getRemainingCount() < 0 || (!allowExhausted && membership.getRemainingCount() == 0))) {
             return false;
         }
         return !now.isBefore(membership.getStartsAt())

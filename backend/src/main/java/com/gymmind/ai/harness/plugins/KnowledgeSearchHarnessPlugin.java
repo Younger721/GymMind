@@ -3,13 +3,13 @@ package com.gymmind.ai.harness.plugins;
 import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.ai.harness.AiHarnessPlugin;
 import com.gymmind.ai.harness.AiHarnessPluginDescriptor;
+import com.gymmind.ai.harness.AiProgressEvent;
 import com.gymmind.knowledge.application.KnowledgeSearchService;
-import com.gymmind.shared.error.BusinessException;
-import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /** 知识库 RAG 检索插件 */
 @Component
@@ -36,13 +36,23 @@ public class KnowledgeSearchHarnessPlugin implements AiHarnessPlugin {
     }
 
     @Override
-    public void contribute(CurrentActor actor, String input, List<ContextSegment> context) {
-        try {
-            context.addAll(search.search(actor, input));
-        } catch (BusinessException ex) {
-            if (ex.errorCode() != ErrorCode.DEPENDENCY_UNAVAILABLE) {
-                throw ex;
-            }
+    public boolean supports(CurrentActor actor) {
+        // Platform administrators can search platform knowledge without first
+        // selecting a tenant. Tenant users keep the normal tenant and permission boundary.
+        if (actor == null) {
+            return false;
         }
+        return actor.isPlatformAdmin() || AiHarnessPlugin.super.supports(actor);
+    }
+
+    @Override
+    public void contribute(CurrentActor actor, String input, List<ContextSegment> context) {
+        context.addAll(search.search(actor, input));
+    }
+
+    @Override
+    public void contribute(CurrentActor actor, String input, List<ContextSegment> context,
+                           Consumer<AiProgressEvent> progress) {
+        context.addAll(search.search(actor, input, progress));
     }
 }

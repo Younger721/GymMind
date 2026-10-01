@@ -6,6 +6,7 @@ import com.gymmind.audit.domain.OperationAudit;
 import com.gymmind.audit.domain.repository.OperationAuditRepository;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.CurrentActorProvider;
+import com.gymmind.shared.security.TenantContextHolder;
 import com.gymmind.iam.domain.model.RoleCode;
 import org.junit.jupiter.api.Test;
 
@@ -51,6 +52,25 @@ class DefaultAuditRecorderTest {
 
         verify(rejected).record(any(OperationAudit.class));
         org.mockito.Mockito.verifyNoInteractions(repository);
+    }
+
+    @Test
+    void platformAuditUsesSelectedTenantContext() {
+        OperationAuditRepository repository = mock(OperationAuditRepository.class);
+        CurrentActorProvider actors = mock(CurrentActorProvider.class);
+        when(actors.requireCurrent()).thenReturn(new CurrentActor(9L, null,
+                Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "platform-token"));
+        DefaultAuditRecorder recorder = new DefaultAuditRecorder(repository, actors, mock(RejectedAuditWriter.class));
+        TenantContextHolder.set(11L);
+        try {
+            recorder.record(new AuditEvent("EXERCISE_CREATED", "EXERCISE", 5L,
+                    AuditResult.SUCCESS.name(), "trace-1", Map.of()));
+            var captured = org.mockito.ArgumentCaptor.forClass(OperationAudit.class);
+            verify(repository).save(captured.capture());
+            assertEquals(11L, captured.getValue().getTenantId());
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 
     @Test

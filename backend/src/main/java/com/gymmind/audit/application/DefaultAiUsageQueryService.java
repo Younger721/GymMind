@@ -2,9 +2,11 @@ package com.gymmind.audit.application;
 
 import com.gymmind.ai.application.AiUsageRecord;
 import com.gymmind.ai.application.AiUsageRepository;
+import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
+import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
-import com.gymmind.shared.security.CurrentActor;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
@@ -16,9 +18,10 @@ public class DefaultAiUsageQueryService implements AiUsageQueryService {
 
     @Override
     public List<AiUsageRecord> list(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null || actor.isPlatformAdmin() || !actor.hasPermission("audit:read")) {
+        if (actor == null || (!actor.isPlatformAdmin() && !actor.roles().contains(RoleCode.GYM_ADMIN))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return repository.findAllByTenantId(actor.tenantId());
+        Long tenantId = ActorAccess.tenantId(actor);
+        return tenantId == null ? repository.findAll() : repository.findAllByTenantId(tenantId);
     }
 }

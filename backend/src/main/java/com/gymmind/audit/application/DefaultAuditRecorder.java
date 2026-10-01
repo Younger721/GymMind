@@ -5,6 +5,7 @@ import com.gymmind.audit.domain.OperationAudit;
 import com.gymmind.audit.domain.repository.OperationAuditRepository;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.CurrentActorProvider;
+import com.gymmind.shared.security.ActorAccess;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +29,7 @@ public class DefaultAuditRecorder implements AuditRecorder {
     public void record(AuditEvent event) {
         Objects.requireNonNull(event, "event");
         CurrentActor actor = actors.requireCurrent();
-        OperationAudit audit = OperationAudit.create(actor.userId(), actor.tenantId(), event.action(),
+        OperationAudit audit = OperationAudit.create(actor.userId(), ActorAccess.tenantId(actor), event.action(),
                 event.resourceType(), event.resourceId(), event.auditResult(), event.traceId(), event.metadata());
         if (event.auditResult() == com.gymmind.audit.domain.AuditResult.REJECTED) {
             rejectedAuditWriter.record(audit);

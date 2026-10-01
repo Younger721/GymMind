@@ -14,6 +14,7 @@ import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.TenantAccessGuard;
 import com.gymmind.iam.domain.model.RoleCode;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.Objects;
@@ -31,6 +32,7 @@ public class DefaultMemberService implements MemberService {
         this(members, audit, null);
     }
 
+    @Autowired
     public DefaultMemberService(MemberRepository members, AuditRecorder audit, MemberTenantRepository memberships) {
         this.members = Objects.requireNonNull(members, "members");
         this.audit = Objects.requireNonNull(audit, "audit");
@@ -129,5 +131,5 @@ public class DefaultMemberService implements MemberService {
     private static void requireAdmin(CurrentActor actor, String permission) {
         ActorAccess.requireGymAdmin(actor, permission);
     }
-    private static MemberView view(Member member) { return new MemberView(member.getId(), member.getTenantId(), member.getUserId(), member.getMemberNumber(), member.getFullName(), member.getPhone(), member.getStatus()); }
+    private static MemberView view(Member member) { return new MemberView(member.getId(), member.getTenantId(), member.getUserId(), member.getMemberNumber(), member.getFullName(), member.getPhone(), member.getStatus(), member.getCheckInToken()); }
 }

@@ -1,6 +1,7 @@
 package com.gymmind.shared.security;
 
 import com.gymmind.shared.security.jwt.JwtService;
+import com.gymmind.tenancy.domain.repository.TenantRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -37,11 +38,15 @@ class SecurityConfigurationTest {
     @MockitoBean
     private PrincipalLoader principalLoader;
 
+    @MockitoBean
+    private TenantRepository tenantRepository;
+
     @Test
     void onlyAuthenticationEntryPointsHealthAndOpenApiArePublic() throws Exception {
         mockMvc.perform(post("/api/v1/auth/register")).andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/auth/login")).andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/auth/refresh")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/auth/invitations/accept")).andExpect(status().isOk());
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
         mockMvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
@@ -81,6 +86,7 @@ class SecurityConfigurationTest {
                 "/api/v1/auth/register",
                 "/api/v1/auth/login",
                 "/api/v1/auth/refresh",
+                "/api/v1/auth/invitations/accept",
                 "/api/v1/auth/logout"
         })
         String authenticationOperation() {

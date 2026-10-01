@@ -10,6 +10,7 @@ import com.gymmind.member.domain.repository.MemberRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.workout.domain.model.WorkoutPlan;
 import com.gymmind.workout.domain.model.WorkoutPlanStatus;
 import com.gymmind.workout.domain.repository.WorkoutPlanItemRepository;
@@ -51,19 +52,20 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     public WorkoutPlanView create(CurrentActor actor, CreateWorkoutPlanCommand command) {
         require(actor);
         validator.validate(command);
-        if (command.tenantId() != null && !actor.tenantId().equals(command.tenantId())) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        members.findByTenantIdAndId(actor.tenantId(), command.memberId())
+        members.findByTenantIdAndId(tenantId, command.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!assignments.canAccess(actor, command.memberId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         for (var item : command.items()) {
-            exercises.findByTenantIdAndId(actor.tenantId(), item.exerciseId())
+            exercises.findByTenantIdAndId(tenantId, item.exerciseId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
-        WorkoutPlan plan = plans.save(WorkoutPlan.create(actor.tenantId(), command.memberId(), command.coachId(),
+        WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
         for (var item : command.items()) {
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
@@ -78,21 +80,22 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     @Override
     @Transactional
     public WorkoutPlanView saveValidatedDraft(CurrentActor actor, CreateWorkoutPlanCommand command) {
-        require(actor);
+        requireDraftSaver(actor, command);
         validator.validate(command);
-        if (command.tenantId() != null && !actor.tenantId().equals(command.tenantId())) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        members.findByTenantIdAndId(actor.tenantId(), command.memberId())
+        members.findByTenantIdAndId(tenantId, command.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!assignments.canAccess(actor, command.memberId())) {
+        if (!canAccessPlanMember(actor, command.memberId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         for (var item : command.items()) {
-            exercises.findByTenantIdAndId(actor.tenantId(), item.exerciseId())
+            exercises.findByTenantIdAndId(tenantId, item.exerciseId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
-        WorkoutPlan plan = plans.save(WorkoutPlan.create(actor.tenantId(), command.memberId(), command.coachId(),
+        WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
         for (var item : command.items()) {
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
@@ -106,10 +109,10 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     @Override
     @Transactional(readOnly = true)
     public WorkoutPlanView find(CurrentActor actor, Long id) {
-        require(actor);
-        WorkoutPlan plan = plans.findByTenantIdAndId(actor.tenantId(), id)
+        requireReader(actor);
+        WorkoutPlan plan = plans.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!assignments.canAccess(actor, plan.getMemberId())) {
+        if (!canAccessPlanMember(actor, plan.getMemberId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return WorkoutPlanView.from(plan);
@@ -118,9 +121,9 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     @Override
     @Transactional(readOnly = true)
     public List<WorkoutPlanView> list(CurrentActor actor) {
-        require(actor);
-        return plans.findAllByTenantId(actor.tenantId()).stream()
-                .filter(plan -> assignments.canAccess(actor, plan.getMemberId()))
+        requireReader(actor);
+        return plans.findAllByTenantId(ActorAccess.tenantId(actor)).stream()
+                .filter(plan -> canAccessPlanMember(actor, plan.getMemberId()))
                 .map(WorkoutPlanView::from)
                 .toList();
     }
@@ -129,7 +132,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     @Transactional
     public WorkoutPlanView publish(CurrentActor actor, Long id) {
         require(actor);
-        WorkoutPlan plan = plans.findByTenantIdAndId(actor.tenantId(), id)
+        WorkoutPlan plan = plans.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!assignments.canAccess(actor, plan.getMemberId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -145,10 +148,47 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     }
 
     private static void require(CurrentActor actor) {
-        if (actor == null || actor.tenantId() == null
-                || (!actor.roles().contains(RoleCode.GYM_ADMIN) && !actor.roles().contains(RoleCode.COACH))
+        if (ActorAccess.tenantId(actor) == null
+                || (!ActorAccess.canManageTenant(actor) && !actor.roles().contains(RoleCode.COACH))
                 || !actor.hasPermission("workout:write")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private void requireDraftSaver(CurrentActor actor, CreateWorkoutPlanCommand command) {
+        if (actor != null && actor.roles().contains(RoleCode.MEMBER)) {
+            Long tenantId = ActorAccess.tenantId(actor);
+            boolean ownMember = tenantId != null && command != null && command.memberId() != null
+                    && actor.hasPermission("ai:plan")
+                    && members.findByTenantIdAndUserId(tenantId, actor.userId())
+                    .map(member -> member.getId().equals(command.memberId()))
+                    .orElse(false);
+            if (!ownMember) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return;
+        }
+        require(actor);
+    }
+
+    private void requireReader(CurrentActor actor) {
+        if (actor != null && actor.roles().contains(RoleCode.MEMBER)) {
+            if (ActorAccess.tenantId(actor) == null || !actor.hasPermission("ai:plan")) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return;
+        }
+        require(actor);
+    }
+
+    private boolean canAccessPlanMember(CurrentActor actor, Long memberId) {
+        if (actor != null && actor.roles().contains(RoleCode.MEMBER)) {
+            Long tenantId = ActorAccess.tenantId(actor);
+            return tenantId != null && actor.hasPermission("ai:plan")
+                    && members.findByTenantIdAndUserId(tenantId, actor.userId())
+                    .map(member -> member.getId().equals(memberId))
+                    .orElse(false);
+        }
+        return assignments.canAccess(actor, memberId);
     }
 }

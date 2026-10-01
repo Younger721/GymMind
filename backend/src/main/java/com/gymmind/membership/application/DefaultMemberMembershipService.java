@@ -7,6 +7,7 @@ import com.gymmind.membership.domain.model.MemberMembership;
 import com.gymmind.membership.domain.model.MembershipPackage;
 import com.gymmind.membership.domain.repository.MemberMembershipRepository;
 import com.gymmind.membership.domain.repository.MembershipPackageRepository;
+import com.gymmind.member.domain.repository.MemberRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
@@ -21,14 +22,17 @@ public class DefaultMemberMembershipService implements MemberMembershipService {
 
     private final MemberMembershipRepository memberships;
     private final MembershipPackageRepository packages;
+    private final MemberRepository members;
     private final AuditRecorder audit;
 
     public DefaultMemberMembershipService(
             MemberMembershipRepository memberships,
             MembershipPackageRepository packages,
+            MemberRepository members,
             AuditRecorder audit) {
         this.memberships = memberships;
         this.packages = packages;
+        this.members = members;
         this.audit = audit;
     }
 
@@ -41,6 +45,8 @@ public class DefaultMemberMembershipService implements MemberMembershipService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         MembershipPackage membershipPackage = packages.findByTenantIdAndId(tenantId, command.packageId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        members.findByTenantIdAndId(tenantId, command.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         MemberMembership membership = memberships.save(MemberMembership.create(
                 tenantId, command.memberId(), command.packageId(), membershipPackage.getEntitlementCount(),

@@ -38,7 +38,7 @@ class AuthControllerTest {
             42L, 7L, Set.of(RoleCode.GYM_ADMIN), Set.of("tenant:settings:write"), 0L, "access-jti");
     private static final AuthResult RESULT = new AuthResult(
             new AuthResult.AuthenticatedUser(
-                    42L, 7L, "owner@example.com", "Owner",
+                    42L, 7L, "owner", "owner@example.com", "Owner",
                     Set.of(RoleCode.GYM_ADMIN), Set.of("tenant:settings:write")),
             new TokenPair(
                     "access-token", Instant.parse("2026-09-13T02:15:00Z"),
@@ -90,7 +90,7 @@ class AuthControllerTest {
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\" owner@example.com \",\"password\":\"password123\"}"))
+                        .content("{\"username\":\" owner \",\"password\":\"password123\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken").value("access-token"));
         mockMvc.perform(post("/api/v1/auth/refresh")
@@ -99,7 +99,7 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.refreshToken").value("refresh-token"));
 
-        verify(service).login(new LoginCommand("owner@example.com", "password123"));
+        verify(service).login(new LoginCommand("owner", "password123"));
         verify(service).refresh(new RefreshCommand("raw-refresh-token"));
     }
 

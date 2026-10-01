@@ -1,7 +1,7 @@
 <template>
   <div>
-    <h2 class="simple-page-title">数据分析</h2>
-    <p class="simple-page-desc">运营看板、周报与流失预警</p>
+    <h2 class="simple-page-title">风险预警</h2>
+    <p class="simple-page-desc">基于签到、训练和会籍状态识别待跟进会员</p>
 
     <div class="simple-card filter-box">
       <el-form inline>
@@ -15,16 +15,17 @@
           <el-input v-model="weekStart" placeholder="2026-09-15" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="loadDashboard">看板</el-button>
+          <el-button type="primary" :loading="loading" @click="loadDashboard">运营概览</el-button>
           <el-button :loading="loading" @click="loadWeekly">周指标</el-button>
           <el-button :loading="loading" @click="loadReport">周报</el-button>
-          <el-button :loading="loading" @click="loadAiReport">AI 周报</el-button>
+          <el-button :loading="loading" @click="loadAiReport">运营助手摘要</el-button>
         </el-form-item>
       </el-form>
     </div>
 
     <div class="simple-card filter-box">
-      <h3 class="sub-title">流失风险评估</h3>
+      <h3 class="sub-title">会员风险评估</h3>
+      <p class="panel-desc">当前接口接收单个会员的指标，后续接入会员列表批量计算。</p>
       <el-form label-width="140px">
         <el-form-item label="距上次训练(天)">
           <el-input-number v-model="churn.daysSinceLastWorkout" :min="0" />
@@ -42,7 +43,7 @@
           <el-switch v-model="churn.membershipExpiring" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="runChurn">评估</el-button>
+          <el-button type="primary" :loading="loading" @click="runChurn">计算风险</el-button>
         </el-form-item>
       </el-form>
     </div>
