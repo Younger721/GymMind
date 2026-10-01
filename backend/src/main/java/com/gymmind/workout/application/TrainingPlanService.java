@@ -1,0 +1,3 @@
+package com.gymmind.workout.application;
+import com.gymmind.shared.security.CurrentActor; import java.time.LocalDate; import java.util.*;
+public interface TrainingPlanService { List<?> templates(CurrentActor actor); Object template(CurrentActor actor,Long id); Object create(CurrentActor actor,CreateTemplateCommand c); Object publish(CurrentActor actor,Long id); Object select(CurrentActor actor,Long templateId); List<?> memberPlans(CurrentActor actor); Object schedule(CurrentActor actor,Long memberPlanId,LocalDate date); List<?> calendar(CurrentActor actor,LocalDate from,LocalDate to); void deleteSchedule(CurrentActor actor,Long id); }
