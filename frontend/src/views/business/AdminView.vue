@@ -26,6 +26,7 @@
             <el-table-column prop="tenantName" label="关联门店" min-width="140" />
             <el-table-column prop="username" label="用户名" min-width="120" />
             <el-table-column prop="email" label="邮箱" min-width="180" />
+            <el-table-column label="电话" min-width="130"><template #default="{ row }">{{ row.phone || '—' }}</template></el-table-column>
             <el-table-column prop="status" label="状态" width="90" />
             <el-table-column label="角色" min-width="130"><template #default="{ row }">{{ formatRoles(row.roles) }}</template></el-table-column>
             <el-table-column prop="membershipType" label="会员类型" min-width="120" />
@@ -48,10 +49,12 @@
       <el-form label-width="90px">
         <el-form-item v-if="authStore.isPlatformAdmin" label="关联门店" required><el-select v-model="newUser.tenantId" filterable placeholder="选择门店" style="width: 100%"><el-option v-for="tenant in tenants" :key="tenant.id" :label="tenant.name" :value="tenant.id" /></el-select></el-form-item>
         <el-form-item label="用户名" required><el-input v-model="newUser.username" /></el-form-item>
-        <el-form-item label="邮箱" required><el-input v-model="newUser.email" /></el-form-item>
+        <el-form-item label="邮箱"><el-input v-model="newUser.email" /></el-form-item>
+        <el-form-item label="电话"><el-input v-model="newUser.phone" /></el-form-item>
         <el-form-item label="姓名" required><el-input v-model="newUser.displayName" /></el-form-item>
         <el-form-item label="密码" required><el-input v-model="newUser.password" type="password" show-password /></el-form-item>
         <el-form-item label="角色" required><el-select v-model="newUser.role" style="width: 100%"><el-option label="会员" value="MEMBER" /><el-option label="教练" value="COACH" /><el-option v-if="authStore.isPlatformAdmin" label="健身房管理员" value="GYM_ADMIN" /></el-select></el-form-item>
+        <el-form-item v-if="newUser.role === 'MEMBER'" label="会员卡类型" required><el-select v-model="newUser.membershipCardType" placeholder="选择会员卡类型" style="width: 100%"><el-option label="周卡" value="周卡" /><el-option label="月卡" value="月卡" /><el-option label="年卡" value="年卡" /></el-select></el-form-item>
       </el-form>
       <template #footer><el-button @click="createUserVisible = false">取消</el-button><el-button type="primary" :loading="creatingUser" @click="createUser">保存</el-button></template>
     </el-dialog>
@@ -82,7 +85,7 @@ const usersLoading = ref(false)
 const createUserVisible = ref(false)
 const creatingUser = ref(false)
 const filters = reactive<{ tenantId?: number; displayName: string }>({ displayName: '' })
-const newUser = reactive({ tenantId: undefined as number | undefined, username: '', email: '', displayName: '', password: '', role: 'MEMBER' })
+const newUser = reactive({ tenantId: undefined as number | undefined, username: '', email: '', phone: '', displayName: '', password: '', role: 'MEMBER', membershipCardType: '' })
 
 function formatRoles(roles: string[] = []) { return roles.map(role => ({ MEMBER: '会员', COACH: '教练', GYM_ADMIN: '健身房管理员', PLATFORM_ADMIN: '平台管理员' } as Record<string, string>)[role] || role).join('、') || '—' }
 
@@ -102,9 +105,9 @@ async function loadTenants() {
   tenants.value = rows.map((tenant: any) => ({ id: Number(tenant.id), name: String(tenant.name || tenant.code || tenant.id) }))
 }
 
-function openCreateUser() { Object.assign(newUser, { tenantId: authStore.isPlatformAdmin ? undefined : authStore.tenantId ?? undefined, username: '', email: '', displayName: '', password: '', role: 'MEMBER' }); createUserVisible.value = true }
+function openCreateUser() { Object.assign(newUser, { tenantId: authStore.isPlatformAdmin ? undefined : authStore.tenantId ?? undefined, username: '', email: '', phone: '', displayName: '', password: '', role: 'MEMBER', membershipCardType: '' }); createUserVisible.value = true }
 async function createUser() {
-  if (!newUser.username || !newUser.email || !newUser.displayName || !newUser.password || (authStore.isPlatformAdmin && !newUser.tenantId)) { ElMessage.warning('请完整填写用户信息'); return }
+  if (!newUser.username || !newUser.displayName || !newUser.password || (newUser.role === 'MEMBER' && !newUser.membershipCardType) || (authStore.isPlatformAdmin && !newUser.tenantId)) { ElMessage.warning('请完整填写用户信息'); return }
   creatingUser.value = true
   try { await usersApi.create({ ...newUser, ...(authStore.isPlatformAdmin ? { tenantId: newUser.tenantId } : {}) }); ElMessage.success('用户创建成功'); createUserVisible.value = false; await loadUsers() } finally { creatingUser.value = false }
 }

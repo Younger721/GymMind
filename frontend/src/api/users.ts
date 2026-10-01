@@ -3,8 +3,8 @@ import type { ApiResponse } from '@/types/api'
 import type { PageResponse } from '@/types/page'
 
 export const usersApi = {
-  list(page = 0, size = 20) {
-    return apiClient.get<any, ApiResponse<PageResponse<unknown>>>('/v1/users', { params: { page, size } })
+  list(page = 0, size = 20, filters?: { tenantId?: number; displayName?: string }) {
+    return apiClient.get<any, ApiResponse<PageResponse<unknown>>>('/v1/users', { params: { page, size, ...filters } })
   },
   statistics() {
     return apiClient.get<any, ApiResponse<{
@@ -16,7 +16,7 @@ export const usersApi = {
       membershipTypeCounts: Record<string, number>
     }>>('/v1/users/statistics')
   },
-  create(body: Record<string, unknown>) {
+  create(body: { tenantId?: number; username: string; email?: string; password: string; displayName: string; phone?: string; role: string; membershipCardType?: string }) {
     return apiClient.post('/v1/users', body)
   },
   changeStatus(userId: number, status: string) {

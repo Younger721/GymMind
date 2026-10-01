@@ -19,6 +19,13 @@ import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.tenancy.domain.repository.TenantRepository;
+import com.gymmind.member.domain.model.Member;
+import com.gymmind.member.domain.repository.MemberRepository;
+import com.gymmind.membership.domain.model.MemberMembership;
+import com.gymmind.membership.domain.model.MembershipPackage;
+import com.gymmind.membership.domain.repository.MemberMembershipRepository;
+import com.gymmind.membership.domain.repository.MembershipPackageRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -34,6 +41,8 @@ import java.util.Set;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class DefaultUserAdministrationService implements UserAdministrationService {
@@ -43,6 +52,10 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     private final RoleRepository roles;
     private final PermissionRepository permissions;
     private final RolePermissionRepository rolePermissions;
+    private final TenantRepository tenants;
+    private final MemberRepository members;
+    private final MemberMembershipRepository memberships;
+    private final MembershipPackageRepository packages;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @Autowired
@@ -50,12 +63,26 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
                                              UserRoleRepository userRoles,
                                              RoleRepository roles,
                                              PermissionRepository permissions,
-                                             RolePermissionRepository rolePermissions) {
+                                             RolePermissionRepository rolePermissions,
+                                             TenantRepository tenants,
+                                             MemberRepository members,
+                                             MemberMembershipRepository memberships,
+                                             MembershipPackageRepository packages) {
         this.users = Objects.requireNonNull(users, "users");
         this.userRoles = Objects.requireNonNull(userRoles, "userRoles");
         this.roles = Objects.requireNonNull(roles, "roles");
         this.permissions = permissions;
         this.rolePermissions = rolePermissions;
+        this.tenants = tenants;
+        this.members = members;
+        this.memberships = memberships;
+        this.packages = packages;
+    }
+
+    public DefaultUserAdministrationService(UserAccountRepository users, UserRoleRepository userRoles,
+                                             RoleRepository roles, PermissionRepository permissions,
+                                             RolePermissionRepository rolePermissions) {
+        this(users, userRoles, roles, permissions, rolePermissions, null, null, null, null);
     }
 
     public DefaultUserAdministrationService(UserAccountRepository users, UserRoleRepository userRoles, RoleRepository roles) {
@@ -65,7 +92,9 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     @Override
     @Transactional
     public UserView create(CurrentActor actor, CreateUserCommand command) {
-        Long tenantId = requireGymAdmin(actor, "user:write");
+        Long tenantId = ActorAccess.isSuperAdmin(actor)
+                ? commandTenant(actor, command == null ? null : command.tenantId())
+                : requireGymAdmin(actor, "user:write");
         Objects.requireNonNull(command, "command");
         RoleCode roleCode = requireTenantRole(actor, command.role());
         String email = UserAccount.normalizeEmail(command.email());
@@ -78,13 +107,33 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
         }
         UserAccount user = UserAccount.tenantUser(tenantId, email, username,
                 passwordEncoder.encode(required(command.password(), "Password")),
-                required(command.displayName(), "Display name"), roleCode);
+                required(command.displayName(), "Display name"), command.phone(), roleCode);
         UserAccount saved = users.save(user);
         Role role = roles.findByCode(roleCode)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
         if (!role.isActive()) throw new BusinessException(ErrorCode.FORBIDDEN);
         userRoles.save(UserRole.assign(saved, role));
+        if (roleCode == RoleCode.MEMBER) {
+            createMembership(saved, tenantId, command.membershipCardType());
+        }
         return view(saved, Set.of(roleCode));
+    }
+
+    private void createMembership(UserAccount user, Long tenantId, String cardType) {
+        Integer validDays = switch (cardType == null ? "" : cardType.trim()) {
+            case "周卡" -> 7;
+            case "月卡" -> 30;
+            case "年卡" -> 365;
+            default -> null;
+        };
+        if (validDays == null || members == null || memberships == null || packages == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "会员必须选择会员卡类型");
+        }
+        MembershipPackage membershipPackage = packages.findByTenantIdAndValidDays(tenantId, validDays)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "对应会员套餐不存在"));
+        Member member = members.save(Member.create(tenantId, user.getId(), null, user.getDisplayName(), user.getPhone()));
+        memberships.save(MemberMembership.create(tenantId, member.getId(), membershipPackage.getId(),
+                membershipPackage.getEntitlementCount(), Instant.now(), Instant.now().plus(validDays, ChronoUnit.DAYS)));
     }
 
     @Override
@@ -276,6 +325,12 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
         return role;
     }
 
+    private static Long commandTenant(CurrentActor actor, Long requestedTenantId) {
+        Long tenantId = requestedTenantId != null ? requestedTenantId : ActorAccess.tenantId(actor);
+        if (tenantId == null || tenantId <= 0) throw new BusinessException(ErrorCode.TENANT_CONTEXT_REQUIRED);
+        return tenantId;
+    }
+
     private static String required(String value, String label) {
         if (value == null || value.trim().isEmpty()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, label + " must not be blank");
@@ -284,13 +339,15 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     }
 
     private UserSummary summary(UserAccount user) {
-        return new UserSummary(user.getId(), user.getTenantId(), user.getNormalizedUsername(),
-                user.getNormalizedEmail(), user.getDisplayName(), user.getStatus(),
+        String tenantName = tenants == null || user.getTenantId() == null ? null
+                : tenants.findById(user.getTenantId()).map(t -> t.getName()).orElse(null);
+        return new UserSummary(user.getId(), user.getTenantId(), tenantName, user.getNormalizedUsername(),
+                user.getNormalizedEmail(), user.getDisplayName(), user.getPhone(), user.getStatus(),
                 userRoles.findRoleCodesByUserId(user.getId()), null, null);
     }
 
     private UserView view(UserAccount user, Set<RoleCode> roleCodes) {
         return new UserView(user.getId(), user.getTenantId(), user.getNormalizedUsername(),
-                user.getNormalizedEmail(), user.getDisplayName(), user.getStatus(), roleCodes);
+                user.getNormalizedEmail(), user.getDisplayName(), user.getPhone(), user.getStatus(), roleCodes);
     }
 }
