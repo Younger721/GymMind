@@ -6,6 +6,7 @@ import com.gymmind.membership.domain.model.MemberMembershipStatus;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 public record ProfileOverview(
         Long userId,
@@ -16,6 +17,7 @@ public record ProfileOverview(
         LocalDate from,
         LocalDate to,
         long checkInCount,
+        List<LocalDate> checkInDates,
         MemberInfo member,
         MembershipInfo membership) {
 

@@ -1,6 +1,7 @@
 package com.gymmind.profile.application;
 
 import com.gymmind.booking.domain.repository.GymCheckInRepository;
+import com.gymmind.booking.domain.model.GymCheckIn;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.iam.domain.model.UserAccount;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,6 +48,10 @@ class ProfileOverviewServiceTest {
         when(users.findById(7L)).thenReturn(Optional.of(user));
         when(members.findByTenantIdAndUserId(10L, 7L)).thenReturn(Optional.of(member));
         when(checkIns.countByTenantIdAndMemberIdAndCheckInAtBetween(eq(10L), eq(12L), any(), any())).thenReturn(4L);
+        when(checkIns.findByTenantIdAndMemberIdAndCheckInAtBetween(eq(10L), eq(12L), any(), any())).thenReturn(List.of(
+                GymCheckIn.create(10L, 12L, Instant.parse("2026-09-05T01:00:00Z"), 3L, null),
+                GymCheckIn.create(10L, 12L, Instant.parse("2026-09-05T08:00:00Z"), 3L, null),
+                GymCheckIn.create(10L, 12L, Instant.parse("2026-09-18T01:00:00Z"), 3L, null)));
         when(memberships.findActiveByTenantIdAndMemberId(10L, 12L)).thenReturn(Optional.of(membership));
         when(packages.findByTenantIdAndId(10L, 21L)).thenReturn(Optional.of(packageValue));
 
@@ -54,6 +60,7 @@ class ProfileOverviewServiceTest {
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
 
         assertThat(overview.checkInCount()).isEqualTo(4L);
+        assertThat(overview.checkInDates()).containsExactly(LocalDate.of(2026, 9, 5), LocalDate.of(2026, 9, 18));
         assertThat(overview.member()).isNotNull();
         assertThat(overview.member().checkInToken()).isEqualTo(member.getCheckInToken());
         assertThat(overview.membership().packageName()).isEqualTo("月卡-基础");

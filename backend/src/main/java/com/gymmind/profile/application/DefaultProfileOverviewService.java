@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -59,18 +60,24 @@ public class DefaultProfileOverviewService implements ProfileOverviewService {
                 : null;
         if (member == null) {
             return new ProfileOverview(user.getId(), user.getNormalizedUsername(), user.getNormalizedEmail(),
-                    user.getDisplayName(), user.getStatus(), effectiveFrom, effectiveTo, 0L, null, null);
+                    user.getDisplayName(), user.getStatus(), effectiveFrom, effectiveTo, 0L, List.of(), null, null);
         }
 
         Instant start = effectiveFrom.atStartOfDay(ZoneId.systemDefault()).toInstant();
         Instant end = effectiveTo.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant();
         long count = checkIns.countByTenantIdAndMemberIdAndCheckInAtBetween(tenantId, member.getId(), start, end);
+        List<LocalDate> checkInDates = checkIns.findByTenantIdAndMemberIdAndCheckInAtBetween(tenantId, member.getId(), start, end)
+                .stream()
+                .map(value -> value.getCheckInAt().atZone(ZoneId.systemDefault()).toLocalDate())
+                .distinct()
+                .sorted()
+                .toList();
         ProfileOverview.MembershipInfo membership = memberships
                 .findActiveByTenantIdAndMemberId(tenantId, member.getId())
                 .map(value -> membershipInfo(tenantId, value))
                 .orElse(null);
         return new ProfileOverview(user.getId(), user.getNormalizedUsername(), user.getNormalizedEmail(),
-                user.getDisplayName(), user.getStatus(), effectiveFrom, effectiveTo, count,
+                user.getDisplayName(), user.getStatus(), effectiveFrom, effectiveTo, count, checkInDates,
                 new ProfileOverview.MemberInfo(member.getId(), member.getFullName(), member.getMemberNumber(),
                         member.getStatus(), member.getCheckInToken()), membership);
     }

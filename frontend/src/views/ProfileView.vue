@@ -16,11 +16,28 @@
 
       <div class="simple-card checkin-card">
         <div class="card-head">
-          <div><h3>签到统计</h3><span class="muted">选择日期范围查看签到次数</span></div>
-          <el-date-picker v-model="dateRange" type="daterange" value-format="YYYY-MM-DD" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" @change="loadOverview" />
+          <div><h3>签到统计</h3><span class="muted">选择月份查看出勤记录</span></div>
+          <div class="month-picker">
+            <el-button text circle aria-label="上个月" @click="changeMonth(-1)"><ArrowLeft /></el-button>
+            <el-date-picker v-model="selectedMonth" type="month" value-format="YYYY-MM" placeholder="选择月份" @change="loadOverview" />
+            <el-button text circle aria-label="下个月" @click="changeMonth(1)"><ArrowRight /></el-button>
+          </div>
         </div>
-        <div class="checkin-count">{{ overview?.checkInCount ?? 0 }} <small>次</small></div>
-        <div class="muted">{{ overview?.from || '—' }} 至 {{ overview?.to || '—' }}</div>
+        <div class="checkin-summary">
+          <div><strong>{{ checkInDays }}</strong><small>出勤天</small></div>
+          <div class="summary-secondary"><strong>{{ overview?.checkInCount ?? 0 }}</strong><small>签到次</small></div>
+        </div>
+        <div class="month-comparison" :class="comparisonTone">{{ comparisonText }}</div>
+        <div class="attendance-calendar">
+          <div v-for="day in weekDays" :key="day" class="calendar-weekday">{{ day }}</div>
+          <template v-for="(cell, index) in calendarCells" :key="index">
+            <div v-if="cell === null" class="calendar-cell calendar-blank"></div>
+            <div v-else class="calendar-cell" :class="{ attended: checkedDates.has(cell.date) }">
+              <span>{{ cell.day }}</span>
+              <i v-if="checkedDates.has(cell.date)" class="attendance-dot" aria-label="已签到"></i>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -44,32 +61,55 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { ElMessageBox } from 'element-plus'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
 import { useAuthStore } from '@/stores/auth'
 import { profileApi, type ProfileOverview } from '@/api/profile'
 
 const authStore = useAuthStore()
 const overview = ref<ProfileOverview | null>(null)
-const dateRange = ref<[string, string] | null>(null)
+const previousOverview = ref<ProfileOverview | null>(null)
+const selectedMonth = ref(monthKey(new Date()))
 const qrDataUrl = ref('')
 const error = ref('')
+const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 
-function monthRange(): [string, string] {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  const lastDay = new Date(year, today.getMonth() + 1, 0).getDate()
-  return [`${year}-${month}-01`, `${year}-${month}-${String(lastDay).padStart(2, '0')}`]
+interface CalendarCell { date: string; day: number }
+
+function monthKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function monthRange(month: string): [string, string] {
+  const [year, value] = month.split('-').map(Number)
+  const lastDay = new Date(year, value, 0).getDate()
+  return [`${year}-${String(value).padStart(2, '0')}-01`, `${year}-${String(value).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`]
+}
+
+function previousMonth(month: string): string {
+  const [year, value] = month.split('-').map(Number)
+  return monthKey(new Date(year, value - 2, 1))
+}
+
+function changeMonth(offset: number) {
+  const [year, month] = selectedMonth.value.split('-').map(Number)
+  selectedMonth.value = monthKey(new Date(year, month - 1 + offset, 1))
+  void loadOverview()
 }
 
 async function loadOverview() {
-  const range = dateRange.value || monthRange()
-  dateRange.value = range
+  const range = monthRange(selectedMonth.value)
+  const previousRange = monthRange(previousMonth(selectedMonth.value))
   error.value = ''
   try {
-    const response = await profileApi.getOverview(range[0], range[1])
+    const [response, previousResponse] = await Promise.all([
+      profileApi.getOverview(range[0], range[1]),
+      profileApi.getOverview(previousRange[0], previousRange[1])
+    ])
     overview.value = response.data
+    previousOverview.value = previousResponse.data
     qrDataUrl.value = response.data?.member?.checkInToken
       ? await QRCode.toDataURL(response.data.member.checkInToken, { width: 220, margin: 2 })
       : ''
@@ -77,6 +117,30 @@ async function loadOverview() {
     error.value = '个人信息加载失败，请稍后重试'
   }
 }
+
+const checkedDates = computed(() => new Set(overview.value?.checkInDates || []))
+const checkInDays = computed(() => checkedDates.value.size)
+const previousCheckInDays = computed(() => new Set(previousOverview.value?.checkInDates || []).size)
+const comparisonTone = computed(() => checkInDays.value >= previousCheckInDays.value ? 'positive' : 'negative')
+const comparisonText = computed(() => {
+  const difference = checkInDays.value - previousCheckInDays.value
+  if (difference === 0) return '与上月持平'
+  if (previousCheckInDays.value === 0) return `比上月多 ${difference} 天`
+  const percentage = Math.round(Math.abs(difference) / previousCheckInDays.value * 100)
+  return difference > 0
+    ? `比上月多 ${difference} 天，提升 ${percentage}%`
+    : `比上月少 ${Math.abs(difference)} 天，下降 ${percentage}%`
+})
+const calendarCells = computed<Array<CalendarCell | null>>(() => {
+  const [year, month] = selectedMonth.value.split('-').map(Number)
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const firstDay = (new Date(year, month - 1, 1).getDay() + 6) % 7
+  const cells: Array<CalendarCell | null> = Array.from({ length: firstDay }, () => null)
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ date: `${selectedMonth.value}-${String(day).padStart(2, '0')}`, day })
+  }
+  return cells
+})
 
 function formatDate(value?: string) {
   return value ? value.slice(0, 10) : '—'
@@ -110,9 +174,22 @@ onMounted(loadOverview)
 .overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
 .simple-card h3 { margin: 0 0 14px; font-size: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.month-picker { display: flex; align-items: center; gap: 2px; }
+.month-picker .el-date-editor { width: 138px; }
 .muted { color: var(--text-muted); font-size: 12px; }
-.checkin-count { margin-top: 34px; font-size: 42px; font-weight: 700; color: var(--primary); }
-.checkin-count small { font-size: 16px; font-weight: 500; }
+.checkin-summary { display: flex; align-items: baseline; gap: 24px; margin: 22px 0 4px; }
+.checkin-summary strong { color: var(--primary); font-size: 38px; line-height: 1; }
+.checkin-summary small { margin-left: 5px; color: var(--text-muted); font-size: 13px; }
+.summary-secondary strong { color: var(--text); font-size: 22px; }
+.month-comparison { min-height: 20px; margin-bottom: 14px; font-size: 12px; font-weight: 600; }
+.month-comparison.positive { color: #16805b; }
+.month-comparison.negative { color: #b65f4f; }
+.attendance-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.calendar-weekday { padding: 5px 0; color: var(--text-muted); font-size: 11px; text-align: center; }
+.calendar-cell { min-height: 38px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-radius: 6px; color: var(--text); font-size: 12px; }
+.calendar-cell.attended { background: #effaf4; color: #0e805d; font-weight: 700; }
+.calendar-blank { background: transparent; }
+.attendance-dot { width: 5px; height: 5px; border-radius: 50%; background: #19b477; }
 .member-grid { align-items: stretch; }
 .qr-card { text-align: center; }
 .qr-wrap { display: flex; justify-content: center; margin: 12px 0; }
@@ -121,7 +198,7 @@ onMounted(loadOverview)
 .membership-type { font-size: 30px; font-weight: 700; color: var(--primary); margin: 18px 0 24px; }
 .empty-card { color: var(--text-muted); }
 
-@media (max-width: 720px) { .overview-grid { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .overview-grid { grid-template-columns: 1fr; } .card-head { align-items: stretch; } .month-picker { justify-content: space-between; } }
 
 .label {
   color: var(--text-muted);

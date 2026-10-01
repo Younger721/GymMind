@@ -10,6 +10,7 @@ export interface ProfileOverview {
   from: string
   to: string
   checkInCount: number
+  checkInDates: string[]
   member: {
     id: number
     fullName: string
