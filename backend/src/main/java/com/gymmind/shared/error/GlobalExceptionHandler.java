@@ -9,6 +9,7 @@ import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -33,7 +34,38 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleValidation(Exception exception) {
-        return response(ErrorCode.VALIDATION_FAILED);
+        if (exception instanceof MethodArgumentNotValidException ex) {
+            return validationResponse(ex.getBindingResult().getFieldErrors().stream()
+                    .map(this::formatFieldError).findFirst().orElse("请求参数不合法"));
+        }
+        if (exception instanceof BindException ex) {
+            return validationResponse(ex.getBindingResult().getFieldErrors().stream()
+                    .map(this::formatFieldError).findFirst().orElse("请求参数不合法"));
+        }
+        if (exception instanceof ConstraintViolationException ex) {
+            return validationResponse(ex.getConstraintViolations().stream()
+                    .map(violation -> violation.getPropertyPath() + "：" + violation.getMessage())
+                    .findFirst().orElse("请求参数不合法"));
+        }
+        if (exception instanceof HttpMessageNotReadableException) {
+            return validationResponse("请求体格式不正确，请检查 JSON 内容");
+        }
+        if (exception instanceof MissingServletRequestParameterException ex) {
+            return validationResponse("缺少请求参数：" + ex.getParameterName());
+        }
+        if (exception instanceof MethodArgumentTypeMismatchException ex) {
+            return validationResponse("请求参数“" + ex.getName() + "”格式不正确");
+        }
+        return validationResponse("请求参数不合法");
+    }
+
+    private String formatFieldError(FieldError error) {
+        return error.getField() + "：" + error.getDefaultMessage();
+    }
+
+    private ResponseEntity<ApiResponse<Void>> validationResponse(String message) {
+        return ResponseEntity.status(ErrorCode.VALIDATION_FAILED.status())
+                .body(ApiResponse.error(ErrorCode.VALIDATION_FAILED.name(), message));
     }
 
     @ExceptionHandler(BusinessException.class)

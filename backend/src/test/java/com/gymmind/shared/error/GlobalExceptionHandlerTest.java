@@ -52,7 +52,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(header().string(TraceIdFilter.HEADER_NAME, "validation_trace_1"))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.message").value("参数校验失败"))
+                .andExpect(jsonPath("$.message").value("name：不能为空"))
                 .andExpect(jsonPath("$.traceId").value("validation_trace_1"));
     }
 
@@ -100,7 +100,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.message").value("参数校验失败"))
+                .andExpect(jsonPath("$.message").value("请求体格式不正确，请检查 JSON 内容"))
                 .andExpect(jsonPath("$.traceId").value("malformed_trace_1"));
     }
 
