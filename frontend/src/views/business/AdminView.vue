@@ -24,6 +24,7 @@
           <el-table :data="users" v-loading="usersLoading" stripe>
             <el-table-column prop="id" label="ID" width="70" />
             <el-table-column prop="tenantName" label="关联门店" min-width="140" />
+            <el-table-column prop="displayName" label="姓名" min-width="120" />
             <el-table-column prop="username" label="用户名" min-width="120" />
             <el-table-column prop="email" label="邮箱" min-width="180" />
             <el-table-column label="电话" min-width="130"><template #default="{ row }">{{ row.phone || '—' }}</template></el-table-column>
