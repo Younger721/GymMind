@@ -9,6 +9,7 @@ export const trainingApi={
  overview(since?:string,until?:string,memberId?:number){return apiClient.get<any,ApiResponse<TrainingOverview>>('/v1/training/overview',{params:{since,until,memberId}})},
  templates(){return apiClient.get<any,ApiResponse<TrainingTemplate[]>>('/v1/training/plans')},
  template(id:number){return apiClient.get<any,ApiResponse<TrainingTemplate>>(`/v1/training/plans/${id}`)},
+ createTemplate(payload:any){return apiClient.post<any,ApiResponse<TrainingTemplate>>('/v1/training/plans',payload)},
  select(templateId:number){return apiClient.post<any,ApiResponse<MemberPlan>>('/v1/training/member-plans',null,{params:{templateId}})},
  memberPlans(){return apiClient.get<any,ApiResponse<MemberPlan[]>>('/v1/training/member-plans')},
  calendar(from:string,to:string){return apiClient.get<any,ApiResponse<TrainingSchedule[]>>('/v1/training/calendar',{params:{from,to}})},
