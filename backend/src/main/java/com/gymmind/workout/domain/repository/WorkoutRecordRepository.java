@@ -8,6 +8,8 @@ import java.util.List;
 public interface WorkoutRecordRepository {
     WorkoutRecord save(WorkoutRecord record);
 
+    List<WorkoutRecord> findByTenantIdAndDateBetween(Long tenantId, LocalDate since, LocalDate until);
+
     List<WorkoutRecord> findRecentCompleted(Long tenantId, Long memberId,
                                             LocalDate since, LocalDate until, int limit);
 }

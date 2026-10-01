@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 interface SpringDataWorkoutRecordRepository extends JpaRepository<WorkoutRecord, Long> {
+    List<WorkoutRecord> findByTenantIdAndWorkoutDateBetweenOrderByWorkoutDateDescIdDesc(Long tenantId, LocalDate since, LocalDate until);
     List<WorkoutRecord> findByTenantIdAndMemberIdAndStatusAndWorkoutDateBetweenOrderByWorkoutDateDescIdDesc(
             Long tenantId, Long memberId, WorkoutRecordStatus status, LocalDate since, LocalDate until,
             Pageable pageable);

@@ -23,6 +23,11 @@ class JpaWorkoutRecordRepository implements WorkoutRecordRepository {
     }
 
     @Override
+    public List<WorkoutRecord> findByTenantIdAndDateBetween(Long tenantId, LocalDate since, LocalDate until) {
+        return delegate.findByTenantIdAndWorkoutDateBetweenOrderByWorkoutDateDescIdDesc(tenantId, since, until);
+    }
+
+    @Override
     public List<WorkoutRecord> findRecentCompleted(Long tenantId, Long memberId,
                                                    LocalDate since, LocalDate until, int limit) {
         if (tenantId == null || memberId == null || since == null || until == null || limit <= 0) {
