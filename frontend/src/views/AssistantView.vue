@@ -298,7 +298,7 @@ const send = async () => {
   messages.value.push({ role: 'user', content: text }); input.value = ''; loading.value = true; scrollBottom()
   persistConversation()
   try {
-    const message = { role: 'assistant' as const, content: '', sources: [] as UiMessage['sources'], processSteps: [] as HarnessProgressEvent[], processExpanded: true }
+    const message = reactive<UiMessage>({ role: 'assistant', content: '', sources: [], processSteps: [], processExpanded: true })
     messages.value.push(message)
     await harnessApi.stream(
       { sessionId: sessionId.value, question: text, plugins: sessionPlugins.value,

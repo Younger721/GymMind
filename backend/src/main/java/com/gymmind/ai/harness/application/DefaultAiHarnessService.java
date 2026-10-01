@@ -183,15 +183,24 @@ public class DefaultAiHarnessService implements AiHarnessService {
             registry.find(pluginId).ifPresent(plugin -> {
                 AiHarnessPluginDescriptor descriptor = plugin.descriptor();
                 int contextBefore = context.size();
+                String startMessage = "knowledge_search".equals(pluginId)
+                        ? "启动 RAG 插件"
+                        : "启动" + descriptor.name();
+                String completeMessage = "knowledge_search".equals(pluginId)
+                        ? "RAG 检索完成"
+                        : descriptor.name() + "完成";
                 progress.accept(new AiProgressEvent(pluginId, "plugin_start", AiProgressEvent.Status.STARTED,
-                        "启动" + descriptor.name(), null));
+                        startMessage, null));
                 try {
                     plugin.contribute(actor, question, context, progress);
                     progress.accept(new AiProgressEvent(pluginId, "plugin_complete", AiProgressEvent.Status.COMPLETED,
-                            descriptor.name() + "完成", context.size() - contextBefore));
+                            completeMessage, context.size() - contextBefore));
                 } catch (RuntimeException exception) {
+                    String errorMessage = "knowledge_search".equals(pluginId)
+                            ? "RAG 插件执行失败"
+                            : descriptor.name() + "执行失败";
                     progress.accept(new AiProgressEvent(pluginId, "plugin_error", AiProgressEvent.Status.FAILED,
-                            descriptor.name() + "执行失败", null));
+                            errorMessage, null));
                     throw exception;
                 }
             });
