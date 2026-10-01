@@ -11,7 +11,7 @@ public record CreateUserRequest(
         Long tenantId,
         @NotBlank @Size(max = 64) String username,
         @Email @Size(max = 320) String email,
-        @NotBlank @Size(min = 8, max = 72) String password,
+        @NotBlank @Size(min = 6, max = 72) String password,
         @NotBlank @Size(max = 128) String displayName,
         @Size(max = 32) String phone,
         @NotNull RoleCode role,
