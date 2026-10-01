@@ -12,10 +12,6 @@
           <div class="stat-card"><span>健身房管理员</span><strong>{{ stats.gymAdminCount }}</strong></div>
           <div v-if="authStore.isPlatformAdmin" class="stat-card"><span>平台管理员</span><strong>{{ stats.platformAdminCount }}</strong></div>
         </div>
-        <div v-if="Object.keys(stats.membershipTypeCounts).length" class="membership-summary simple-card">
-          <span class="summary-title">套餐类型</span>
-          <el-tag v-for="(count, name) in stats.membershipTypeCounts" :key="name" effect="plain">{{ name }}：{{ count }}</el-tag>
-        </div>
         <div class="user-panel simple-card">
           <div class="user-toolbar">
             <el-select v-if="authStore.isPlatformAdmin" v-model="filters.tenantId" clearable filterable placeholder="按门店筛选" style="width: 210px" @change="loadUsers">
@@ -27,7 +23,7 @@
           </div>
           <el-table :data="users" v-loading="usersLoading" stripe>
             <el-table-column prop="id" label="ID" width="70" />
-            <el-table-column v-if="authStore.isPlatformAdmin" prop="tenantName" label="关联门店" min-width="140" />
+            <el-table-column prop="tenantName" label="关联门店" min-width="140" />
             <el-table-column prop="username" label="用户名" min-width="120" />
             <el-table-column prop="email" label="邮箱" min-width="180" />
             <el-table-column prop="status" label="状态" width="90" />
