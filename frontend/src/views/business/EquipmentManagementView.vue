@@ -5,8 +5,25 @@
         <h2 class="simple-page-title">器械管理</h2>
         <p class="simple-page-desc">管理健身房器械库存、申请与配送入库</p>
       </div>
-      <el-button v-if="isGymAdmin" type="primary" @click="openRequest">申请器械</el-button>
-      <el-button v-if="isPlatformAdmin && activeTab === 'catalog'" type="primary" @click="openCatalog">新增器械</el-button>
+      <div class="page-actions">
+        <el-select
+          v-if="isPlatformAdmin"
+          v-model="selectedTenantId"
+          filterable
+          placeholder="选择健身房"
+          class="tenant-filter"
+          @change="handleTenantChange"
+        >
+          <el-option
+            v-for="tenant in tenants"
+            :key="tenant.id"
+            :label="`${tenant.name}（ID: ${tenant.id}）`"
+            :value="tenant.id"
+          />
+        </el-select>
+        <el-button v-if="isGymAdmin" type="primary" @click="openRequest">申请器械</el-button>
+        <el-button v-if="isPlatformAdmin && activeTab === 'catalog'" type="primary" @click="openCatalog">新增器械</el-button>
+      </div>
     </div>
 
     <el-tabs v-model="activeTab" @tab-change="loadActiveTab">
@@ -65,9 +82,11 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { equipmentApi, type EquipmentCatalog, type EquipmentDelivery, type EquipmentInventory, type EquipmentRequest, type EquipmentRequestStatus, type EquipmentStatistics } from '@/api/equipment'
+import { tenancyApi } from '@/api/tenancy'
 import { useAuthStore } from '@/stores/auth'
 
 type Tab = 'overview' | 'catalog' | 'inventory' | 'requests' | 'deliveries'
+type TenantOption = { id: number; name: string; status?: string }
 const auth = useAuthStore()
 const isPlatformAdmin = computed(() => auth.isPlatformAdmin)
 const isGymAdmin = computed(() => auth.roles.includes('GYM_ADMIN'))
@@ -78,6 +97,8 @@ const activeOnly = ref(true)
 const catalogKeyword = ref('')
 const inventoryKeyword = ref('')
 const requestStatus = ref<EquipmentRequestStatus>()
+const tenants = ref<TenantOption[]>([])
+const selectedTenantId = ref<number>()
 const catalogs = ref<EquipmentCatalog[]>([])
 const inventory = ref<EquipmentInventory[]>([])
 const requests = ref<EquipmentRequest[]>([])
@@ -105,11 +126,35 @@ function statusLabel(status: EquipmentRequestStatus) { return statusOptions.find
 function statusType(status: EquipmentRequestStatus) { return status === 'REJECTED' || status === 'CANCELLED' ? 'danger' : status === 'RECEIVED' ? 'success' : status === 'PENDING' ? 'warning' : 'info' }
 function formatDate(value?: string) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—' }
 function requestItemsLabel(request: EquipmentRequest) { return request.items.map(item => `${item.name} × ${item.requestedQuantity}`).join('、') }
+function effectiveTenantId() { return isPlatformAdmin.value ? selectedTenantId.value ?? tenants.value[0]?.id : undefined }
+async function loadTenants() {
+  if (!isPlatformAdmin.value) return
+  try {
+    const response = await tenancyApi.listTenants(0, 200)
+    const data = (response as any)?.data
+    const rows = Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : []
+    tenants.value = rows
+      .map((tenant: Record<string, unknown>) => ({
+        id: Number(tenant.id),
+        name: String(tenant.name || tenant.code || `健身房 #${tenant.id}`),
+        status: String(tenant.status || '')
+      }))
+      .filter((tenant: TenantOption) => Number.isSafeInteger(tenant.id) && tenant.id > 0 && tenant.status !== 'DISABLED')
+      .sort((left: TenantOption, right: TenantOption) => left.id - right.id)
+    if (selectedTenantId.value == null || !tenants.value.some(tenant => tenant.id === selectedTenantId.value)) {
+      selectedTenantId.value = tenants.value[0]?.id
+    }
+  } catch {
+    tenants.value = []
+    selectedTenantId.value = undefined
+  }
+}
+async function handleTenantChange() { await loadActiveTab() }
 async function loadCatalog() { try { catalogs.value = (await equipmentApi.listCatalog(activeOnly.value)).data ?? [] } catch { ElMessage.error('器械目录加载失败') } }
-async function loadInventory() { try { inventory.value = (await equipmentApi.listInventory()).data ?? [] } catch { ElMessage.error('库存加载失败') } }
-async function loadRequests() { try { requests.value = (await equipmentApi.listRequests(requestStatus.value ? { status: requestStatus.value } : undefined)).data ?? [] } catch { ElMessage.error('申请记录加载失败') } }
-async function loadStatistics() { try { statistics.value = (await equipmentApi.statistics()).data } catch { ElMessage.error('统计加载失败') } }
-async function loadDeliveries() { try { deliveries.value = (await equipmentApi.listDeliveries()).data ?? [] } catch { ElMessage.error('配送记录加载失败') } }
+async function loadInventory() { try { inventory.value = (await equipmentApi.listInventory(effectiveTenantId())).data ?? [] } catch { ElMessage.error('库存加载失败') } }
+async function loadRequests() { try { requests.value = (await equipmentApi.listRequests({ tenantId: effectiveTenantId(), ...(requestStatus.value ? { status: requestStatus.value } : {}) })).data ?? [] } catch { ElMessage.error('申请记录加载失败') } }
+async function loadStatistics() { try { statistics.value = (await equipmentApi.statistics(effectiveTenantId())).data } catch { ElMessage.error('统计加载失败') } }
+async function loadDeliveries() { try { deliveries.value = (await equipmentApi.listDeliveries(effectiveTenantId())).data ?? [] } catch { ElMessage.error('配送记录加载失败') } }
 async function loadActiveTab() { loading.value = true; try { if (activeTab.value === 'overview') await loadStatistics(); if (activeTab.value === 'catalog') await loadCatalog(); if (activeTab.value === 'inventory') await loadInventory(); if (activeTab.value === 'requests') await loadRequests(); if (activeTab.value === 'deliveries') await loadDeliveries() } finally { loading.value = false } }
 function openCatalog(catalog?: EquipmentCatalog) { editingCatalog.value = catalog || null; Object.assign(catalogForm, catalog ? { name: catalog.name, category: catalog.category, description: catalog.description || '', unit: catalog.unit, active: catalog.active } : { name: '', category: '', description: '', unit: '台', active: true }); catalogDialogVisible.value = true }
 async function saveCatalog() { if (!catalogForm.name.trim() || !catalogForm.category.trim()) { ElMessage.warning('请填写器械名称和分类'); return }; saving.value = true; try { if (editingCatalog.value) await equipmentApi.updateCatalog(editingCatalog.value.id, { ...catalogForm }); else await equipmentApi.createCatalog({ ...catalogForm }); ElMessage.success('器械目录已保存'); catalogDialogVisible.value = false; await loadCatalog() } catch { /* client interceptor提示 */ } finally { saving.value = false } }
@@ -121,11 +166,13 @@ function openDeliver(request: EquipmentRequest) { selectedRequest.value = reques
 async function submitDecision() { if (!selectedRequest.value) return; saving.value = true; try { if (decisionMode.value === 'approve') await equipmentApi.approve(selectedRequest.value.id, { ...decisionQuantities }, decisionComment.value.trim() || undefined); else await equipmentApi.deliver(selectedRequest.value.id, { ...decisionQuantities }, decisionComment.value.trim() || undefined); ElMessage.success(decisionMode.value === 'approve' ? '申请已审批' : '配送已登记'); decisionDialogVisible.value = false; await loadRequests() } catch { /* client interceptor提示 */ } finally { saving.value = false } }
 async function rejectRequest(request: EquipmentRequest) { try { const result = await ElMessageBox.prompt('填写驳回原因（可选）', '驳回申请', { confirmButtonText: '驳回', cancelButtonText: '取消' }); await equipmentApi.reject(request.id, result.value?.trim() || undefined); ElMessage.success('申请已驳回'); await loadRequests() } catch { /* 用户取消 */ } }
 async function receiveRequest(request: EquipmentRequest) { saving.value = true; try { await equipmentApi.receive(request.id); ElMessage.success('已确认入库'); await loadRequests(); await loadInventory() } catch { /* client interceptor提示 */ } finally { saving.value = false } }
-onMounted(async () => { await loadCatalog(); await loadActiveTab() })
+onMounted(async () => { await loadTenants(); await loadCatalog(); await loadActiveTab() })
 </script>
 
 <style scoped>
 .page-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:12px; }
+.page-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+.tenant-filter { width:260px; }
 .overview-grid { display:grid; grid-template-columns:repeat(6,minmax(120px,1fr)); gap:12px; }
 .stat-card { padding:18px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
 .stat-card span { display:block; color:var(--text-muted); font-size:12px; margin-bottom:10px; }
@@ -138,5 +185,5 @@ onMounted(async () => { await loadCatalog(); await loadActiveTab() })
 .decision-line span { flex:1; font-size:13px; }
 .detail-summary p { margin:0 0 10px; }
 @media (max-width: 1000px) { .overview-grid { grid-template-columns:repeat(3,minmax(120px,1fr)); } }
-@media (max-width: 650px) { .overview-grid { grid-template-columns:repeat(2,minmax(120px,1fr)); } .toolbar { flex-wrap:wrap; } }
+@media (max-width: 650px) { .overview-grid { grid-template-columns:repeat(2,minmax(120px,1fr)); } .toolbar { flex-wrap:wrap; } .page-head { flex-direction:column; } .page-actions { width:100%; justify-content:flex-start; } .tenant-filter { width:100%; } }
 </style>
