@@ -66,6 +66,14 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
     }
 
     private OperationsMetricsQuery resolveQuery(String input, LocalDate today) {
+        if (input != null && (input.contains("最近7天") || input.contains("近7天"))) {
+            LocalDate first = today.minusDays(6);
+            return new OperationsMetricsQuery(first, today, first + "至" + today);
+        }
+        if (input != null && (input.contains("最近30天") || input.contains("近30天"))) {
+            LocalDate first = today.minusDays(29);
+            return new OperationsMetricsQuery(first, today, first + "至" + today);
+        }
         if (input != null && input.contains("上上个月")) {
             LocalDate first = today.withDayOfMonth(1).minusMonths(2);
             return new OperationsMetricsQuery(first, first.plusMonths(1).minusDays(1), first.getYear() + "年" + first.getMonthValue() + "月");
