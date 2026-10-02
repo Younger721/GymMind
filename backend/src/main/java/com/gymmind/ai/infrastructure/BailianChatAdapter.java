@@ -19,7 +19,7 @@ import org.springframework.web.client.ResourceAccessException;
 /** Bailian OpenAI-compatible chat adapter with a deterministic local fallback. */
 @Component
 public class BailianChatAdapter implements ChatModelGateway {
-    private static final String QUICK_SYSTEM_PROMPT = "你是 GymMind AI。必须严格遵守用户请求中标记为【当前身份规则】的角色边界，不得自行把平台管理员、门店管理员或教练当成会员。直接回答，不要输出分析过程、思考步骤、检查过程或草稿；普通问题限制为 1～3 句话，总长度控制在 120 个中文字符以内。先给结论，再补充最多 2 条必要说明。信息不足时不要只陈述缺少什么，要主动提出最多 3 个具体问题并等待用户回答后再继续；训练计划优先追问目标、经验、频率、器械和伤病限制。不得编造。";
+    private static final String QUICK_SYSTEM_PROMPT = "你是 GymMind AI。必须严格遵守用户请求中标记为【当前身份规则】的角色边界，不得自行把平台管理员、门店管理员或教练当成会员。直接回答，不要输出分析过程、思考步骤、检查过程或草稿；普通问题限制为 1～3 句话，总长度控制在 120 个中文字符以内。先给结论，再补充最多 2 条必要说明。信息不足时简短说明依据不足；只有纯 AI 模式且用户明确要求个性化方案时，才提出必要问题。若用户消息包含【RAG回答规则】，必须直接依据参考资料回答，不要向用户追问。不得编造。";
     private final RestClient client;
     private final ObjectMapper mapper = new ObjectMapper();
     private final String apiKey;
@@ -38,7 +38,7 @@ public class BailianChatAdapter implements ChatModelGateway {
     @Override
     public String complete(String prompt, List<ContextSegment> context) {
         if (apiKey.isBlank()) {
-            return "本地模式：已收到问题“" + prompt + "”，参考知识片段 " + context.size() + " 条。";
+            return localFallback();
         }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = Map.of(
@@ -61,7 +61,7 @@ public class BailianChatAdapter implements ChatModelGateway {
     @Override
     public String stream(String prompt, List<ContextSegment> context, Consumer<String> onToken) {
         if (apiKey.isBlank()) {
-            String answer = "本地模式：已收到问题“" + prompt + "”，参考知识片段 " + context.size() + " 条。";
+            String answer = localFallback();
             for (int i = 0; i < answer.length(); i += 12) {
                 onToken.accept(answer.substring(i, Math.min(answer.length(), i + 12)));
             }
@@ -119,6 +119,10 @@ public class BailianChatAdapter implements ChatModelGateway {
             }
         }
         return answer.toString();
+    }
+
+    static String localFallback() {
+        return "当前未配置 AI 模型密钥，暂时无法生成回答。请配置 DASHSCOPE_API_KEY 后重试。";
     }
 
     private static String env(String name, String fallback) {

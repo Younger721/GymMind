@@ -15,4 +15,13 @@ class BailianChatAdapterPromptTest {
         assertThat(prompt).contains("1～3 句话");
         assertThat(prompt).contains("120 个中文字符");
     }
+
+    @Test
+    void localFallbackDoesNotEchoInternalPrompt() {
+        String answer = BailianChatAdapter.localFallback();
+
+        assertThat(answer).doesNotContain("当前身份规则");
+        assertThat(answer).doesNotContain("纯AI回答规则");
+        assertThat(answer).contains("DASHSCOPE_API_KEY");
+    }
 }
