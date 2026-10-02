@@ -8,6 +8,7 @@ import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.iam.domain.model.RoleCode;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -25,6 +26,7 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
+    @Autowired
     public GymOperationsMetricsTool(JdbcTemplate jdbc) {
         this(jdbc, Clock.systemDefaultZone());
     }
