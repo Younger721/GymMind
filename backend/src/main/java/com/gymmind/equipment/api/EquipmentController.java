@@ -6,6 +6,7 @@ import com.gymmind.equipment.application.EquipmentRequestView;
 import com.gymmind.equipment.application.EquipmentService;
 import com.gymmind.equipment.application.EquipmentStatisticsView;
 import com.gymmind.equipment.application.EquipmentDeliveryView;
+import com.gymmind.equipment.application.PlatformEquipmentInventoryView;
 import com.gymmind.equipment.domain.model.EquipmentRequestStatus;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
@@ -102,6 +103,16 @@ public class EquipmentController {
         return ApiResponse.success(service.statistics(actors.requireCurrent(), tenantId));
     }
 
+    @GetMapping("/warehouse/inventory")
+    public ApiResponse<List<PlatformEquipmentInventoryView>> warehouseInventory() {
+        return ApiResponse.success(service.listWarehouseInventory(actors.requireCurrent()));
+    }
+
+    @PostMapping("/warehouse/adjust")
+    public ApiResponse<List<PlatformEquipmentInventoryView>> adjustWarehouse(@Valid @RequestBody WarehouseAdjustmentRequest request) {
+        return ApiResponse.success(service.adjustWarehouseInventory(actors.requireCurrent(), request.catalogId(), request.delta(), request.reason()));
+    }
+
     public record CatalogRequest(@NotBlank String name, @NotBlank String category, String description,
                                  String unit, boolean active) {
         public CatalogRequest(String name, String category, String description, String unit) {
@@ -113,4 +124,5 @@ public class EquipmentController {
     public record RequestItem(@NotNull Long catalogId, @Positive int quantity) {}
     public record DecisionRequest(@NotEmpty Map<@NotNull Long, @Positive Integer> quantities, String comment) {}
     public record CommentRequest(String comment) {}
+    public record WarehouseAdjustmentRequest(@NotNull Long catalogId, int delta, @NotBlank String reason) {}
 }

@@ -18,6 +18,8 @@ public interface EquipmentService {
     EquipmentRequestView receive(CurrentActor actor, Long id);
     List<EquipmentDeliveryView> listDeliveries(CurrentActor actor, Long tenantId);
     EquipmentStatisticsView statistics(CurrentActor actor, Long tenantId);
+    List<PlatformEquipmentInventoryView> listWarehouseInventory(CurrentActor actor);
+    List<PlatformEquipmentInventoryView> adjustWarehouseInventory(CurrentActor actor, Long catalogId, int delta, String reason);
 
     record RequestItemCommand(Long catalogId, int quantity) {}
 }

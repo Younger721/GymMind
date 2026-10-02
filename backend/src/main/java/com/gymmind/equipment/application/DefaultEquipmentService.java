@@ -10,6 +10,10 @@ import com.gymmind.equipment.domain.repository.EquipmentCatalogRepository;
 import com.gymmind.equipment.domain.repository.EquipmentDeliveryRepository;
 import com.gymmind.equipment.domain.repository.EquipmentInventoryRepository;
 import com.gymmind.equipment.domain.repository.EquipmentRequestRepository;
+import com.gymmind.equipment.domain.repository.PlatformEquipmentAdjustmentRepository;
+import com.gymmind.equipment.domain.repository.PlatformEquipmentInventoryRepository;
+import com.gymmind.equipment.domain.model.PlatformEquipmentAdjustment;
+import com.gymmind.equipment.domain.model.PlatformEquipmentInventory;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
@@ -34,15 +38,20 @@ public class DefaultEquipmentService implements EquipmentService {
     private final EquipmentRequestRepository requests;
     private final EquipmentDeliveryRepository deliveries;
     private final TenantRepository tenants;
+    private final PlatformEquipmentInventoryRepository warehouse;
+    private final PlatformEquipmentAdjustmentRepository adjustments;
 
     public DefaultEquipmentService(EquipmentCatalogRepository catalogs, EquipmentInventoryRepository inventories,
                                    EquipmentRequestRepository requests, EquipmentDeliveryRepository deliveries,
-                                   TenantRepository tenants) {
+                                   TenantRepository tenants, PlatformEquipmentInventoryRepository warehouse,
+                                   PlatformEquipmentAdjustmentRepository adjustments) {
         this.catalogs = catalogs;
         this.inventories = inventories;
         this.requests = requests;
         this.deliveries = deliveries;
         this.tenants = tenants;
+        this.warehouse = warehouse;
+        this.adjustments = adjustments;
     }
 
     @Transactional(readOnly = true)
@@ -56,7 +65,9 @@ public class DefaultEquipmentService implements EquipmentService {
     public EquipmentCatalogView createCatalog(CurrentActor actor, String name, String category, String description, String unit) {
         requirePlatform(actor);
         try {
-            return EquipmentCatalogView.from(catalogs.save(EquipmentCatalog.create(name, category, description, unit)));
+            EquipmentCatalog saved = catalogs.save(EquipmentCatalog.create(name, category, description, unit));
+            warehouse.save(PlatformEquipmentInventory.create(saved.getId(), 0));
+            return EquipmentCatalogView.from(saved);
         } catch (IllegalArgumentException ex) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
@@ -155,10 +166,21 @@ public class DefaultEquipmentService implements EquipmentService {
         requirePlatform(actor);
         EquipmentRequest request = findRequest(actor, id);
         try {
+            for (EquipmentRequestItem item : request.getItems()) {
+                int quantity = quantities == null ? 0 : quantities.getOrDefault(item.getCatalogId(), 0);
+                if (quantity > 0) {
+                    warehouse.findByCatalogId(item.getCatalogId())
+                            .orElseThrow(() -> new IllegalArgumentException("Warehouse inventory not found"));
+                }
+            }
             request.deliver(quantities);
             int total = request.getItems().stream().mapToInt(EquipmentRequestItem::getDeliveredQuantity).sum();
             for (EquipmentRequestItem item : request.getItems()) {
                 if (item.getDeliveredQuantity() <= 0) continue;
+                PlatformEquipmentInventory platformInventory = warehouse.findByCatalogId(item.getCatalogId())
+                        .orElseThrow(() -> new IllegalArgumentException("Warehouse inventory not found"));
+                platformInventory.registerDelivery(item.getDeliveredQuantity());
+                warehouse.save(platformInventory);
                 EquipmentInventory inventory = inventories.findByTenantIdAndCatalogId(request.getTenantId(), item.getCatalogId())
                         .orElseGet(() -> EquipmentInventory.create(request.getTenantId(), item.getCatalogId()));
                 inventory.registerDelivery(item.getDeliveredQuantity());
@@ -178,9 +200,18 @@ public class DefaultEquipmentService implements EquipmentService {
         requireGymAdmin(actor);
         EquipmentRequest request = findRequest(actor, id);
         try {
+            for (EquipmentRequestItem item : request.getItems()) {
+                if (item.getDeliveredQuantity() <= 0) continue;
+                warehouse.findByCatalogId(item.getCatalogId())
+                        .orElseThrow(() -> new IllegalStateException("Warehouse inventory not found"));
+            }
             request.receive();
             for (EquipmentRequestItem item : request.getItems()) {
                 if (item.getReceivedQuantity() <= 0) continue;
+                PlatformEquipmentInventory platformInventory = warehouse.findByCatalogId(item.getCatalogId())
+                        .orElseThrow(() -> new IllegalStateException("Warehouse inventory not found"));
+                platformInventory.confirmReceipt(item.getReceivedQuantity());
+                warehouse.save(platformInventory);
                 EquipmentInventory inventory = inventories.findByTenantIdAndCatalogId(request.getTenantId(), item.getCatalogId())
                         .orElseThrow(() -> new IllegalStateException("Inventory not found"));
                 inventory.confirmReceipt(item.getReceivedQuantity());
@@ -217,7 +248,38 @@ public class DefaultEquipmentService implements EquipmentService {
         }).toList();
         long catalogCount = scope == null ? catalogs.findAll().size() : inventory.stream().map(EquipmentInventory::getCatalogId).distinct().count();
         long visibleTenantCount = scope == null ? tenants.findAll(PageRequest.of(0, 10000)).getTotalElements() : 1;
-        return new EquipmentStatisticsView(visibleTenantCount, catalogCount, inventory.stream().mapToInt(EquipmentInventory::getDeliveredQuantity).sum(), inventory.stream().mapToInt(EquipmentInventory::getReceivedQuantity).sum(), pending, waiting, summary);
+        List<PlatformEquipmentInventoryView> warehouseInventory = ActorAccess.isSuperAdmin(actor) ? listWarehouseInventory(actor) : List.of();
+        int warehouseQuantity = warehouseInventory.stream().mapToInt(PlatformEquipmentInventoryView::warehouseQuantity).sum();
+        int inTransitQuantity = warehouseInventory.stream().mapToInt(PlatformEquipmentInventoryView::inTransitQuantity).sum();
+        int platformTotalQuantity = warehouseInventory.stream().mapToInt(PlatformEquipmentInventoryView::totalQuantity).sum();
+        return new EquipmentStatisticsView(visibleTenantCount, catalogCount, inventory.stream().mapToInt(EquipmentInventory::getDeliveredQuantity).sum(), inventory.stream().mapToInt(EquipmentInventory::getReceivedQuantity).sum(), pending, waiting, summary, warehouseQuantity, inTransitQuantity, platformTotalQuantity, warehouseInventory);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PlatformEquipmentInventoryView> listWarehouseInventory(CurrentActor actor) {
+        requirePlatform(actor);
+        Map<Long, Integer> tenantReceived = inventories.findAll().stream()
+                .collect(Collectors.groupingBy(EquipmentInventory::getCatalogId, Collectors.summingInt(EquipmentInventory::getReceivedQuantity)));
+        return warehouse.findAll().stream().map(item -> warehouseView(item, tenantReceived.getOrDefault(item.getCatalogId(), 0))).toList();
+    }
+
+    @Transactional
+    public List<PlatformEquipmentInventoryView> adjustWarehouseInventory(CurrentActor actor, Long catalogId, int delta, String reason) {
+        requirePlatform(actor);
+        if (catalogId == null || delta == 0 || reason == null || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        catalogs.findById(catalogId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        try {
+            PlatformEquipmentInventory item = warehouse.findByCatalogId(catalogId)
+                    .orElseGet(() -> PlatformEquipmentInventory.create(catalogId, 0));
+            item.adjust(delta);
+            warehouse.save(item);
+            adjustments.save(PlatformEquipmentAdjustment.create(catalogId, delta, reason, actor.userId()));
+            return listWarehouseInventory(actor);
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
     }
 
     private EquipmentRequest findRequest(CurrentActor actor, Long id) {
@@ -235,6 +297,12 @@ public class DefaultEquipmentService implements EquipmentService {
     private EquipmentInventoryView inventoryView(EquipmentInventory inventory) {
         EquipmentCatalog catalog = catalogs.findById(inventory.getCatalogId()).orElse(null);
         return new EquipmentInventoryView(inventory.getTenantId(), tenantName(inventory.getTenantId()), inventory.getCatalogId(), catalog == null ? "未知器械" : catalog.getName(), catalog == null ? "" : catalog.getCategory(), catalog == null ? "台" : catalog.getUnit(), inventory.getDeliveredQuantity(), inventory.getReceivedQuantity(), inventory.getUsableQuantity(), inventory.getAbnormalQuantity(), inventory.getLastReceivedAt());
+    }
+
+    private PlatformEquipmentInventoryView warehouseView(PlatformEquipmentInventory item, int tenantReceivedQuantity) {
+        EquipmentCatalog catalog = catalogs.findById(item.getCatalogId()).orElse(null);
+        int total = item.getWarehouseQuantity() + item.getInTransitQuantity() + tenantReceivedQuantity;
+        return new PlatformEquipmentInventoryView(item.getCatalogId(), catalog == null ? "未知器械" : catalog.getName(), catalog == null ? "" : catalog.getCategory(), catalog == null ? "台" : catalog.getUnit(), item.getWarehouseQuantity(), item.getInTransitQuantity(), item.getOutboundQuantity(), tenantReceivedQuantity, total, item.getLastAdjustedAt());
     }
 
     private EquipmentRequestView requestView(EquipmentRequest request) {

@@ -68,6 +68,23 @@ export interface EquipmentStatistics {
   pendingRequests: number
   waitingReceive: number
   inventory: Array<{ tenantId: number; tenantName?: string; catalogName: string; quantity: number }>
+  warehouseQuantity: number
+  inTransitQuantity: number
+  platformTotalQuantity: number
+  warehouseInventory: PlatformEquipmentInventory[]
+}
+
+export interface PlatformEquipmentInventory {
+  catalogId: number
+  name: string
+  category: string
+  unit: string
+  warehouseQuantity: number
+  inTransitQuantity: number
+  outboundQuantity: number
+  tenantReceivedQuantity: number
+  totalQuantity: number
+  lastAdjustedAt?: string
 }
 
 export const equipmentApi = {
@@ -106,5 +123,11 @@ export const equipmentApi = {
   },
   statistics(tenantId?: number) {
     return apiClient.get<any, ApiResponse<EquipmentStatistics>>('/v1/equipment/statistics', { params: tenantId ? { tenantId } : undefined })
+  },
+  warehouseInventory() {
+    return apiClient.get<any, ApiResponse<PlatformEquipmentInventory[]>>('/v1/equipment/warehouse/inventory')
+  },
+  adjustWarehouse(catalogId: number, delta: number, reason: string) {
+    return apiClient.post<any, ApiResponse<PlatformEquipmentInventory[]>>('/v1/equipment/warehouse/adjust', { catalogId, delta, reason })
   }
 }
