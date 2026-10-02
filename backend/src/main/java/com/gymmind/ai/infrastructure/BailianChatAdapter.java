@@ -26,12 +26,12 @@ public class BailianChatAdapter implements ChatModelGateway {
     private final String model;
 
     public BailianChatAdapter(RestClient.Builder builder) {
-        String baseUrl = env("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1");
+        String baseUrl = firstEnv("DASHSCOPE_BASE_URL", "AI_API_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1");
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(3)).build());
         requestFactory.setReadTimeout(Duration.ofSeconds(30));
         this.client = builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
-        this.apiKey = env("DASHSCOPE_API_KEY", "");
+        this.apiKey = firstEnv("DASHSCOPE_API_KEY", "AI_API_KEY", "");
         this.model = env("DASHSCOPE_CHAT_MODEL", "qwen3.7-plus");
     }
 
@@ -128,6 +128,11 @@ public class BailianChatAdapter implements ChatModelGateway {
     private static String env(String name, String fallback) {
         String value = System.getenv(name);
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static String firstEnv(String primary, String secondary, String fallback) {
+        String value = env(primary, "");
+        return value.isBlank() ? env(secondary, fallback) : value;
     }
 
     static String quickSystemPrompt() {
