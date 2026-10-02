@@ -286,6 +286,17 @@ public class DefaultAiHarnessService implements AiHarnessService {
         boolean directToolAnswerUsageRecorded = false;
         if (nativeToolFlow) {
             orchestration = toolOrchestrator.decide(actor, prompt, List.of(), enabled, progress);
+            if (orchestration.toolResults().isEmpty()
+                    && actor.roles().contains(com.gymmind.iam.domain.model.RoleCode.GYM_ADMIN)
+                    && GymOperationsMetricsTool.matchesQuestion(question)
+                    && capabilityRegistry.find("gym_operations_metrics").map(capability -> capability.supports(actor)).orElse(false)) {
+                // tool_choice=auto may still return text for a current-data question; ground it with a safe default query.
+                progress.accept(new AiProgressEvent("orchestrator", "tool_decision", AiProgressEvent.Status.COMPLETED,
+                        "经营问题未触发工具，使用安全查询兜底", 1));
+                AiToolOrchestrationResult fallback = toolOrchestrator.executeNamed(
+                        actor, question, List.of("gym_operations_metrics"), progress);
+                orchestration = new AiToolOrchestrationResult(null, fallback.toolResults(), fallback.context());
+            }
             if (orchestration.usage() != null && usage != null) {
                 directToolAnswerUsageRecorded = orchestration.directAnswer() != null;
                 try {

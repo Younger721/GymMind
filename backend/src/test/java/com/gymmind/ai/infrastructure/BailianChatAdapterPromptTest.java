@@ -17,6 +17,13 @@ class BailianChatAdapterPromptTest {
     }
 
     @Test
+    void quickPromptPrefersDatabaseToolsForCurrentOperationalFacts() {
+        assertThat(BailianChatAdapter.quickSystemPrompt())
+                .contains("涉及签到、预约、会籍、训练记录或门店经营数据时")
+                .contains("优先调用提供的只读工具");
+    }
+
+    @Test
     void localFallbackDoesNotEchoInternalPrompt() {
         String answer = BailianChatAdapter.localFallback();
 

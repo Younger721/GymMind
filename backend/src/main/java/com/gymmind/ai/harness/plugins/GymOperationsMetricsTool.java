@@ -1,8 +1,11 @@
 package com.gymmind.ai.harness.plugins;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.ai.harness.AiHarnessPlugin;
 import com.gymmind.ai.harness.AiHarnessPluginDescriptor;
+import com.gymmind.ai.harness.capability.ToolExecutionContext;
+import com.gymmind.ai.harness.capability.ToolResult;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.iam.domain.model.RoleCode;
@@ -15,7 +18,10 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /** 门店运营数据工具：固定白名单 SQL，模型永远不能传入任意 SQL。 */
 @Component
@@ -52,6 +58,73 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
         context.add(new ContextSegment("gym-operations:" + tenantId + ":" + query.from(), "gym_operations_metrics", format(metrics)));
     }
 
+    /** 执行经过 JSON Schema 和白名单校验的结构化查询意图。 */
+    ToolResult executeStructured(CurrentActor actor, JsonNode arguments, ToolExecutionContext executionContext) {
+        if (!supports(actor)) return ToolResult.error("当前身份无权使用门店运营数据");
+        try {
+            OperationsQueryIntent intent = parseStructuredIntent(arguments, LocalDate.now(clock));
+            Long tenantId = ActorAccess.tenantId(actor);
+            OperationsMetricsContext metrics = query(tenantId, intent.query());
+            List<String> grouped = intent.groupBy() == OperationsGroupBy.NONE
+                    ? List.of()
+                    : groupedCheckIns(tenantId, intent.query(), intent.groupBy(), intent.metrics());
+            String text = formatStructured(metrics, intent, grouped);
+            return ToolResult.context("gym-operations:" + tenantId + ":" + intent.query().from(), text);
+        } catch (IllegalArgumentException exception) {
+            return ToolResult.error(exception.getMessage());
+        } catch (RuntimeException exception) {
+            return ToolResult.error("门店运营数据暂时不可用");
+        }
+    }
+
+    static OperationsQueryIntent parseStructuredIntent(JsonNode arguments, LocalDate today) {
+        if (arguments == null || !arguments.isObject()) throw new IllegalArgumentException("工具参数必须是 JSON 对象");
+        Set<String> allowed = Set.of("metrics", "period", "from", "to", "groupBy", "comparePrevious");
+        arguments.fieldNames().forEachRemaining(name -> {
+            if (name.equals("sql") || name.equals("querySql") || name.equals("rawQuery")) {
+                throw new IllegalArgumentException("工具不接受 SQL 或任意查询语句");
+            }
+            if (!allowed.contains(name)) throw new IllegalArgumentException("不支持的查询参数：" + name);
+        });
+        List<OperationsMetric> metrics = new ArrayList<>();
+        JsonNode metricNode = arguments.get("metrics");
+        if (metricNode != null) {
+            if (!metricNode.isArray() || metricNode.isEmpty() || metricNode.size() > OperationsMetric.values().length) {
+                throw new IllegalArgumentException("metrics 必须是非空白名单数组");
+            }
+            for (JsonNode value : metricNode) {
+                if (!value.isTextual()) throw new IllegalArgumentException("运营指标必须是字符串");
+                try {
+                    metrics.add(OperationsMetric.valueOf(value.asText()));
+                } catch (IllegalArgumentException exception) {
+                    throw new IllegalArgumentException("不支持的运营指标：" + value.asText());
+                }
+            }
+            metrics = new ArrayList<>(new LinkedHashSet<>(metrics));
+        }
+        String fromText = text(arguments, "from");
+        String toText = text(arguments, "to");
+        OperationsMetricsQuery query;
+        if (fromText != null || toText != null) {
+            if (fromText == null || toText == null) throw new IllegalArgumentException("from 和 to 必须同时提供");
+            try {
+                LocalDate from = LocalDate.parse(fromText);
+                LocalDate to = LocalDate.parse(toText);
+                query = new OperationsMetricsQuery(from, to, from + "至" + to);
+            } catch (java.time.format.DateTimeParseException exception) {
+                throw new IllegalArgumentException("日期必须使用 YYYY-MM-DD 格式");
+            }
+        } else {
+            String period = text(arguments, "period");
+            query = resolveStructuredPeriod(period, today);
+        }
+        if (query.from().plusDays(366).isBefore(query.to())) throw new IllegalArgumentException("查询时间范围不能超过 366 天");
+        OperationsGroupBy groupBy = enumValue(arguments, "groupBy", OperationsGroupBy.class, OperationsGroupBy.NONE);
+        JsonNode compare = arguments.get("comparePrevious");
+        if (compare != null && !compare.isBoolean()) throw new IllegalArgumentException("comparePrevious 必须是布尔值");
+        return new OperationsQueryIntent(metrics, query, groupBy, compare != null && compare.asBoolean());
+    }
+
     public static boolean matchesQuestion(String question) {
         return question != null && question.matches("(?s).*?(" + QUESTION_KEYWORDS + ").*");
     }
@@ -65,6 +138,24 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
         if (previous == 0) return current == 0 ? BigDecimal.ZERO.setScale(1) : BigDecimal.valueOf(100).setScale(1);
         return BigDecimal.valueOf(current - previous).multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(previous), 1, RoundingMode.HALF_UP);
+    }
+
+    private static OperationsMetricsQuery resolveStructuredPeriod(String period, LocalDate today) {
+        String value = period == null || period.isBlank() ? "PREVIOUS_MONTH" : period;
+        return switch (value) {
+            case "PREVIOUS_MONTH" -> previousCalendarMonth(today);
+            case "PREVIOUS_PREVIOUS_MONTH" -> {
+                LocalDate first = today.withDayOfMonth(1).minusMonths(2);
+                yield new OperationsMetricsQuery(first, first.plusMonths(1).minusDays(1), first.getYear() + "年" + first.getMonthValue() + "月");
+            }
+            case "CURRENT_MONTH" -> {
+                LocalDate first = today.withDayOfMonth(1);
+                yield new OperationsMetricsQuery(first, today, first.getYear() + "年" + first.getMonthValue() + "月至今");
+            }
+            case "LAST_7_DAYS" -> new OperationsMetricsQuery(today.minusDays(6), today, today.minusDays(6) + "至" + today);
+            case "LAST_30_DAYS" -> new OperationsMetricsQuery(today.minusDays(29), today, today.minusDays(29) + "至" + today);
+            default -> throw new IllegalArgumentException("不支持的时间范围：" + value);
+        };
     }
 
     private OperationsMetricsQuery resolveQuery(String input, LocalDate today) {
@@ -136,5 +227,68 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
             m.followUps().forEach(item -> out.append(" ").append(item.memberName()).append("（").append(item.daysSinceLastCheckIn()).append("天未到店）；"));
         }
         return out.toString();
+    }
+
+    private List<String> groupedCheckIns(Long tenantId, OperationsMetricsQuery query,
+                                         OperationsGroupBy groupBy, List<OperationsMetric> metrics) {
+        if (metrics.stream().noneMatch(Set.of(OperationsMetric.UNIQUE_VISITORS, OperationsMetric.CHECK_IN_COUNT)::contains)) {
+            return List.of();
+        }
+        String expression = switch (groupBy) {
+            case DAY -> "DATE(check_in_at)";
+            case WEEK -> "YEARWEEK(check_in_at, 1)";
+            case MONTH -> "DATE_FORMAT(check_in_at, '%Y-%m')";
+            case NONE -> throw new IllegalArgumentException("不支持的分组维度");
+        };
+        String sql = "SELECT " + expression + " AS bucket, COUNT(DISTINCT member_id) AS visitors, COUNT(*) AS check_ins "
+                + "FROM gym_check_in WHERE tenant_id=? AND DATE(check_in_at) BETWEEN ? AND ? GROUP BY " + expression
+                + " ORDER BY MIN(check_in_at)";
+        return jdbc.query(sql, (rs, row) -> {
+            StringBuilder line = new StringBuilder(rs.getString("bucket"));
+            if (metrics.contains(OperationsMetric.UNIQUE_VISITORS)) line.append(" 到店会员").append(rs.getLong("visitors")).append("人");
+            if (metrics.contains(OperationsMetric.CHECK_IN_COUNT)) line.append(" 签到").append(rs.getLong("check_ins")).append("次");
+            return line.toString();
+        }, tenantId, query.from(), query.to());
+    }
+
+    private String formatStructured(OperationsMetricsContext m, OperationsQueryIntent intent, List<String> grouped) {
+        Set<OperationsMetric> selected = intent.metrics().isEmpty()
+                ? EnumSet.allOf(OperationsMetric.class)
+                : EnumSet.copyOf(intent.metrics());
+        StringBuilder out = new StringBuilder("【门店运营数据，统计周期：").append(m.periodLabel()).append("】");
+        if (selected.contains(OperationsMetric.UNIQUE_VISITORS)) out.append("\n到店会员数：").append(m.uniqueVisitors()).append("人");
+        if (selected.contains(OperationsMetric.CHECK_IN_COUNT)) out.append("\n签到次数：").append(m.checkInCount()).append("次");
+        if (selected.contains(OperationsMetric.ACTIVE_MEMBERS)) out.append("\n当前有效会员：").append(m.activeMembers()).append("人");
+        if (selected.contains(OperationsMetric.BOOKINGS)) out.append("\n预约数：").append(m.bookings()).append("次");
+        if (selected.contains(OperationsMetric.ATTENDANCE_RATE)) out.append("\n预约到店率：").append(m.attendanceRate()).append("%");
+        if (selected.contains(OperationsMetric.EXPIRING_MEMBERS)) out.append("\n30天内到期会员：").append(m.expiringWithin30Days()).append("人");
+        if (selected.contains(OperationsMetric.INACTIVE_MEMBERS)) out.append("\n连续30天未到店：").append(m.inactiveMembers()).append("人");
+        if (selected.contains(OperationsMetric.WORKOUT_MEMBERS)) out.append("\n训练会员：").append(m.workoutMembers()).append("人");
+        if (selected.contains(OperationsMetric.WORKOUT_COUNT)) out.append("\n训练次数：").append(m.workoutCount()).append("次");
+        if (intent.comparePrevious() && selected.contains(OperationsMetric.UNIQUE_VISITORS)) {
+            out.append("\n上期到店会员数：").append(m.previousUniqueVisitors()).append("人；变化率：").append(m.visitorChangeRate()).append("%");
+        }
+        if (!grouped.isEmpty()) {
+            out.append("\n分组维度：").append(intent.groupBy().name()).append("\n分组结果：");
+            grouped.forEach(value -> out.append("\n- ").append(value));
+        }
+        return out.toString();
+    }
+
+    private static String text(JsonNode node, String name) {
+        JsonNode value = node.get(name);
+        if (value == null || value.isNull()) return null;
+        if (!value.isTextual()) throw new IllegalArgumentException(name + " 必须是字符串");
+        return value.asText();
+    }
+
+    private static <E extends Enum<E>> E enumValue(JsonNode node, String name, Class<E> type, E fallback) {
+        String value = text(node, name);
+        if (value == null || value.isBlank()) return fallback;
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("不支持的" + name + "：" + value);
+        }
     }
 }
