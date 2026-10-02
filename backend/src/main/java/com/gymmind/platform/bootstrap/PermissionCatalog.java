@@ -45,6 +45,15 @@ public final class PermissionCatalog {
             new Entry("coach-relation:manage", "Manage coach relationships"),
             new Entry("course:read", "Read courses"),
             new Entry("course:write", "Manage courses"),
+            new Entry("equipment:catalog:read", "Read equipment catalog"),
+            new Entry("equipment:catalog:write", "Manage equipment catalog"),
+            new Entry("equipment:inventory:read", "Read equipment inventory"),
+            new Entry("equipment:request:read", "Read equipment requests"),
+            new Entry("equipment:request:write", "Submit equipment requests"),
+            new Entry("equipment:request:approve", "Approve equipment requests"),
+            new Entry("equipment:request:deliver", "Register equipment deliveries"),
+            new Entry("equipment:request:receive", "Confirm equipment receipt"),
+            new Entry("equipment:stats:read", "Read equipment statistics"),
             new Entry("membership:read", "Read membership packages"),
             new Entry("membership:write", "Manage membership packages"),
             new Entry("payment:write", "Record offline payments"),
@@ -89,6 +98,7 @@ public final class PermissionCatalog {
             new MenuEntry("menu:knowledge", "Knowledge base"),
             new MenuEntry("menu:operations", "Gym operations"),
             new MenuEntry("menu:courses", "Courses"),
+            new MenuEntry("menu:equipment", "Equipment"),
             new MenuEntry("menu:training", "Training"),
             new MenuEntry("menu:analytics", "Risk and analytics"),
             new MenuEntry("menu:admin", "Users and roles"),
@@ -183,6 +193,10 @@ public final class PermissionCatalog {
                 "coach-relation:reject", "coach-relation:manage", "membership:read", "membership:write",
                 "payment:write", "order:write", "checkin:write"));
         mappings.put("menu:courses", Set.of("course:read", "course:write", "booking:write"));
+        mappings.put("menu:equipment", Set.of(
+                "equipment:catalog:read", "equipment:catalog:write", "equipment:inventory:read",
+                "equipment:request:read", "equipment:request:write", "equipment:request:approve",
+                "equipment:request:deliver", "equipment:request:receive", "equipment:stats:read"));
         mappings.put("menu:training", Set.of(
                 "exercise:read", "exercise:write", "video:read", "video:write", "workout:read",
                 "workout:write", "workout-record:read", "workout-record:write", "nutrition:read",
@@ -218,7 +232,7 @@ public final class PermissionCatalog {
         Map<RoleCode, Set<String>> defaults = new EnumMap<>(RoleCode.class);
         defaults.put(RoleCode.GYM_ADMIN, Set.of(
                 "menu:dashboard", "menu:assistant", "menu:knowledge", "menu:operations", "menu:courses",
-                "menu:training", "menu:analytics", "menu:admin", "menu:tenant-settings", "menu:profile"));
+                "menu:equipment", "menu:training", "menu:analytics", "menu:admin", "menu:tenant-settings", "menu:profile"));
         defaults.put(RoleCode.COACH, Set.of(
                 "menu:dashboard", "menu:assistant", "menu:knowledge", "menu:courses", "menu:training", "menu:profile"));
         defaults.put(RoleCode.MEMBER, Set.of(
