@@ -33,7 +33,6 @@ public class DefaultCoachAssistantService {
         this(model, assignments, quotas, null, null);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments,
                                         TenantQuotaService quotas, WorkoutHistoryQueryService history) {
         this(model, assignments, quotas, history, null);
