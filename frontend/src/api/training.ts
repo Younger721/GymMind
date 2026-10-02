@@ -1,7 +1,7 @@
 import apiClient from './client'
 import type { ApiResponse } from '@/types/api'
 export interface TrainingOverview { role:string; since:string; until:string; summary:{workoutCount:number;activeMembers:number;totalMinutes:number;averageMinutes:number;streakDays:number}; records:Array<{id:number;memberId:number;workoutDate:string;duration:number;calories:number;notes:string}>; members:Array<{memberId:number;name:string;workoutCount:number;totalMinutes:number;lastWorkout?:string}> }
-export interface TrainingTemplateItem { id:number; exerciseId:number; phase:string; sortOrder:number; sets:number; reps:number; restSeconds:number; weight:number; notes?:string }
+export interface TrainingTemplateItem { id:number; exerciseName:string; phase:string; sortOrder:number; sets:number; reps:number; restSeconds:number; weight:number; notes?:string }
 export interface TrainingTemplate { id:number; name:string; category:string; goal:string; description:string; coachId?:number; versionNumber:number; status:string; items?:TrainingTemplateItem[] }
 export interface MemberPlan { id:number; name:string; templateId:number; templateVersion:number }
 export interface TrainingSchedule { id:number; memberPlanId:number; memberId:number; scheduledDate:string }

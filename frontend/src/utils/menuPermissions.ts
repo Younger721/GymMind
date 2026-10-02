@@ -97,8 +97,6 @@ const OPERATION_MENU_PREFIXES: ReadonlyArray<readonly [string, MenuCode]> = [
   ['order:', MENU_CODES.OPERATIONS],
   ['booking:', MENU_CODES.COURSES],
   ['checkin:', MENU_CODES.OPERATIONS],
-  ['exercise:', MENU_CODES.TRAINING],
-  ['video:', MENU_CODES.TRAINING],
   ['workout:', MENU_CODES.TRAINING],
   ['workout-record:', MENU_CODES.TRAINING],
   ['nutrition:', MENU_CODES.TRAINING],
