@@ -6,21 +6,6 @@
         <p class="simple-page-desc">管理健身房器械库存、申请与配送入库</p>
       </div>
       <div class="page-actions">
-        <el-select
-          v-if="isPlatformAdmin"
-          v-model="selectedTenantId"
-          filterable
-          placeholder="选择健身房"
-          class="tenant-filter"
-          @change="handleTenantChange"
-        >
-          <el-option
-            v-for="tenant in tenants"
-            :key="tenant.id"
-            :label="`${tenant.name}（ID: ${tenant.id}）`"
-            :value="tenant.id"
-          />
-        </el-select>
         <el-button v-if="isGymAdmin" type="primary" @click="openRequest">申请器械</el-button>
         <el-button v-if="isPlatformAdmin && activeTab === 'catalog'" type="primary" @click="openCatalog">新增器械</el-button>
       </div>
@@ -98,7 +83,6 @@ const catalogKeyword = ref('')
 const inventoryKeyword = ref('')
 const requestStatus = ref<EquipmentRequestStatus>()
 const tenants = ref<TenantOption[]>([])
-const selectedTenantId = ref<number>()
 const catalogs = ref<EquipmentCatalog[]>([])
 const inventory = ref<EquipmentInventory[]>([])
 const requests = ref<EquipmentRequest[]>([])
@@ -126,7 +110,7 @@ function statusLabel(status: EquipmentRequestStatus) { return statusOptions.find
 function statusType(status: EquipmentRequestStatus) { return status === 'REJECTED' || status === 'CANCELLED' ? 'danger' : status === 'RECEIVED' ? 'success' : status === 'PENDING' ? 'warning' : 'info' }
 function formatDate(value?: string) { return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—' }
 function requestItemsLabel(request: EquipmentRequest) { return request.items.map(item => `${item.name} × ${item.requestedQuantity}`).join('、') }
-function effectiveTenantId() { return isPlatformAdmin.value ? selectedTenantId.value ?? tenants.value[0]?.id : undefined }
+function effectiveTenantId() { return isPlatformAdmin.value ? auth.platformContextTenantId ?? tenants.value[0]?.id : undefined }
 async function loadTenants() {
   if (!isPlatformAdmin.value) return
   try {
@@ -141,15 +125,13 @@ async function loadTenants() {
       }))
       .filter((tenant: TenantOption) => Number.isSafeInteger(tenant.id) && tenant.id > 0 && tenant.status !== 'DISABLED')
       .sort((left: TenantOption, right: TenantOption) => left.id - right.id)
-    if (selectedTenantId.value == null || !tenants.value.some(tenant => tenant.id === selectedTenantId.value)) {
-      selectedTenantId.value = tenants.value[0]?.id
+    if ((auth.platformContextTenantId == null || !tenants.value.some(tenant => tenant.id === auth.platformContextTenantId)) && tenants.value[0]) {
+      auth.setPlatformContextTenantId(tenants.value[0].id)
     }
   } catch {
     tenants.value = []
-    selectedTenantId.value = undefined
   }
 }
-async function handleTenantChange() { await loadActiveTab() }
 async function loadCatalog() { try { catalogs.value = (await equipmentApi.listCatalog(activeOnly.value)).data ?? [] } catch { ElMessage.error('器械目录加载失败') } }
 async function loadInventory() { try { inventory.value = (await equipmentApi.listInventory(effectiveTenantId())).data ?? [] } catch { ElMessage.error('库存加载失败') } }
 async function loadRequests() { try { requests.value = (await equipmentApi.listRequests({ tenantId: effectiveTenantId(), ...(requestStatus.value ? { status: requestStatus.value } : {}) })).data ?? [] } catch { ElMessage.error('申请记录加载失败') } }
@@ -172,7 +154,6 @@ onMounted(async () => { await loadTenants(); await loadCatalog(); await loadActi
 <style scoped>
 .page-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:12px; }
 .page-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
-.tenant-filter { width:260px; }
 .overview-grid { display:grid; grid-template-columns:repeat(6,minmax(120px,1fr)); gap:12px; }
 .stat-card { padding:18px; border:1px solid var(--border); border-radius:8px; background:var(--surface); }
 .stat-card span { display:block; color:var(--text-muted); font-size:12px; margin-bottom:10px; }
@@ -185,5 +166,5 @@ onMounted(async () => { await loadTenants(); await loadCatalog(); await loadActi
 .decision-line span { flex:1; font-size:13px; }
 .detail-summary p { margin:0 0 10px; }
 @media (max-width: 1000px) { .overview-grid { grid-template-columns:repeat(3,minmax(120px,1fr)); } }
-@media (max-width: 650px) { .overview-grid { grid-template-columns:repeat(2,minmax(120px,1fr)); } .toolbar { flex-wrap:wrap; } .page-head { flex-direction:column; } .page-actions { width:100%; justify-content:flex-start; } .tenant-filter { width:100%; } }
+@media (max-width: 650px) { .overview-grid { grid-template-columns:repeat(2,minmax(120px,1fr)); } .toolbar { flex-wrap:wrap; } .page-head { flex-direction:column; } .page-actions { width:100%; justify-content:flex-start; } }
 </style>
