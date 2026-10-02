@@ -22,7 +22,7 @@ import java.util.List;
 public class GymOperationsMetricsTool implements AiHarnessPlugin {
     private static final AiHarnessPluginDescriptor DESCRIPTOR = new AiHarnessPluginDescriptor(
             "gym_operations_metrics", "门店运营数据", "查询当前健身房签到、预约、会籍和训练活跃数据", "TOOL", "analytics:read", true, true);
-    private static final String QUESTION_KEYWORDS = "到店|签到|来了|活跃|预约|到店率|会籍|续费|到期|训练次数|训练活跃|会员减少|会员增加|经营|运营|趋势";
+    private static final String QUESTION_KEYWORDS = "到店|签到|来了|活跃|预约|到店率|会籍|续费|到期|训练次数|训练活跃|会员减少|会员增加|经营|运营|趋势|变化|对比|比较|环比";
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
@@ -75,6 +75,11 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
         if (input != null && (input.contains("最近30天") || input.contains("近30天"))) {
             LocalDate first = today.minusDays(29);
             return new OperationsMetricsQuery(first, today, first + "至" + today);
+        }
+        if (input != null && (input.contains("和上上个月相比")
+                || input.contains("上个月和上上个月")
+                || input.contains("上个月与上上个月"))) {
+            return previousCalendarMonth(today);
         }
         if (input != null && input.contains("上上个月")) {
             LocalDate first = today.withDayOfMonth(1).minusMonths(2);
