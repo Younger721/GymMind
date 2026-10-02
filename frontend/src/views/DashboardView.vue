@@ -45,7 +45,6 @@ const quickLinks = computed(() => [
   { path: '/operations', permission: MENU_CODES.OPERATIONS, icon: '👥', title: '门店运营', desc: '会员·课程·预约' },
   { path: '/courses', permission: MENU_CODES.COURSES, icon: '📚', title: '课程中心', desc: '课程发布与报名' },
   { path: '/training', permission: MENU_CODES.TRAINING, icon: '🏋️', title: '训练营养', desc: '动作库与计划' },
-  { path: '/analytics', permission: MENU_CODES.ANALYTICS, icon: '📊', title: '数据分析', desc: '看板与周报' },
   { path: '/knowledge', permission: MENU_CODES.KNOWLEDGE, icon: '📄', title: '知识库', desc: '上传门店文档' },
   { path: '/plan', permission: MENU_CODES.ASSISTANT, icon: '📋', title: '训练计划', desc: 'AI 生成计划' },
   { path: '/agents/manage', permission: MENU_CODES.ASSISTANT, icon: '🤖', title: 'Agent', desc: '配置门店助手' },

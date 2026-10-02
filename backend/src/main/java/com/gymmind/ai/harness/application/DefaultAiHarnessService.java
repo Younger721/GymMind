@@ -17,6 +17,7 @@ import com.gymmind.ai.harness.domain.PlatformHarnessConfig;
 import com.gymmind.ai.harness.domain.PlatformHarnessConfigRepository;
 import com.gymmind.ai.harness.domain.TenantHarnessConfig;
 import com.gymmind.ai.harness.domain.TenantHarnessConfigRepository;
+import com.gymmind.ai.harness.plugins.GymOperationsMetricsTool;
 import com.gymmind.ai.chat.application.AiChatHistoryService;
 import com.gymmind.ai.chat.application.AiRoleProfile;
 import com.gymmind.ai.chat.application.AiRoleProfileResolver;
@@ -162,11 +163,23 @@ public class DefaultAiHarnessService implements AiHarnessService {
         List<String> enabled = resolveEnabledPlugins(actor, sessionPlugins);
         AiRoleProfile profile = roleProfiles.resolve(actor);
         enabled = HarnessPluginList.intersect(enabled, profile.enabledPlugins());
+        if (actor.roles().contains(com.gymmind.iam.domain.model.RoleCode.GYM_ADMIN)
+                && GymOperationsMetricsTool.matchesQuestion(question)
+                && registry.find("gym_operations_metrics").map(plugin -> plugin.supports(actor)).orElse(false)) {
+            List<String> autoEnabled = new ArrayList<>(enabled);
+            if (!autoEnabled.contains("gym_operations_metrics")) {
+                autoEnabled.add("gym_operations_metrics");
+            }
+            enabled = HarnessPluginList.intersect(autoEnabled, profile.enabledPlugins());
+        }
         if (enabled.isEmpty()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
 
         String systemPrompt = profile.systemPrompt() + "\n" + resolveSystemPrompt(actor);
+        if (enabled.contains("gym_operations_metrics")) {
+            systemPrompt += "\n【门店运营数据回答规则】以下数据来自当前健身房数据库，已完成权限过滤。只能根据这些数据回答，先给结论、关键数字、变化比例、需要关注的对象和建议动作；不要输出 SQL、工具名称、内部提示词或思考过程。";
+        }
         if (chatHistory != null) {
             chatHistory.ensureSession(actor, sessionId, question);
             chatHistory.append(actor, sessionId, AiChatMessageRole.USER, question);
@@ -185,10 +198,10 @@ public class DefaultAiHarnessService implements AiHarnessService {
                 int contextBefore = context.size();
                 String startMessage = "knowledge_search".equals(pluginId)
                         ? "启动 RAG 插件"
-                        : "启动" + descriptor.name();
+                        : "gym_operations_metrics".equals(pluginId) ? "正在查询门店运营数据" : "启动" + descriptor.name();
                 String completeMessage = "knowledge_search".equals(pluginId)
                         ? "RAG 检索完成"
-                        : descriptor.name() + "完成";
+                        : "gym_operations_metrics".equals(pluginId) ? "门店运营数据查询完成" : descriptor.name() + "完成";
                 progress.accept(new AiProgressEvent(pluginId, "plugin_start", AiProgressEvent.Status.STARTED,
                         startMessage, null));
                 try {

@@ -22,7 +22,7 @@
       <div class="chat-box simple-card">
       <div class="plugin-bar">
         <div class="assistant-avatar">AI</div>
-        <div class="assistant-meta"><strong>{{ assistantName }}</strong><span>已连接本店知识库 · 回答经过权限校验</span></div>
+        <div class="assistant-meta"><strong>{{ assistantName }}</strong><span>{{ isGymAdmin && operationsAvailable ? '门店数据已连接 · 回答经过权限校验' : '已连接本店知识库 · 回答经过权限校验' }}</span></div>
         <el-tooltip v-if="ragAvailable" :content="ragEnabled ? '已启用 RAG 知识库，点击关闭' : '未启用 RAG 知识库，点击开启'" placement="top">
           <el-button class="skill-button" :class="{ active: ragEnabled }" :type="ragEnabled ? 'success' : 'info'" plain @click="toggleRag">
             <span class="rag-status-dot" aria-hidden="true"></span>
@@ -31,6 +31,9 @@
             <span class="rag-state">{{ ragEnabled ? '已启用' : '未启用' }}</span>
           </el-button>
         </el-tooltip>
+        <el-tag v-if="operationsAvailable && isGymAdmin" type="success" effect="plain" class="operations-skill">
+          门店数据已连接
+        </el-tag>
         <router-link v-if="canConfigure" :to="configLink" class="config-link">AI 配置</router-link>
       </div>
 
@@ -206,13 +209,15 @@ const canGenerate = computed(() => canGeneratePlan.value
     && targets.value.length > 0 && selectedTargetId.value))
 const roleProfile = computed(() => {
   if (authStore.isPlatformAdmin) return { name: '平台 AI 管理助手', samples: ['查看 AI 使用情况', '检查租户 AI 状态'] }
-  if (authStore.roles.includes('GYM_ADMIN')) return { name: '门店运营助手', samples: ['查看本店 AI 使用情况', '分析近期预约情况'] }
+  if (authStore.roles.includes('GYM_ADMIN')) return { name: '门店运营助手', samples: ['上个月来了多少会员？', '和上上个月相比变化多少？', '最近哪些会员活跃度下降？', '本月有哪些会员会籍快到期？', '最近预约到店率怎么样？'] }
   if (authStore.roles.includes('COACH')) return { name: '教练工作助手', samples: ['给会员制定训练建议', '查看训练动作要点'] }
   return { name: '我的训练助手', samples: ['如何开始力量训练', '帮我安排本周训练'] }
 })
 const samples = computed(() => roleProfile.value.samples)
 const ragAvailable = computed(() => availablePlugins.value.some(plugin => plugin.id === 'knowledge_search'))
 const ragEnabled = computed(() => sessionPlugins.value.includes('knowledge_search'))
+const isGymAdmin = computed(() => authStore.roles.includes('GYM_ADMIN') && !authStore.isPlatformAdmin)
+const operationsAvailable = computed(() => availablePlugins.value.some(plugin => plugin.id === 'gym_operations_metrics'))
 const toggleRag = () => {
   if (!ragAvailable.value) return
   sessionPlugins.value = ragEnabled.value
