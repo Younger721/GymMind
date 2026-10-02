@@ -57,6 +57,7 @@
           <el-form label-width="140px" style="margin-top: 12px">
             <el-form-item label="最大 Agent"><el-input v-model="quotaForm.maxAgents" /></el-form-item>
             <el-form-item label="月 AI 调用上限"><el-input v-model="quotaForm.maxAiCallsPerMonth" /></el-form-item>
+            <el-form-item label="月 token 配额"><el-input v-model="quotaForm.maxAiTokensPerMonth" /></el-form-item>
             <el-form-item label="知识库文档上限"><el-input v-model="quotaForm.maxKnowledgeDocuments" /></el-form-item>
             <el-form-item label="启用 AI 模块"><el-switch v-model="quotaForm.aiModuleEnabled" /></el-form-item>
             <el-form-item label="启用知识库"><el-switch v-model="quotaForm.knowledgeModuleEnabled" /></el-form-item>
@@ -87,6 +88,7 @@ const quotaResult = ref<unknown>(null)
 const quotaForm = reactive({
   maxAgents: '5',
   maxAiCallsPerMonth: '1000',
+  maxAiTokensPerMonth: '1000000',
   maxKnowledgeDocuments: '100',
   aiModuleEnabled: true,
   knowledgeModuleEnabled: true
@@ -186,6 +188,7 @@ async function loadQuota() {
     if (data) {
       quotaForm.maxAgents = String(data.maxAgents ?? quotaForm.maxAgents)
       quotaForm.maxAiCallsPerMonth = String(data.maxAiCallsPerMonth ?? quotaForm.maxAiCallsPerMonth)
+      quotaForm.maxAiTokensPerMonth = String(data.maxAiTokensPerMonth ?? quotaForm.maxAiTokensPerMonth)
       quotaForm.maxKnowledgeDocuments = String(data.maxKnowledgeDocuments ?? quotaForm.maxKnowledgeDocuments)
       quotaForm.aiModuleEnabled = Boolean(data.aiModuleEnabled ?? quotaForm.aiModuleEnabled)
       quotaForm.knowledgeModuleEnabled = Boolean(data.knowledgeModuleEnabled ?? quotaForm.knowledgeModuleEnabled)
@@ -202,6 +205,7 @@ async function saveQuota() {
     quotaResult.value = await tenancyApi.updateTenantQuota(Number(quotaTenantId.value), {
       maxAgents: Number(quotaForm.maxAgents),
       maxAiCallsPerMonth: Number(quotaForm.maxAiCallsPerMonth),
+      maxAiTokensPerMonth: Number(quotaForm.maxAiTokensPerMonth),
       maxKnowledgeDocuments: Number(quotaForm.maxKnowledgeDocuments),
       aiModuleEnabled: quotaForm.aiModuleEnabled,
       knowledgeModuleEnabled: quotaForm.knowledgeModuleEnabled

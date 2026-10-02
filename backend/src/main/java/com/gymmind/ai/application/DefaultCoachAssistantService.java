@@ -22,23 +22,32 @@ public class DefaultCoachAssistantService {
     private final CoachAssignmentService assignments;
     private final TenantQuotaService quotas;
     private final WorkoutHistoryQueryService history;
+    private final DefaultAiUsageService usage;
 
     public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments) {
-        this(model, assignments, TenantQuotaServices.unboundedForLegacyConstruction(), null);
+        this(model, assignments, TenantQuotaServices.unboundedForLegacyConstruction(), null, null);
     }
 
     public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments,
                                         TenantQuotaService quotas) {
-        this(model, assignments, quotas, null);
+        this(model, assignments, quotas, null, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
     public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments,
                                         TenantQuotaService quotas, WorkoutHistoryQueryService history) {
+        this(model, assignments, quotas, history, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DefaultCoachAssistantService(ChatModelGateway model, CoachAssignmentService assignments,
+                                        TenantQuotaService quotas, WorkoutHistoryQueryService history,
+                                        DefaultAiUsageService usage) {
         this.model = model;
         this.assignments = assignments;
         this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
         this.history = history;
+        this.usage = usage;
     }
 
     public AiAnalysisResult assist(CurrentActor actor, Long memberId, String request) {
@@ -63,7 +72,12 @@ public class DefaultCoachAssistantService {
         }
         quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
         try {
-            String answer = model.complete(prompt, List.of());
+            long started = System.currentTimeMillis();
+            ChatModelCallResult call = model.completeWithUsage(prompt, List.of());
+            if (call == null) call = ChatModelCallResult.unavailable(model.complete(prompt, List.of()),
+                    Math.max(0, System.currentTimeMillis() - started), "OK");
+            if (usage != null) usage.record(actor, call, "coach-assistant");
+            String answer = call.content();
             return new AiAnalysisResult(answer == null || answer.isBlank()
                     ? "暂时无法生成建议，请结合会员实际情况人工评估。"
                     : answer.trim());

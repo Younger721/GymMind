@@ -43,12 +43,13 @@ public class PlatformQuotaController {
     public record QuotaRequest(
             @Min(1) int maxAgents,
             @Min(1) int maxAiCallsPerMonth,
+            @Min(1) long maxAiTokensPerMonth,
             @Min(1) int maxKnowledgeDocuments,
             boolean aiModuleEnabled,
             boolean knowledgeModuleEnabled) {
         UpdateTenantQuotaCommand toCommand() {
             return new UpdateTenantQuotaCommand(
-                    maxAgents, maxAiCallsPerMonth, maxKnowledgeDocuments,
+                    maxAgents, maxAiCallsPerMonth, maxAiTokensPerMonth, maxKnowledgeDocuments,
                     aiModuleEnabled, knowledgeModuleEnabled);
         }
     }

@@ -65,8 +65,13 @@ public class DefaultAiAnalysisService {
         quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
         long started = System.currentTimeMillis();
         try {
-            String answer = model.complete(prompt, List.of());
-            recordUsage(actor, started, "OK");
+            ChatModelCallResult call = model.completeWithUsage(prompt, List.of());
+            if (call == null) {
+                call = ChatModelCallResult.unavailable(model.complete(prompt, List.of()),
+                        Math.max(0, System.currentTimeMillis() - started), "OK");
+            }
+            String answer = call.content();
+            recordUsage(actor, call, "analysis");
             return new AiAnalysisResult(answer == null || answer.isBlank() ? fallback : answer.trim());
         } catch (RuntimeException ex) {
             recordUsage(actor, started, "ERROR");
@@ -79,6 +84,15 @@ public class DefaultAiAnalysisService {
         try {
             usage.record(actor, new AiUsageCommand("analysis", 0, 0,
                     Math.max(0, System.currentTimeMillis() - started), null, status, null));
+        } catch (RuntimeException ignored) {
+            // Usage persistence must not replace an AI result.
+        }
+    }
+
+    private void recordUsage(CurrentActor actor, ChatModelCallResult result, String feature) {
+        if (usage == null) return;
+        try {
+            usage.record(actor, result, feature);
         } catch (RuntimeException ignored) {
             // Usage persistence must not replace an AI result.
         }

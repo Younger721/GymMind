@@ -57,7 +57,7 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
         TenantQuota quota = requireQuota(tenantId);
-        quota.update(command.maxAgents(), command.maxAiCallsPerMonth(), command.maxKnowledgeDocuments(),
+        quota.update(command.maxAgents(), command.maxAiCallsPerMonth(), command.maxAiTokensPerMonth(), command.maxKnowledgeDocuments(),
                 command.aiModuleEnabled(), command.knowledgeModuleEnabled());
         return buildView(quotas.save(quota));
     }
@@ -128,6 +128,7 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
                 quota,
                 agents.countByTenantId(tenantId),
                 countAiCallsThisMonth(tenantId),
+                countAiTokensThisMonth(tenantId),
                 documents.findByTenantId(tenantId).size());
     }
 
@@ -144,6 +145,16 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
                 "SELECT COUNT(*) FROM ai_usage_record WHERE tenant_id = ? AND created_at >= ? AND created_at < ?",
                 Long.class, tenantId, start, end);
         return count == null ? 0L : count;
+    }
+
+    private long countAiTokensThisMonth(Long tenantId) {
+        YearMonth month = YearMonth.now(ZoneOffset.UTC);
+        Instant start = month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant end = month.plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Long total = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(total_tokens), 0) FROM ai_usage_record WHERE tenant_id = ? AND created_at >= ? AND created_at < ?",
+                Long.class, tenantId, start, end);
+        return total == null ? 0L : total;
     }
 
     private static void requireTenant(CurrentActor actor, String permission) {

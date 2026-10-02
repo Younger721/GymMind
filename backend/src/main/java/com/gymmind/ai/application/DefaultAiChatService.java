@@ -103,14 +103,19 @@ public class DefaultAiChatService implements AiChatService {
             return new AiChatView("没有找到足够可靠的知识依据，暂不提供确定性建议。", List.of(), List.of());
         }
 
-        String answer = model.complete(withProfile(question, actor, intent), context);
+        ChatModelCallResult call = model.completeWithUsage(withProfile(question, actor, intent), context);
+        if (call == null) {
+            String legacyAnswer = model.complete(withProfile(question, actor, intent), context);
+            call = ChatModelCallResult.unavailable(legacyAnswer, Math.max(0, System.currentTimeMillis() - started), "OK");
+        }
+        String answer = call.content();
         if (answer == null || answer.isBlank()) {
             answer = "模型暂时不可用，请稍后重试。";
         }
-        recordUsage(actor, started, "OK");
+        recordUsage(actor, call, "chat");
         var sources = context.stream().map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
         var citations = context.stream().filter(item -> item.id() != null)
-                .map(item -> new SourceCitation(item.id(), item.documentId(), item.text())).distinct().toList();
+                .map(item -> SourceCitation.from(item, question)).distinct().toList();
         return new AiChatView(answer, sources, citations);
     }
 
@@ -137,6 +142,15 @@ public class DefaultAiChatService implements AiChatService {
         try {
             usage.record(actor, new AiUsageCommand("qwen3.7-plus", 0, 0,
                     Math.max(0, System.currentTimeMillis() - started), null, status, null));
+        } catch (RuntimeException ignored) {
+            // 用量记录失败不影响对话
+        }
+    }
+
+    private void recordUsage(CurrentActor actor, ChatModelCallResult result, String feature) {
+        if (usage == null) return;
+        try {
+            usage.record(actor, result, feature);
         } catch (RuntimeException ignored) {
             // 用量记录失败不影响对话
         }

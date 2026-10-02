@@ -57,12 +57,14 @@ public class AiToolOrchestrator {
                 .toList();
         java.util.Set<String> candidateIds = capabilities.stream()
                 .map(capability -> capability.descriptor().id()).collect(java.util.stream.Collectors.toSet());
+        long started = System.currentTimeMillis();
         ChatModelResponse response = model.completeWithTools(question, context, definitions);
         if (response == null) return new AiToolOrchestrationResult(null, List.of(), List.of());
         if (!response.hasToolCalls()) {
             progress.accept(new AiProgressEvent("orchestrator", "tool_decision", AiProgressEvent.Status.COMPLETED,
                     "直接回答", 0));
-            return new AiToolOrchestrationResult(response.content(), List.of(), List.of());
+            return new AiToolOrchestrationResult(response.content(), List.of(), List.of(), response.usage(),
+                    Math.max(0, System.currentTimeMillis() - started));
         }
         if (response.toolCalls().size() > MAX_TOOL_CALLS) {
             throw new IllegalArgumentException("一次最多执行 2 个只读工具");
@@ -98,7 +100,8 @@ public class AiToolOrchestrator {
                     result.success() ? AiProgressEvent.Status.COMPLETED : AiProgressEvent.Status.FAILED,
                     result.success() ? "查询完成" : "数据暂时不可用", result.context().size()));
         }
-        return new AiToolOrchestrationResult(null, results, toolContext);
+        return new AiToolOrchestrationResult(null, results, toolContext, response.usage(),
+                Math.max(0, System.currentTimeMillis() - started));
     }
 
     /** Deterministic read-only fallback used when the model cannot call tools. */

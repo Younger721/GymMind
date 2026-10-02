@@ -19,6 +19,8 @@ export interface TenantQuotaView {
   usedAgents: number
   maxAiCallsPerMonth: number
   usedAiCallsThisMonth: number
+  maxAiTokensPerMonth: number
+  usedAiTokensThisMonth: number
   maxKnowledgeDocuments: number
   usedKnowledgeDocuments: number
   aiModuleEnabled: boolean

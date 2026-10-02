@@ -102,16 +102,21 @@ public class DefaultAgentChatService implements AgentChatService {
         }
 
         String prompt = buildPrompt(agent, actor, question);
-        String answer = model.complete(prompt, context);
+        com.gymmind.ai.application.ChatModelCallResult call = model.completeWithUsage(prompt, context);
+        if (call == null) {
+            call = com.gymmind.ai.application.ChatModelCallResult.unavailable(
+                    model.complete(prompt, context), Math.max(0, System.currentTimeMillis() - started), "OK");
+        }
+        String answer = call.content();
         if (answer == null || answer.isBlank()) {
             answer = "模型暂时不可用，请稍后重试。";
         }
-        recordUsage(actor, agentId, started, "OK");
+        recordUsage(actor, call, "agent");
 
         var sources = context.stream().map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
         var citations = context.stream()
                 .filter(item -> item.id() != null)
-                .map(item -> new SourceCitation(item.id(), item.documentId(), item.text()))
+                .map(item -> SourceCitation.from(item, question))
                 .distinct()
                 .toList();
         return new AiChatView(answer, sources, citations);
@@ -171,6 +176,15 @@ public class DefaultAgentChatService implements AgentChatService {
                     "agent-" + agentId,
                     status,
                     null));
+        } catch (RuntimeException ignored) {
+            // 用量记录失败不影响对话
+        }
+    }
+
+    private void recordUsage(CurrentActor actor, com.gymmind.ai.application.ChatModelCallResult result, String feature) {
+        if (usage == null) return;
+        try {
+            usage.record(actor, result, feature);
         } catch (RuntimeException ignored) {
             // 用量记录失败不影响对话
         }

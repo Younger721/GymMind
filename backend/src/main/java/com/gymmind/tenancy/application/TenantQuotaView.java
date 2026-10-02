@@ -8,18 +8,22 @@ public record TenantQuotaView(
         int usedAgents,
         int maxAiCallsPerMonth,
         long usedAiCallsThisMonth,
+        long maxAiTokensPerMonth,
+        long usedAiTokensThisMonth,
         int maxKnowledgeDocuments,
         long usedKnowledgeDocuments,
         boolean aiModuleEnabled,
         boolean knowledgeModuleEnabled) {
 
-    public static TenantQuotaView of(TenantQuota quota, long usedAgents, long usedAiCalls, long usedDocs) {
+    public static TenantQuotaView of(TenantQuota quota, long usedAgents, long usedAiCalls, long usedAiTokens, long usedDocs) {
         return new TenantQuotaView(
                 quota.getTenantId(),
                 quota.getMaxAgents(),
                 (int) usedAgents,
                 quota.getMaxAiCallsPerMonth(),
                 usedAiCalls,
+                quota.getMaxAiTokensPerMonth(),
+                usedAiTokens,
                 quota.getMaxKnowledgeDocuments(),
                 usedDocs,
                 quota.isAiModuleEnabled(),

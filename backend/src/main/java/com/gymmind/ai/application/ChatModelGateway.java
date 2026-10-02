@@ -8,6 +8,17 @@ import java.util.function.Consumer;
 public interface ChatModelGateway {
     String complete(String prompt, List<ContextSegment> context);
 
+    default ChatModelCallResult completeWithUsage(String prompt, List<ContextSegment> context) {
+        long started = System.currentTimeMillis();
+        try {
+            return ChatModelCallResult.unavailable(complete(prompt, context),
+                    Math.max(0, System.currentTimeMillis() - started), "OK");
+        } catch (RuntimeException exception) {
+            return ChatModelCallResult.unavailable(null,
+                    Math.max(0, System.currentTimeMillis() - started), "ERROR");
+        }
+    }
+
     /** Whether this gateway can send native OpenAI-compatible tool definitions. */
     default boolean supportsToolCalling() {
         return false;
@@ -27,5 +38,17 @@ public interface ChatModelGateway {
             }
         }
         return answer;
+    }
+
+    default ChatModelCallResult streamWithUsage(String prompt, List<ContextSegment> context,
+                                                Consumer<String> onToken) {
+        long started = System.currentTimeMillis();
+        try {
+            return ChatModelCallResult.unavailable(stream(prompt, context, onToken),
+                    Math.max(0, System.currentTimeMillis() - started), "OK");
+        } catch (RuntimeException exception) {
+            return ChatModelCallResult.unavailable(null,
+                    Math.max(0, System.currentTimeMillis() - started), "ERROR");
+        }
     }
 }

@@ -285,6 +285,15 @@ public class DefaultAiHarnessService implements AiHarnessService {
         AiToolOrchestrationResult orchestration = null;
         if (nativeToolFlow) {
             orchestration = toolOrchestrator.decide(actor, prompt, List.of(), enabled, progress);
+            if (orchestration.usage() != null && usage != null) {
+                try {
+                    usage.record(actor, new com.gymmind.ai.application.ChatModelCallResult(
+                            orchestration.directAnswer(), orchestration.usage(), orchestration.latencyMs(), "OK"),
+                            "tool-decision");
+                } catch (RuntimeException ignored) {
+                    // Usage persistence must not replace an AI result.
+                }
+            }
             context.addAll(orchestration.context());
             if (!orchestration.toolResults().isEmpty()) {
                 prompt += "\n【受控工具结果】\n" + context.stream()
@@ -294,19 +303,26 @@ public class DefaultAiHarnessService implements AiHarnessService {
                         + "\n只能根据上述工具结果回答；若结果标记为不可用，明确说明数据暂时不可用，不要推测。";
             }
         }
-        String answer;
+        com.gymmind.ai.application.ChatModelCallResult call;
         if (nativeToolFlow && orchestration != null && orchestration.directAnswer() != null) {
-            answer = emitAnswer(orchestration.directAnswer(), onToken);
+            String directAnswer = emitAnswer(orchestration.directAnswer(), onToken);
+            call = com.gymmind.ai.application.ChatModelCallResult.unavailable(directAnswer,
+                    Math.max(0, System.currentTimeMillis() - started), "OK");
         } else {
-            answer = model.stream(prompt, context, onToken);
+            call = model.streamWithUsage(prompt, context, onToken);
+            if (call == null) {
+                call = com.gymmind.ai.application.ChatModelCallResult.unavailable(
+                        model.stream(prompt, context, onToken), Math.max(0, System.currentTimeMillis() - started), "OK");
+            }
         }
+        String answer = call.content();
         if (answer == null || answer.isBlank()) {
             answer = "模型暂时不可用，请稍后重试。";
         }
         if (chatHistory != null) {
             chatHistory.append(actor, sessionId, AiChatMessageRole.ASSISTANT, answer);
         }
-        recordUsage(actor, started, "OK");
+        recordUsage(actor, call, "harness");
 
         var sources = context.stream().filter(DefaultAiHarnessService::isUserVisibleSource)
                 .map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
@@ -521,6 +537,15 @@ public class DefaultAiHarnessService implements AiHarnessService {
                     null));
         } catch (RuntimeException ignored) {
             // 用量记录失败不影响对话
+        }
+    }
+
+    private void recordUsage(CurrentActor actor, com.gymmind.ai.application.ChatModelCallResult result, String feature) {
+        if (usage == null || ActorAccess.tenantId(actor) == null) return;
+        try {
+            usage.record(actor, result, feature);
+        } catch (RuntimeException ignored) {
+            // Usage persistence must not replace an AI result.
         }
     }
 }

@@ -3,6 +3,8 @@ package com.gymmind.ai.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gymmind.ai.application.ChatModelGateway;
+import com.gymmind.ai.application.ChatModelCallResult;
+import com.gymmind.ai.application.ModelUsage;
 import com.gymmind.ai.application.ChatModelResponse;
 import com.gymmind.ai.application.ChatToolCall;
 import com.gymmind.ai.application.ChatToolDefinition;
@@ -41,8 +43,14 @@ public class BailianChatAdapter implements ChatModelGateway {
 
     @Override
     public String complete(String prompt, List<ContextSegment> context) {
+        return completeWithUsage(prompt, context).content();
+    }
+
+    @Override
+    public ChatModelCallResult completeWithUsage(String prompt, List<ContextSegment> context) {
+        long started = System.currentTimeMillis();
         if (apiKey.isBlank()) {
-            return localFallback();
+            return ChatModelCallResult.unavailable(localFallback(), elapsed(started), "FALLBACK");
         }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = Map.of(
@@ -52,13 +60,17 @@ public class BailianChatAdapter implements ChatModelGateway {
                 "messages", List.of(
                 Map.of("role", "system", "content", quickSystemPrompt()),
                         Map.of("role", "user", "content", prompt + "\n参考资料：" + contextText)));
-        String raw = client.post().uri("/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .body(body).retrieve().body(String.class);
         try {
-            return mapper.readTree(raw).path("choices").path(0).path("message").path("content").asText(raw);
-        } catch (Exception ignored) {
-            return raw == null ? "模型暂不可用" : raw;
+            String raw = client.post().uri("/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .body(body).retrieve().body(String.class);
+            JsonNode root = mapper.readTree(raw);
+            ModelUsage usage = BailianUsageParser.parse(root);
+            String answer = root.path("choices").path(0).path("message").path("content").asText(raw);
+            return new ChatModelCallResult(answer, usage, elapsed(started), "OK");
+        } catch (RuntimeException | java.io.IOException failure) {
+            return new ChatModelCallResult(null,
+                    BailianUsageParser.parse(mapper.createObjectNode()), elapsed(started), "ERROR");
         }
     }
 
@@ -71,7 +83,7 @@ public class BailianChatAdapter implements ChatModelGateway {
     public ChatModelResponse completeWithTools(String prompt, List<ContextSegment> context,
                                                List<ChatToolDefinition> tools) {
         if (apiKey.isBlank()) {
-            return ChatModelResponse.direct(localFallback());
+            return ChatModelResponse.direct(localFallback(), BailianUsageParser.parse(mapper.createObjectNode()));
         }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = new java.util.LinkedHashMap<>();
@@ -103,7 +115,8 @@ public class BailianChatAdapter implements ChatModelGateway {
                 }
             }
             String content = message.path("content").asText("");
-            return calls.isEmpty() ? ChatModelResponse.direct(content) : ChatModelResponse.toolCalls(calls);
+            ModelUsage usage = BailianUsageParser.parse(mapper.readTree(raw));
+            return calls.isEmpty() ? ChatModelResponse.direct(content, usage) : ChatModelResponse.toolCalls(calls, usage);
         } catch (RuntimeException | java.io.IOException failure) {
             throw new IllegalStateException("模型工具调用暂时不可用", failure);
         }
@@ -111,17 +124,24 @@ public class BailianChatAdapter implements ChatModelGateway {
 
     @Override
     public String stream(String prompt, List<ContextSegment> context, Consumer<String> onToken) {
+        return streamWithUsage(prompt, context, onToken).content();
+    }
+
+    @Override
+    public ChatModelCallResult streamWithUsage(String prompt, List<ContextSegment> context, Consumer<String> onToken) {
+        long started = System.currentTimeMillis();
         if (apiKey.isBlank()) {
             String answer = localFallback();
             for (int i = 0; i < answer.length(); i += 12) {
                 onToken.accept(answer.substring(i, Math.min(answer.length(), i + 12)));
             }
-            return answer;
+            return ChatModelCallResult.unavailable(answer, elapsed(started), "FALLBACK");
         }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = Map.of(
                 "model", model,
                 "stream", true,
+                "stream_options", Map.of("include_usage", true),
                 "max_tokens", 256,
                 "enable_thinking", false,
                 "messages", List.of(
@@ -129,6 +149,7 @@ public class BailianChatAdapter implements ChatModelGateway {
                         Map.of("role", "user", "content", prompt + "\n参考资料：" + contextText)));
         StringBuilder answer = new StringBuilder();
         AtomicBoolean emitted = new AtomicBoolean();
+        ModelUsage[] finalUsage = {BailianUsageParser.parse(mapper.createObjectNode())};
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
                 client.post().uri("/chat/completions")
@@ -145,6 +166,8 @@ public class BailianChatAdapter implements ChatModelGateway {
                                     String data = line.substring(5).trim();
                                     if (data.isEmpty() || "[DONE]".equals(data)) continue;
                                     JsonNode root = mapper.readTree(data);
+                                    ModelUsage parsedUsage = BailianUsageParser.parse(root);
+                                    if (parsedUsage.available()) finalUsage[0] = parsedUsage;
                                     JsonNode delta = root.path("choices").path(0).path("delta");
                                     String token = delta.path("content").asText("");
                                     if (!token.isEmpty()) {
@@ -169,7 +192,11 @@ public class BailianChatAdapter implements ChatModelGateway {
                 }
             }
         }
-        return answer.toString();
+        return new ChatModelCallResult(answer.toString(), finalUsage[0], elapsed(started), "OK");
+    }
+
+    private static long elapsed(long started) {
+        return Math.max(0, System.currentTimeMillis() - started);
     }
 
     static String localFallback() {

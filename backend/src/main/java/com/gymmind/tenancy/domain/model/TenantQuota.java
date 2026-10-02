@@ -19,6 +19,9 @@ public class TenantQuota {
     @Column(name = "max_ai_calls_per_month", nullable = false)
     private int maxAiCallsPerMonth = 1000;
 
+    @Column(name = "max_ai_tokens_per_month", nullable = false)
+    private long maxAiTokensPerMonth = 1_000_000L;
+
     @Column(name = "max_knowledge_documents", nullable = false)
     private int maxKnowledgeDocuments = 100;
 
@@ -42,13 +45,14 @@ public class TenantQuota {
         return new TenantQuota(tenantId);
     }
 
-    public void update(int maxAgents, int maxAiCallsPerMonth, int maxKnowledgeDocuments,
+    public void update(int maxAgents, int maxAiCallsPerMonth, long maxAiTokensPerMonth, int maxKnowledgeDocuments,
                        boolean aiModuleEnabled, boolean knowledgeModuleEnabled) {
-        if (maxAgents < 1 || maxAiCallsPerMonth < 1 || maxKnowledgeDocuments < 1) {
+        if (maxAgents < 1 || maxAiCallsPerMonth < 1 || maxAiTokensPerMonth < 1 || maxKnowledgeDocuments < 1) {
             throw new IllegalArgumentException("quota limits must be positive");
         }
         this.maxAgents = maxAgents;
         this.maxAiCallsPerMonth = maxAiCallsPerMonth;
+        this.maxAiTokensPerMonth = maxAiTokensPerMonth;
         this.maxKnowledgeDocuments = maxKnowledgeDocuments;
         this.aiModuleEnabled = aiModuleEnabled;
         this.knowledgeModuleEnabled = knowledgeModuleEnabled;
@@ -64,6 +68,10 @@ public class TenantQuota {
 
     public int getMaxAiCallsPerMonth() {
         return maxAiCallsPerMonth;
+    }
+
+    public long getMaxAiTokensPerMonth() {
+        return maxAiTokensPerMonth;
     }
 
     public int getMaxKnowledgeDocuments() {

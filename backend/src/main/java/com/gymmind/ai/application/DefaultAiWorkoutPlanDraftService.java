@@ -41,22 +41,30 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
     private final CoachAssignmentRepository assignments;
     private final WorkoutHistoryQueryService history;
     private final ExerciseRepository exercises;
+    private final DefaultAiUsageService usage;
 
     /** Kept for existing integrations and unit tests; Spring uses the complete constructor below. */
     public DefaultAiWorkoutPlanDraftService(ChatModelGateway model, ObjectMapper mapper) {
-        this(model, mapper, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null, null, null);
+        this(model, mapper, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null, null, null, null);
     }
 
     /** Kept for existing integrations and unit tests. */
     public DefaultAiWorkoutPlanDraftService(ChatModelGateway model, ObjectMapper mapper, TenantQuotaService quotas) {
-        this(model, mapper, quotas, null, null, null, null, null);
+        this(model, mapper, quotas, null, null, null, null, null, null);
+    }
+
+    public DefaultAiWorkoutPlanDraftService(ChatModelGateway model, ObjectMapper mapper, TenantQuotaService quotas,
+                                            MemberRepository members, CoachRepository coaches,
+                                            CoachAssignmentRepository assignments, WorkoutHistoryQueryService history,
+                                            ExerciseRepository exercises) {
+        this(model, mapper, quotas, members, coaches, assignments, history, exercises, null);
     }
 
     @Autowired
     public DefaultAiWorkoutPlanDraftService(ChatModelGateway model, ObjectMapper mapper, TenantQuotaService quotas,
                                             MemberRepository members, CoachRepository coaches,
                                             CoachAssignmentRepository assignments, WorkoutHistoryQueryService history,
-                                            ExerciseRepository exercises) {
+                                            ExerciseRepository exercises, DefaultAiUsageService usage) {
         this.model = Objects.requireNonNull(model, "model");
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
@@ -65,6 +73,7 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
         this.assignments = assignments;
         this.history = history;
         this.exercises = exercises;
+        this.usage = usage;
     }
 
     @Override
@@ -91,7 +100,12 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
         String prompt = buildPrompt(tenantId, request, includeHistory, historySummary);
         final String response;
         try {
-            response = model.complete(prompt, List.of());
+            long started = System.currentTimeMillis();
+            ChatModelCallResult call = model.completeWithUsage(prompt, List.of());
+            if (call == null) call = ChatModelCallResult.unavailable(model.complete(prompt, List.of()),
+                    Math.max(0, System.currentTimeMillis() - started), "OK");
+            if (usage != null) usage.record(actor, call, "workout-plan");
+            response = call.content();
         } catch (RuntimeException ex) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         }
