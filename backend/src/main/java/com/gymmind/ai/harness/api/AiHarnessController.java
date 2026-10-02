@@ -107,7 +107,11 @@ public class AiHarnessController {
 
     private static void sendProgress(SseEmitter emitter, AiProgressEvent progress) {
         try {
-            emitter.send(SseEmitter.event().name("progress").data(progress));
+            String eventName = switch (progress.stage()) {
+                case "tool_decision", "tool_start", "tool_result" -> progress.stage();
+                default -> "progress";
+            };
+            emitter.send(SseEmitter.event().name(eventName).data(progress));
         } catch (java.io.IOException exception) {
             throw new IllegalStateException("Client disconnected during AI progress", exception);
         }

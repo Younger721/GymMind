@@ -3,6 +3,9 @@ package com.gymmind.ai.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gymmind.ai.application.ChatModelGateway;
+import com.gymmind.ai.application.ChatModelResponse;
+import com.gymmind.ai.application.ChatToolCall;
+import com.gymmind.ai.application.ChatToolDefinition;
 import com.gymmind.ai.domain.ContextSegment;
 import org.springframework.stereotype.Component;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -12,6 +15,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.springframework.web.client.ResourceAccessException;
@@ -55,6 +59,53 @@ public class BailianChatAdapter implements ChatModelGateway {
             return mapper.readTree(raw).path("choices").path(0).path("message").path("content").asText(raw);
         } catch (Exception ignored) {
             return raw == null ? "模型暂不可用" : raw;
+        }
+    }
+
+    @Override
+    public boolean supportsToolCalling() {
+        return !apiKey.isBlank();
+    }
+
+    @Override
+    public ChatModelResponse completeWithTools(String prompt, List<ContextSegment> context,
+                                               List<ChatToolDefinition> tools) {
+        if (apiKey.isBlank()) {
+            return ChatModelResponse.direct(localFallback());
+        }
+        String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("model", model);
+        body.put("max_tokens", 256);
+        body.put("enable_thinking", false);
+        body.put("tool_choice", "auto");
+        body.put("messages", List.of(
+                Map.of("role", "system", "content", quickSystemPrompt()),
+                Map.of("role", "user", "content", prompt + "\n参考资料：" + contextText)));
+        if (tools != null && !tools.isEmpty()) {
+            body.put("tools", tools.stream().map(tool -> Map.of(
+                    "type", "function",
+                    "function", Map.of("name", tool.name(), "description", tool.description(), "parameters", tool.parameters())))
+                    .toList());
+        }
+        try {
+            String raw = client.post().uri("/chat/completions")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .body(body).retrieve().body(String.class);
+            JsonNode message = mapper.readTree(raw).path("choices").path(0).path("message");
+            List<ChatToolCall> calls = new ArrayList<>();
+            JsonNode toolCalls = message.path("tool_calls");
+            if (toolCalls.isArray()) {
+                for (JsonNode call : toolCalls) {
+                    String name = call.path("function").path("name").asText("");
+                    String rawArguments = call.path("function").path("arguments").asText("{}");
+                    if (!name.isBlank()) calls.add(new ChatToolCall(name, mapper.readTree(rawArguments)));
+                }
+            }
+            String content = message.path("content").asText("");
+            return calls.isEmpty() ? ChatModelResponse.direct(content) : ChatModelResponse.toolCalls(calls);
+        } catch (RuntimeException | java.io.IOException failure) {
+            throw new IllegalStateException("模型工具调用暂时不可用", failure);
         }
     }
 

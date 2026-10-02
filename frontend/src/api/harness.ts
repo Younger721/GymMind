@@ -17,6 +17,15 @@ export interface HarnessConfigView {
   availablePlugins: HarnessPluginDescriptor[]
   systemPrompt: string
   platformScope: boolean
+  availableCapabilities?: Array<{
+    id: string
+    name: string
+    description: string
+    type: string
+    permission?: string | null
+    requiresTenant: boolean
+    allowedRoles: string[]
+  }>
 }
 
 export interface HarnessChatResponse {
@@ -25,12 +34,23 @@ export interface HarnessChatResponse {
   citations: Array<{ chunkId?: string; documentId?: string; text?: string; excerpt?: string }>
 }
 
+export interface HarnessProgressDetail {
+  kind: 'ACTOR' | 'SCOPE' | 'CHUNK' | 'DOCUMENT' | string
+  title: string
+  documentId?: string | null
+  chunkId?: string | null
+  documentName?: string | null
+  excerpt?: string | null
+  rank?: number | null
+}
+
 export interface HarnessProgressEvent {
   pluginId: string
   stage: string
   status: 'STARTED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
   message: string
   resultCount?: number | null
+  details?: HarnessProgressDetail[]
 }
 
 export const harnessApi = {
@@ -68,7 +88,7 @@ export const harnessApi = {
         }
         if (eventType === 'done') {
           onDone?.(JSON.parse(data) as HarnessChatResponse)
-        } else if (eventType === 'progress') {
+        } else if (eventType === 'progress' || eventType === 'tool_decision' || eventType === 'tool_start' || eventType === 'tool_result') {
           onProgress?.(JSON.parse(data) as HarnessProgressEvent)
         } else if (eventType === 'token' || !eventType) {
           try {
