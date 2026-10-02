@@ -167,7 +167,13 @@ public class BailianChatAdapter implements ChatModelGateway {
                                     if (data.isEmpty() || "[DONE]".equals(data)) continue;
                                     JsonNode root = mapper.readTree(data);
                                     ModelUsage parsedUsage = BailianUsageParser.parse(root);
-                                    if (parsedUsage.available()) finalUsage[0] = parsedUsage;
+                                    if (parsedUsage.available()) {
+                                        finalUsage[0] = parsedUsage.model() == null
+                                                ? new ModelUsage("dashscope", model, parsedUsage.inputTokens(),
+                                                parsedUsage.outputTokens(), parsedUsage.totalTokens(),
+                                                parsedUsage.providerRequestId(), true)
+                                                : parsedUsage;
+                                    }
                                     JsonNode delta = root.path("choices").path(0).path("delta");
                                     String token = delta.path("content").asText("");
                                     if (!token.isEmpty()) {
