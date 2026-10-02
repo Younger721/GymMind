@@ -71,8 +71,8 @@ public class DefaultAiUsageQueryService implements AiUsageQueryService {
         }
         return source.stream()
                 .filter(row -> filter.tenantId() == null || Objects.equals(row.tenantId(), filter.tenantId()))
-                .filter(row -> filter.from() == null || row.createdAt() == null || !row.createdAt().isBefore(filter.from()))
-                .filter(row -> filter.to() == null || row.createdAt() == null || row.createdAt().isBefore(filter.to()))
+                .filter(row -> filter.from() == null || (row.createdAt() != null && !row.createdAt().isBefore(filter.from())))
+                .filter(row -> filter.to() == null || (row.createdAt() != null && row.createdAt().isBefore(filter.to())))
                 .filter(row -> blank(filter.model()) || filter.model().equals(row.model()))
                 .filter(row -> blank(filter.status())
                         || ("UNAVAILABLE".equals(filter.status())

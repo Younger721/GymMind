@@ -11,6 +11,12 @@ ALTER TABLE ai_usage_record
     ADD COLUMN estimated_cost DECIMAL(18, 6) NULL,
     ADD COLUMN currency VARCHAR(8) NULL;
 
+UPDATE ai_usage_record
+SET total_tokens = COALESCE(input_tokens, 0) + COALESCE(output_tokens, 0),
+    usage_source = COALESCE(usage_source, 'LEGACY')
+WHERE total_tokens IS NULL
+  AND (COALESCE(input_tokens, 0) > 0 OR COALESCE(output_tokens, 0) > 0);
+
 CREATE TABLE ai_model_pricing (
     id BIGINT NOT NULL AUTO_INCREMENT,
     version BIGINT NOT NULL DEFAULT 0,

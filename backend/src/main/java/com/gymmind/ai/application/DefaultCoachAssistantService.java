@@ -71,18 +71,25 @@ public class DefaultCoachAssistantService {
             prompt += "\n请只使用以下已完成训练记录作为参考，不要编造记录：\n" + summary.promptText();
         }
         quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
+        ChatModelCallResult call;
         try {
             long started = System.currentTimeMillis();
-            ChatModelCallResult call = model.completeWithUsage(prompt, List.of());
+            call = model.completeWithUsage(prompt, List.of());
             if (call == null) call = ChatModelCallResult.unavailable(model.complete(prompt, List.of()),
                     Math.max(0, System.currentTimeMillis() - started), "OK");
-            if (usage != null) usage.record(actor, call, "coach-assistant");
-            String answer = call.content();
-            return new AiAnalysisResult(answer == null || answer.isBlank()
-                    ? "暂时无法生成建议，请结合会员实际情况人工评估。"
-                    : answer.trim());
         } catch (RuntimeException ex) {
             return new AiAnalysisResult("模型暂时不可用，请结合会员实际情况人工评估。");
         }
+        if (usage != null) {
+            try {
+                usage.record(actor, call, "coach-assistant");
+            } catch (RuntimeException ignored) {
+                // Usage persistence must not replace a generated recommendation.
+            }
+        }
+        String answer = call.content();
+        return new AiAnalysisResult(answer == null || answer.isBlank()
+                ? "暂时无法生成建议，请结合会员实际情况人工评估。"
+                : answer.trim());
     }
 }

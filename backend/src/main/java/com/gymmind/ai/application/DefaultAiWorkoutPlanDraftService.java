@@ -104,7 +104,13 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
             ChatModelCallResult call = model.completeWithUsage(prompt, List.of());
             if (call == null) call = ChatModelCallResult.unavailable(model.complete(prompt, List.of()),
                     Math.max(0, System.currentTimeMillis() - started), "OK");
-            if (usage != null) usage.record(actor, call, "workout-plan");
+            if (usage != null) {
+                try {
+                    usage.record(actor, call, "workout-plan");
+                } catch (RuntimeException ignored) {
+                    // Usage persistence must not replace a generated plan.
+                }
+            }
             response = call.content();
         } catch (RuntimeException ex) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);

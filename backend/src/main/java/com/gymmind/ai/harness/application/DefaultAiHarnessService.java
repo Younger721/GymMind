@@ -283,9 +283,11 @@ public class DefaultAiHarnessService implements AiHarnessService {
                 + formatHistory(history)
                 + "\n【用户问题】\n" + question;
         AiToolOrchestrationResult orchestration = null;
+        boolean directToolAnswerUsageRecorded = false;
         if (nativeToolFlow) {
             orchestration = toolOrchestrator.decide(actor, prompt, List.of(), enabled, progress);
             if (orchestration.usage() != null && usage != null) {
+                directToolAnswerUsageRecorded = orchestration.directAnswer() != null;
                 try {
                     usage.record(actor, new com.gymmind.ai.application.ChatModelCallResult(
                             orchestration.directAnswer(), orchestration.usage(), orchestration.latencyMs(), "OK"),
@@ -322,7 +324,9 @@ public class DefaultAiHarnessService implements AiHarnessService {
         if (chatHistory != null) {
             chatHistory.append(actor, sessionId, AiChatMessageRole.ASSISTANT, answer);
         }
-        recordUsage(actor, call, "harness");
+        if (!directToolAnswerUsageRecorded) {
+            recordUsage(actor, call, "harness");
+        }
 
         var sources = context.stream().filter(DefaultAiHarnessService::isUserVisibleSource)
                 .map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();

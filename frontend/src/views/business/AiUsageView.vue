@@ -91,7 +91,7 @@ import { agentApi, type TenantQuotaView } from '@/api/agent'
 const authStore = useAuthStore()
 const today = new Date()
 const prior = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)
-const localDate = (value: Date) => value.toISOString().slice(0, 10)
+const localDate = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
 const filters = reactive<{ range: string[]; tenantId?: number; model?: string; status?: string }>({ range: [localDate(prior), localDate(today)] })
 const rows = ref<AiUsageRecord[]>([])
 const trend = ref<AiUsageTrendPoint[]>([])

@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Objects;
 
 @Entity
 @Table(name = "ai_usage_record")
@@ -63,8 +64,17 @@ class AiUsageEntity extends AuditableEntity {
     }
 
     AiUsageRecord toRecord() {
-        return new AiUsageRecord(tenantId, userId, model, inputTokens, outputTokens,
+        Integer normalizedInput = inputTokens;
+        Integer normalizedOutput = outputTokens;
+        String normalizedSource = usageSource;
+        if (totalTokens == null && Objects.equals(inputTokens, 0) && Objects.equals(outputTokens, 0)
+                && (usageSource == null || usageSource.isBlank())) {
+            normalizedInput = null;
+            normalizedOutput = null;
+            normalizedSource = "UNAVAILABLE";
+        }
+        return new AiUsageRecord(tenantId, userId, model, normalizedInput, normalizedOutput,
                 latencyMs, providerRequestId, status, null, provider, feature, totalTokens,
-                usageSource, estimatedCost, currency, getCreatedAt());
+                normalizedSource, estimatedCost, currency, getCreatedAt());
     }
 }
