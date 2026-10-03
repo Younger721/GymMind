@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>鹈鹕骑车 · AI 状态测试</title>
+  <style>
+    :root {
+      --ink: #163c44;
+      --teal: #42c8bc;
+      --teal-dark: #167a79;
+      --sky: #d8f4ef;
+      --coral: #ff866d;
+      --sun: #ffd35e;
+      --paper: #fffaf0;
+      --shadow: rgba(22, 60, 68, .16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      color: var(--ink);
+      background: #f5efe2;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    .page {
+      width: min(1120px, 100%);
+      background: var(--paper);
+      border: 3px solid var(--ink);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 12px 12px 0 var(--ink);
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 28px 32px 20px;
+      background: #fffdf7;
+      border-bottom: 3px solid var(--ink);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--coral);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 52px);
+      line-height: .98;
+      letter-spacing: .01em;
+    }
+
+    .subtitle {
+      max-width: 450px;
+      margin: 12px 0 0;
+      color: #527077;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .status-card {
+      min-width: 236px;
+      padding: 15px 17px;
+      border: 2px solid var(--ink);
+      border-radius: 15px;
+      background: #ecfaf5;
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .status-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: #56767a;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .status-label::after {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      background: var(--teal);
+    }
+
+    .status-text {
+      display: block;
+      margin: 7px 0 10px;
+      font-size: 24px;
+      font-weight: 900;
+    }
+
+    .meter {
+      height: 10px;
+      overflow: hidden;
+      border: 2px solid var(--ink);
+      border-radius: 100px;
+      background: #fff;
+    }
+
+    .meter span {
+      display: block;
+      width: 78%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--teal);
+      transition: width .35s ease, background .35s ease;
+    }
+
+    .stage-wrap { padding: 22px; background: var(--sky); }
+
+    .stage {
+      position: relative;
+      overflow: hidden;
+      border: 3px solid var(--ink);
+      border-radius: 18px;
+      background: #b9e9e0;
+      box-shadow: inset 0 -12px 0 rgba(22, 60, 68, .07);
+    }
+
+    svg { display: block; width: 100%; height: auto; }
+
+    .motion { transform-box: fill-box; transform-origin: center; }
+    .cloud { animation: cloud-drift 18s linear infinite; }
+    .cloud.slow { animation-duration: 25s; animation-delay: -8s; }
+    .pelican { animation: bob 1.2s ease-in-out infinite; }
+    .bike-wheel { animation: wheel-spin .9s linear infinite; }
+    .pedal { animation: pedal-spin .9s linear infinite; }
+    .road-mark { animation: road-slide 1.5s linear infinite; }
+    .wing { animation: wing-flap 1.2s ease-in-out infinite; transform-origin: 50% 70%; }
+
+    .is-paused .motion { animation-play-state: paused; }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 17px 22px 21px;
+      background: #fffdf7;
+    }
+
+    .hint {
+      margin: 0;
+      color: #6a8587;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+    button {
+      border: 2px solid var(--ink);
+      border-radius: 11px;
+      padding: 10px 14px;
+      color: var(--ink);
+      background: #fff;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 3px 3px 0 var(--ink);
+      transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+
+    button:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+    button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
+    button.primary { background: var(--sun); }
+    button:focus-visible { outline: 4px solid rgba(255, 134, 109, .5); outline-offset: 3px; }
+
+    .status-card.warn { background: #fff0dc; }
+    .status-card.warn .status-label::after { background: var(--coral); }
+    .status-card.warn .meter span { background: var(--coral); }
+    .status-card.calm { background: #edf4ff; }
+    .status-card.calm .status-label::after { background: #6d9ee8; }
+    .status-card.calm .meter span { background: #6d9ee8; }
+
+    @keyframes wheel-spin { to { transform: rotate(360deg); } }
+    @keyframes pedal-spin { to { transform: rotate(-360deg); } }
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+    @keyframes wing-flap { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-6deg); } }
+    @keyframes cloud-drift { from { transform: translateX(-70px); } to { transform: translateX(130px); } }
+    @keyframes road-slide { from { transform: translateX(0); } to { transform: translateX(-110px); } }
+
+    @media (max-width: 700px) {
+      body { padding: 10px; }
+      .page { border-radius: 17px; box-shadow: 6px 6px 0 var(--ink); }
+      header { flex-direction: column; padding: 22px 20px 18px; }
+      .status-card { width: 100%; min-width: 0; }
+      .stage-wrap { padding: 12px; }
+      .controls { align-items: stretch; flex-direction: column; padding: 15px 16px 18px; }
+      .buttons { justify-content: stretch; }
+      button { flex: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .motion { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page" id="app">
+    <header>
+      <div>
+        <p class="eyebrow">AI sanity ride / 02D</p>
+        <h1>鹈鹕今天<br>骑得很清醒</h1>
+        <p class="subtitle">如果它能稳稳骑过这段海岸公路，说明状态还不错。点一下按钮，看看 AI 会不会突然降智。</p>
+      </div>
+      <aside class="status-card" id="statusCard" aria-live="polite">
+        <div class="status-label">AI 当前状态</div>
+        <strong class="status-text" id="statusText">思考中</strong>
+        <div class="meter" aria-hidden="true"><span id="meterFill"></span></div>
+      </aside>
+    </header>
+
+    <section class="stage-wrap" aria-label="鹈鹕骑自行车动画">
+      <div class="stage">
+        <svg viewBox="0 0 1000 560" role="img" aria-labelledby="sceneTitle sceneDesc">
+          <title id="sceneTitle">一只鹈鹕骑着自行车沿海岸前进</title>
+          <desc id="sceneDesc">背景有太阳、云朵和海浪，鹈鹕的脚蹬和自行车车轮正在转动。</desc>
+          <defs>
+            <linearGradient id="skyGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#b9e9e0" />
+              <stop offset="1" stop-color="#e5f7e7" />
+            </linearGradient>
+            <linearGradient id="roadGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#efad77" />
+              <stop offset="1" stop-color="#dd835f" />
+            </linearGradient>
+          </defs>
+
+          <rect width="1000" height="560" fill="url(#skyGradient)" />
+          <circle cx="842" cy="112" r="56" fill="#ffd35e" stroke="#163c44" stroke-width="5" />
+          <path d="M0 330 C140 284 245 318 356 292 C495 260 590 300 710 276 C821 254 908 278 1000 250 V395 H0Z" fill="#7ec9b8" stroke="#163c44" stroke-width="5" />
+          <path d="M0 365 C135 330 238 362 357 338 C498 309 609 344 723 321 C846 296 925 321 1000 302 V430 H0Z" fill="#279b9a" opacity=".88" />
+
+          <g class="motion cloud" fill="#fffdf7" stroke="#163c44" stroke-width="5" stroke-linejoin="round">
+            <path d="M90 125 C90 103 110 87 133 89 C142 65 163 52 188 58 C207 38 245 48 251 76 C278 74 295 91 297 112 C319 113 334 126 334 145 H89 C79 139 80 130 90 125Z" />
+          </g>
+          <g class="motion cloud slow" fill="#fffdf7" stroke="#163c44" stroke-width="5" stroke-linejoin="round">
+            <path d="M610 174 C610 157 624 144 642 144 C650 121 673 111 694 120 C710 100 746 110 750 137 C775 134 792 149 794 167 C812 169 824 180 824 195 H609 C601 187 603 179 610 174Z" />
+          </g>
+
+          <g fill="none" stroke="#d6fff4" stroke-width="7" stroke-linecap="round" opacity=".85">
+            <path d="M36 394 C104 375 160 424 226 405 S351 391 421 412" />
+            <path d="M610 397 C683 372 742 426 812 405 S925 391 994 410" />
+          </g>
+
+          <path d="M0 413 H1000 V560 H0Z" fill="url(#roadGradient)" stroke="#163c44" stroke-width="5" />
+          <g class="motion road-mark" fill="#ffe6a2" opacity=".95">
+            <rect x="40" y="490" width="92" height="12" rx="6" />
+            <rect x="250" y="490" width="92" height="12" rx="6" />
+            <rect x="460" y="490" width="92" height="12" rx="6" />
+            <rect x="670" y="490" width="92" height="12" rx="6" />
+            <rect x="880" y="490" width="92" height="12" rx="6" />
+          </g>
+
+          <g class="motion pelican" stroke="#163c44" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+            <ellipse cx="494" cy="307" rx="102" ry="86" fill="#ffd35e" />
+            <path class="wing" d="M439 282 C405 286 393 328 425 351 C450 369 475 345 482 318Z" fill="#f6b948" />
+            <path d="M432 222 C433 180 462 149 500 151 C542 153 560 183 553 224 L539 248 H454Z" fill="#fff5d2" />
+            <path d="M520 213 C554 205 601 219 625 237 C597 263 556 267 523 250Z" fill="#ff866d" />
+            <path d="M523 211 C563 216 594 228 616 238 C578 238 551 234 523 226Z" fill="#ffad5d" stroke-width="4" />
+            <circle cx="527" cy="190" r="9" fill="#163c44" />
+            <path d="M458 165 C459 135 485 118 508 130 C521 137 526 149 523 164 C500 153 480 156 458 165Z" fill="#ff866d" />
+
+            <path d="M463 365 L443 414 L474 426" fill="none" />
+            <path d="M526 365 L548 413 L576 425" fill="none" />
+            <path d="M437 413 C451 416 462 419 476 426" fill="none" />
+            <path d="M545 413 C559 416 570 421 579 427" fill="none" />
+          </g>
+
+          <g class="bike" fill="none" stroke="#163c44" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+            <g class="motion bike-wheel">
+              <circle cx="375" cy="436" r="70" stroke="#fffdf7" stroke-width="9" />
+              <circle cx="375" cy="436" r="7" fill="#163c44" />
+              <path d="M375 366 V506 M305 436 H445 M326 387 L424 485 M326 485 L424 387" stroke-width="3" />
+            </g>
+            <g class="motion bike-wheel">
+              <circle cx="625" cy="436" r="70" stroke="#fffdf7" stroke-width="9" />
+              <circle cx="625" cy="436" r="7" fill="#163c44" />
+              <path d="M625 366 V506 M555 436 H695 M576 387 L674 485 M576 485 L674 387" stroke-width="3" />
+            </g>
+            <path d="M375 436 L449 371 L542 436 L625 436 L542 436 L500 349 L449 371" stroke="#ff866d" stroke-width="9" />
+            <path d="M500 349 H548 M500 349 L483 324" />
+            <path d="M542 436 L560 457" />
+            <g class="motion pedal" transform="translate(542 436)">
+              <circle r="13" fill="#ff866d" />
+              <path d="M0 0 L-28 -18 M-28 -18 h-24 M0 0 L26 18 M26 18 h24" stroke-width="6" />
+            </g>
+            <path d="M454 366 H421" />
+          </g>
+
+          <g transform="translate(754 430)" fill="#fff5d2" stroke="#163c44" stroke-width="5">
+            <path d="M0 45 C16 17 39 0 66 4 C91 7 104 24 100 50 C94 81 60 93 28 77Z" />
+            <path d="M43 14 C34 -4 52 -21 70 -13 C83 -8 88 6 80 19Z" fill="#ff866d" />
+            <circle cx="68" cy="23" r="5" fill="#163c44" />
+            <path d="M85 33 C110 33 125 38 139 50 C116 61 98 59 83 51Z" fill="#ff866d" />
+          </g>
+
+          <g fill="#fffdf7" stroke="#163c44" stroke-width="4" stroke-linecap="round">
+            <path d="M85 446 C103 424 119 424 136 445" />
+            <path d="M145 452 C163 430 179 430 196 451" />
+          </g>
+        </svg>
+      </div>
+    </section>
+
+    <div class="controls">
+      <p class="hint">观察车轮、脚蹬和云朵的节奏，判断它有没有开始胡思乱想。</p>
+      <div class="buttons">
+        <button type="button" id="pauseButton" aria-pressed="false">暂停动画</button>
+        <button type="button" class="primary" id="statusButton">换个 AI 状态</button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const app = document.querySelector('#app');
+    const pauseButton = document.querySelector('#pauseButton');
+    const statusButton = document.querySelector('#statusButton');
+    const statusCard = document.querySelector('#statusCard');
+    const statusText = document.querySelector('#statusText');
+    const meterFill = document.querySelector('#meterFill');
+
+    const statusItems = [
+      { text: '思考中', className: '', meter: '78%' },
+      { text: '状态良好', className: 'calm', meter: '93%' },
+      { text: '小心降智', className: 'warn', meter: '34%' }
+    ];
+    let statusIndex = 0;
+    let isPaused = false;
+
+    pauseButton.addEventListener('click', () => {
+      isPaused = !isPaused;
+      app.classList.toggle('is-paused', isPaused);
+      pauseButton.textContent = isPaused ? '继续动画' : '暂停动画';
+      pauseButton.setAttribute('aria-pressed', String(isPaused));
+    });
+
+    statusButton.addEventListener('click', () => {
+      statusIndex = (statusIndex + 1) % statusItems.length;
+      const next = statusItems[statusIndex];
+      statusText.textContent = next.text;
+      meterFill.style.width = next.meter;
+      statusCard.className = `status-card ${next.className}`.trim();
+    });
+  </script>
+</body>
+</html>
