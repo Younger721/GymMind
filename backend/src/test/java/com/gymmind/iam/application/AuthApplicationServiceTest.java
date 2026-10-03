@@ -103,6 +103,20 @@ class AuthApplicationServiceTest {
     }
 
     @Test
+    void tenantLoginUsesTenantScopedRolePermissions() {
+        Tenant tenant = tenant(7L, "override-gym", "Override Gym");
+        UserAccount user = user(42L, tenant.getId(), RoleCode.COACH);
+        when(users.findByNormalizedUsername("coach")).thenReturn(Optional.of(user));
+        when(tenants.findById(7L)).thenReturn(Optional.of(tenant));
+        when(userRoles.findRoleCodesByUserId(42L)).thenReturn(Set.of(RoleCode.COACH));
+        when(userRoles.findPermissionCodesByUserId(42L, 7L)).thenReturn(Set.of("menu:training"));
+
+        AuthResult result = service.login(new LoginCommand("coach", "correct-password"));
+
+        assertThat(result.user().permissions()).containsExactly("menu:training");
+    }
+
+    @Test
     void loginFailuresDoNotRevealEmailPasswordUserOrTenant() {
         assertInvalidCredentials(() -> service.login(new LoginCommand("missing", "wrong")));
 

@@ -38,7 +38,7 @@ const router = createRouter({
         { path: 'ai-usage', name: 'ai-usage', component: () => import('@/views/business/AiUsageView.vue'), meta: { menuPermission: MENU_CODES.AI_USAGE } },
         { path: 'tenant-settings', name: 'tenant-settings', component: () => import('@/views/business/TenantSettingsView.vue'), meta: { menuPermission: MENU_CODES.TENANT_SETTINGS } },
         { path: 'platform', name: 'platform', component: () => import('@/views/business/PlatformView.vue'), meta: { menuPermission: MENU_CODES.PLATFORM } },
-        { path: 'role-permissions', name: 'role-permissions', component: () => import('@/views/business/RolePermissionView.vue'), meta: { menuPermission: MENU_CODES.ROLE_PERMISSIONS, platformAdminOnly: true } },
+        { path: 'role-permissions', name: 'role-permissions', component: () => import('@/views/business/RolePermissionView.vue'), meta: { menuPermission: MENU_CODES.ROLE_PERMISSIONS } },
         { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue'), meta: { menuPermission: MENU_CODES.PROFILE } },
         { path: 'plan-generator', redirect: '/assistant?mode=workout-plan', meta: { menuPermission: MENU_CODES.ASSISTANT } },
         { path: 'agents/manage', name: 'agents-manage', component: () => import('@/views/AgentManageView.vue'), meta: { menuPermission: MENU_CODES.ASSISTANT } },
@@ -73,10 +73,6 @@ router.beforeEach(async (to, _from, next) => {
   const menuPermission = to.matched
     .map(record => record.meta.menuPermission as string | undefined)
     .find(Boolean)
-  if (requiresAuth && to.matched.some(record => record.meta.platformAdminOnly) && !authStore.isPlatformAdmin) {
-    next('/dashboard')
-    return
-  }
   if (requiresAuth && menuPermission && !hasMenuPermission(menuPermission)) {
     const fallback = MENU_CODES.DASHBOARD
     if (to.path !== '/dashboard' && hasMenuPermission(fallback)) {

@@ -49,6 +49,16 @@
         {"column": "permission_id", "table": "sys_permission", "target": "id"}
       ]
     },
+    "sys_tenant_role_permission": {
+      "columns": ["tenant_id", "role_id", "permission_id"],
+      "required": ["tenant_id", "role_id", "permission_id"],
+      "unique": [["tenant_id", "role_id", "permission_id"]],
+      "foreignKeys": [
+        {"column": "tenant_id", "table": "sys_tenant", "target": "id"},
+        {"column": "role_id", "table": "sys_role", "target": "id"},
+        {"column": "permission_id", "table": "sys_permission", "target": "id"}
+      ]
+    },
     "sys_user_invitation": {
       "columns": ["id", "version", "created_at", "updated_at", "tenant_id", "email", "role_code", "token_hash", "expires_at", "status", "accepted_at"],
       "required": ["id", "version", "created_at", "updated_at", "tenant_id", "email", "role_code", "token_hash", "expires_at", "status"],

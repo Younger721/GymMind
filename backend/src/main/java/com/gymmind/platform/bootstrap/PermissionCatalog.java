@@ -232,7 +232,8 @@ public final class PermissionCatalog {
         Map<RoleCode, Set<String>> defaults = new EnumMap<>(RoleCode.class);
         defaults.put(RoleCode.GYM_ADMIN, Set.of(
                 "menu:dashboard", "menu:assistant", "menu:knowledge", "menu:operations", "menu:courses",
-                "menu:equipment", "menu:training", "menu:analytics", "menu:admin", "menu:tenant-settings", "menu:profile"));
+                "menu:equipment", "menu:training", "menu:analytics", "menu:admin", "menu:tenant-settings",
+                "menu:role-permissions", "menu:profile"));
         defaults.put(RoleCode.COACH, Set.of(
                 "menu:dashboard", "menu:assistant", "menu:knowledge", "menu:courses", "menu:training", "menu:profile"));
         defaults.put(RoleCode.MEMBER, Set.of(

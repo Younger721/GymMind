@@ -1,8 +1,8 @@
 <template>
   <div>
     <h2 class="simple-page-title">角色权限</h2>
-    <p class="simple-page-desc">通过角色配置可见菜单</p>
-    <el-alert v-if="!authStore.isPlatformAdmin" type="error" title="仅平台管理员可以配置角色权限" show-icon />
+    <p class="simple-page-desc">配置平台默认菜单或当前门店的角色菜单覆盖</p>
+    <el-alert v-if="!canManageRolePermissions" type="error" title="仅管理员可以配置角色权限" show-icon />
     <div v-else class="simple-card">
       <el-table :data="roles" v-loading="loading" stripe>
         <el-table-column prop="name" label="角色名称" />
@@ -11,12 +11,13 @@
         <el-table-column label="操作" width="150"><template #default="{ row }">
           <el-button size="small" type="primary" text @click="openPermissions(row)">菜单权限</el-button>
           <el-tag v-if="row.code === 'PLATFORM_ADMIN'" type="info" size="small">固定全量</el-tag>
+          <el-tag v-else-if="row.readOnly" type="info" size="small">固定管理权限</el-tag>
         </template></el-table-column>
       </el-table>
     </div>
     <el-dialog v-model="dialogVisible" :title="`${selectedRole?.name || ''} · 菜单权限`" width="620px" destroy-on-close>
       <el-tree ref="treeRef" :data="permissionTree" node-key="code" show-checkbox default-expand-all :props="{ label: 'label', children: 'children', disabled: 'disabled' }" />
-      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button v-if="selectedRole?.code !== 'PLATFORM_ADMIN'" type="primary" :loading="saving" @click="save">保存菜单</el-button></template>
+      <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button v-if="!selectedRole?.readOnly" type="primary" :loading="saving" @click="save">保存菜单</el-button></template>
     </el-dialog>
   </div>
 </template>
@@ -29,6 +30,7 @@ import { rolePermissionsApi, type PermissionCatalogItem } from '@/api/rolePermis
 import { FULL_MENU_CATALOG, menuLabel } from '@/utils/menuPermissions'
 
 const authStore = useAuthStore()
+const canManageRolePermissions = computed(() => authStore.isPlatformAdmin || authStore.roles.includes('GYM_ADMIN'))
 const loading = ref(false)
 const saving = ref(false)
 const roles = ref<any[]>([])
@@ -45,11 +47,11 @@ const roleNames: Record<string, string> = {
 const roleOrder = ['PLATFORM_ADMIN', 'GYM_ADMIN', 'COACH', 'MEMBER']
 const roleMenuBoundaries: Record<string, Set<string>> = {
   GYM_ADMIN: new Set([
-    'menu:dashboard', 'menu:assistant', 'menu:knowledge', 'menu:operations',
-    'menu:training', 'menu:analytics', 'menu:admin', 'menu:tenant-settings', 'menu:profile'
+    'menu:dashboard', 'menu:assistant', 'menu:knowledge', 'menu:courses',
+    'menu:training', 'menu:analytics', 'menu:admin', 'menu:tenant-settings', 'menu:role-permissions', 'menu:profile'
   ]),
-  COACH: new Set(['menu:dashboard', 'menu:assistant', 'menu:knowledge', 'menu:training', 'menu:profile']),
-  MEMBER: new Set(['menu:dashboard', 'menu:assistant', 'menu:training', 'menu:profile'])
+  COACH: new Set(['menu:dashboard', 'menu:assistant', 'menu:knowledge', 'menu:courses', 'menu:training', 'menu:profile']),
+  MEMBER: new Set(['menu:dashboard', 'menu:assistant', 'menu:courses', 'menu:training', 'menu:profile'])
 }
 const menuItems = computed(() => {
   const byCode = new Map(catalog.value.filter(item => item.code.startsWith('menu:')).map(item => [item.code, item]))
@@ -63,7 +65,7 @@ const menuItems = computed(() => {
   })
 })
 const permissionTree = computed(() => {
-  const readOnly = selectedRole.value?.code === 'PLATFORM_ADMIN'
+  const readOnly = selectedRole.value?.readOnly === true
   const allowed = selectedRole.value?.code === 'PLATFORM_ADMIN'
     ? new Set(FULL_MENU_CATALOG.map(item => item.code))
     : roleMenuBoundaries[selectedRole.value?.code] || new Set<string>()
@@ -85,9 +87,17 @@ async function load() {
   try {
     const pp = await rolePermissionsApi.catalog()
     catalog.value = (pp as any).data || []
-    roles.value = roleOrder.map(code => {
+    const visibleRoleCodes = authStore.isPlatformAdmin
+      ? roleOrder
+      : ['GYM_ADMIN', 'COACH', 'MEMBER']
+    roles.value = visibleRoleCodes.map(code => {
       const menuCount = menuItems.value.filter(item => item.roles.includes(code)).length
-      return { code, name: roleNames[code] || code, permissionCount: code === 'PLATFORM_ADMIN' ? FULL_MENU_CATALOG.length : menuCount }
+      return {
+        code,
+        name: roleNames[code] || code,
+        permissionCount: code === 'PLATFORM_ADMIN' ? FULL_MENU_CATALOG.length : menuCount,
+        readOnly: code === 'PLATFORM_ADMIN' || (!authStore.isPlatformAdmin && code === 'GYM_ADMIN')
+      }
     })
   } catch {
     ElMessage.error('加载角色菜单失败')
@@ -105,7 +115,7 @@ async function openPermissions(row: any) {
   treeRef.value?.setCheckedKeys(selected)
 }
 async function save() {
-  if (!selectedRole.value || selectedRole.value.code === 'PLATFORM_ADMIN') return
+  if (!selectedRole.value || selectedRole.value.readOnly) return
   saving.value = true
   try {
     const keys = (treeRef.value?.getCheckedKeys() || []).filter(k => !String(k).startsWith('group:')) as string[]

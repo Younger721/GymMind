@@ -61,7 +61,12 @@ public class PrincipalLoader {
         }
 
         Set<RoleCode> roles = userRoles.findRoleCodesByUserId(user.getId());
-        Set<String> permissions = userRoles.findPermissionCodesByUserId(user.getId());
+        Set<String> permissions = user.getTenantId() == null
+                ? userRoles.findPermissionCodesByUserId(user.getId())
+                : userRoles.findPermissionCodesByUserId(user.getId(), user.getTenantId());
+        if (permissions == null || (permissions.isEmpty() && user.getTenantId() != null)) {
+            permissions = userRoles.findPermissionCodesByUserId(user.getId());
+        }
         if (claims.tenantId() == null) {
             if (!Set.of(RoleCode.PLATFORM_ADMIN).equals(roles)) {
                 throw new IllegalArgumentException("Platform authorization is invalid");

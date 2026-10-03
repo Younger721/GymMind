@@ -8,9 +8,11 @@ import com.gymmind.iam.domain.model.UserRole;
 import com.gymmind.iam.domain.model.UserStatus;
 import com.gymmind.iam.domain.model.Permission;
 import com.gymmind.iam.domain.model.RolePermission;
+import com.gymmind.iam.domain.model.TenantRolePermission;
 import com.gymmind.iam.domain.repository.PermissionRepository;
 import com.gymmind.iam.domain.repository.RolePermissionRepository;
 import com.gymmind.iam.domain.repository.RoleRepository;
+import com.gymmind.iam.domain.repository.TenantRolePermissionRepository;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
 import com.gymmind.iam.domain.repository.UserRoleRepository;
 import com.gymmind.platform.bootstrap.PermissionCatalog;
@@ -19,6 +21,7 @@ import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.tenancy.domain.model.Tenant;
 import com.gymmind.tenancy.domain.repository.TenantRepository;
 import com.gymmind.member.domain.model.Member;
 import com.gymmind.member.domain.repository.MemberRepository;
@@ -52,6 +55,7 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     private final RoleRepository roles;
     private final PermissionRepository permissions;
     private final RolePermissionRepository rolePermissions;
+    private final TenantRolePermissionRepository tenantRolePermissions;
     private final TenantRepository tenants;
     private final MemberRepository members;
     private final MemberMembershipRepository memberships;
@@ -64,6 +68,7 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
                                              RoleRepository roles,
                                              PermissionRepository permissions,
                                              RolePermissionRepository rolePermissions,
+                                             TenantRolePermissionRepository tenantRolePermissions,
                                              TenantRepository tenants,
                                              MemberRepository members,
                                              MemberMembershipRepository memberships,
@@ -73,6 +78,7 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
         this.roles = Objects.requireNonNull(roles, "roles");
         this.permissions = permissions;
         this.rolePermissions = rolePermissions;
+        this.tenantRolePermissions = tenantRolePermissions;
         this.tenants = tenants;
         this.members = members;
         this.memberships = memberships;
@@ -82,7 +88,15 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     public DefaultUserAdministrationService(UserAccountRepository users, UserRoleRepository userRoles,
                                              RoleRepository roles, PermissionRepository permissions,
                                              RolePermissionRepository rolePermissions) {
-        this(users, userRoles, roles, permissions, rolePermissions, null, null, null, null);
+        this(users, userRoles, roles, permissions, rolePermissions, null, null, null, null, null);
+    }
+
+    public DefaultUserAdministrationService(UserAccountRepository users, UserRoleRepository userRoles,
+                                             RoleRepository roles, PermissionRepository permissions,
+                                             RolePermissionRepository rolePermissions,
+                                             TenantRolePermissionRepository tenantRolePermissions) {
+        this(users, userRoles, roles, permissions, rolePermissions, tenantRolePermissions,
+                null, null, null, null);
     }
 
     public DefaultUserAdministrationService(UserAccountRepository users, UserRoleRepository userRoles, RoleRepository roles) {
@@ -204,20 +218,27 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     public List<RoleView> listRoles(CurrentActor actor) {
         if (!ActorAccess.isSuperAdmin(actor)) requireGymAdmin(actor, "role:read");
         return roles.findAll().stream()
+                .filter(role -> ActorAccess.isSuperAdmin(actor)
+                        || role.getCode() == RoleCode.GYM_ADMIN
+                        || role.getCode() == RoleCode.COACH
+                        || role.getCode() == RoleCode.MEMBER)
                 .map(role -> new RoleView(role.getId(), role.getCode(), role.getName(), role.getStatus().name(),
-                        rolePermissions == null ? 0 : menuPermissionCount(role.getId())))
+                        rolePermissions == null ? 0 : menuPermissionCount(actor, role)))
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PermissionView> listPermissionCatalog(CurrentActor actor) {
-        requirePlatformPermission(actor, "role:permission:read");
+        requireRolePermissionAccess(actor, null, "role:permission:read");
         List<Role> roleList = roles.findAll();
-        if (permissions == null || rolePermissions == null) throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        if (permissions == null || rolePermissions == null || (isTenantRoleAdmin(actor) && tenantRolePermissions == null)) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        }
         Map<String, Set<RoleCode>> roleCodesByMenu = new HashMap<>();
         for (Role role : roleList) {
-            Set<String> assigned = rolePermissions.findPermissionCodesByRoleId(role.getId());
+            if (!ActorAccess.isSuperAdmin(actor) && role.getCode() == RoleCode.PLATFORM_ADMIN) continue;
+            Set<String> assigned = permissionCodesFor(actor, role);
             if (assigned == null) assigned = Set.of();
             for (String code : assigned) {
                 if (PermissionCatalog.isMenuPermission(code)) {
@@ -234,9 +255,11 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     @Override
     @Transactional
     public void replaceRolePermissions(CurrentActor actor, RoleCode roleCode, Set<String> permissionCodes) {
-        requirePlatformPermission(actor, "role:permission:write");
         if (roleCode == null || roleCode == RoleCode.PLATFORM_ADMIN || permissionCodes == null) throw new BusinessException(ErrorCode.FORBIDDEN);
-        if (permissions == null || rolePermissions == null) throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        Long tenantId = requireRolePermissionAccess(actor, roleCode, "role:permission:write");
+        if (permissions == null || rolePermissions == null || (tenantId != null && tenantRolePermissions == null)) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        }
         Role role = roles.findByCode(roleCode).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         Set<String> normalized = permissionCodes.stream().filter(Objects::nonNull).map(String::trim)
                 .filter(s -> !s.isBlank()).collect(Collectors.toSet());
@@ -254,21 +277,61 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
             configuredMarker = permissions.findByCode(PermissionCatalog.MENU_CONFIGURED_MARKER)
                     .orElseThrow(() -> new BusinessException(ErrorCode.INTERNAL_ERROR));
         }
-        rolePermissions.deleteByRoleId(role.getId());
         Set<String> linked = new java.util.HashSet<>();
+        if (tenantId == null) {
+            rolePermissions.deleteByRoleId(role.getId());
+        } else {
+            tenantRolePermissions.deleteByTenantIdAndRoleId(tenantId, role.getId());
+        }
         for (String menuCode : normalized) {
-            linkPermission(role, catalog, linked, menuCode);
+            if (tenantId == null) {
+                linkPermission(role, catalog, linked, menuCode);
+            } else {
+                linkTenantPermission(tenantId, role, catalog, linked, menuCode);
+            }
             for (String operationCode : PermissionCatalog.operationPermissionsFor(roleCode, menuCode)) {
-                linkPermission(role, catalog, linked, operationCode);
+                if (tenantId == null) {
+                    linkPermission(role, catalog, linked, operationCode);
+                } else {
+                    linkTenantPermission(tenantId, role, catalog, linked, operationCode);
+                }
             }
         }
-        rolePermissions.save(RolePermission.link(role, configuredMarker));
+        if (tenantId == null) {
+            rolePermissions.save(RolePermission.link(role, configuredMarker));
+        } else {
+            tenantRolePermissions.save(TenantRolePermission.link(tenantReference(tenantId), role, configuredMarker));
+        }
     }
 
-    private int menuPermissionCount(Long roleId) {
-        Set<String> assigned = rolePermissions.findPermissionCodesByRoleId(roleId);
+    private int menuPermissionCount(CurrentActor actor, Role role) {
+        Set<String> assigned = permissionCodesFor(actor, role);
         if (assigned == null) return 0;
         return (int) assigned.stream().filter(PermissionCatalog::isMenuPermission).count();
+    }
+
+    private Set<String> permissionCodesFor(CurrentActor actor, Role role) {
+        if (isTenantRoleAdmin(actor)
+                && (role.getCode() == RoleCode.COACH || role.getCode() == RoleCode.MEMBER)
+                && tenantRolePermissions.existsByTenantIdAndRoleId(ActorAccess.requireTenantId(actor), role.getId())) {
+            return tenantRolePermissions.findPermissionCodesByTenantIdAndRoleId(
+                    ActorAccess.requireTenantId(actor), role.getId());
+        }
+        return rolePermissions.findPermissionCodesByRoleId(role.getId());
+    }
+
+    private void linkTenantPermission(Long tenantId, Role role, Map<String, Permission> catalog,
+                                      Set<String> linked, String code) {
+        if (!linked.add(code)) return;
+        Permission permission = catalog.get(code);
+        if (permission == null) throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        tenantRolePermissions.save(TenantRolePermission.link(tenantReference(tenantId), role, permission));
+    }
+
+    private Tenant tenantReference(Long tenantId) {
+        if (tenants == null) throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        return tenants.findById(tenantId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
     private void linkPermission(Role role, Map<String, Permission> catalog, Set<String> linked, String code) {
@@ -290,6 +353,25 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
 
     private static void requirePlatformPermission(CurrentActor actor, String permission) {
         if (actor == null || !actor.isPlatformAdmin() || !actor.hasPermission(permission)) throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private static boolean isTenantRoleAdmin(CurrentActor actor) {
+        return actor != null && !actor.isPlatformAdmin() && actor.tenantId() != null
+                && actor.roles().contains(RoleCode.GYM_ADMIN);
+    }
+
+    private Long requireRolePermissionAccess(CurrentActor actor, RoleCode roleCode, String permission) {
+        if (actor == null || !actor.hasPermission(permission)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (actor.isPlatformAdmin()) {
+            return null;
+        }
+        if (!isTenantRoleAdmin(actor) || (roleCode != null
+                && (roleCode == RoleCode.PLATFORM_ADMIN || roleCode == RoleCode.GYM_ADMIN))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return ActorAccess.requireTenantId(actor);
     }
 
     private UserAccount findTenantUser(Long tenantId, Long userId) {

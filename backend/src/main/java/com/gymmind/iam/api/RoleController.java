@@ -48,7 +48,6 @@ public class RoleController {
     @GetMapping("/permissions")
     public ApiResponse<List<PermissionCatalog>> permissions() {
         CurrentActor actor = actors.requireCurrent();
-        ActorAccess.requirePlatformAdmin(actor, "role:permission:read");
         return ApiResponse.success(service.listPermissionCatalog(actor).stream()
                 .map(p -> new PermissionCatalog(p.code(), p.name(), p.roles())).toList());
     }
@@ -56,7 +55,6 @@ public class RoleController {
     @PutMapping("/{roleCode}/permissions")
     public ApiResponse<Void> updatePermissions(@PathVariable RoleCode roleCode, @RequestBody PermissionUpdate request) {
         CurrentActor actor = actors.requireCurrent();
-        ActorAccess.requirePlatformAdmin(actor, "role:permission:write");
         service.replaceRolePermissions(actor, roleCode, request == null ? Set.of() : request.permissions());
         return ApiResponse.success(null);
     }

@@ -154,7 +154,12 @@ public class DefaultAuthApplicationService implements AuthApplicationService {
 
     private AuthenticatedAccount loadAuthorizations(UserAccount user, String sourceTokenId) {
         Set<RoleCode> roles = userRoleRepository.findRoleCodesByUserId(user.getId());
-        Set<String> permissions = userRoleRepository.findPermissionCodesByUserId(user.getId());
+        Set<String> permissions = user.getTenantId() == null
+                ? userRoleRepository.findPermissionCodesByUserId(user.getId())
+                : userRoleRepository.findPermissionCodesByUserId(user.getId(), user.getTenantId());
+        if (permissions == null || (permissions.isEmpty() && user.getTenantId() != null)) {
+            permissions = userRoleRepository.findPermissionCodesByUserId(user.getId());
+        }
         if (roles == null || roles.isEmpty() || permissions == null) {
             throw unauthenticated();
         }

@@ -107,7 +107,12 @@ public class DefaultUserInvitationService implements UserInvitationService {
         invitation.accept(now);
         invitations.save(invitation);
         Set<RoleCode> roleCodes = userRoles.findRoleCodesByUserId(user.getId());
-        Set<String> permissions = userRoles.findPermissionCodesByUserId(user.getId());
+        Set<String> permissions = user.getTenantId() == null
+                ? userRoles.findPermissionCodesByUserId(user.getId())
+                : userRoles.findPermissionCodesByUserId(user.getId(), user.getTenantId());
+        if (permissions == null || (permissions.isEmpty() && user.getTenantId() != null)) {
+            permissions = userRoles.findPermissionCodesByUserId(user.getId());
+        }
         CurrentActor actor = new CurrentActor(user.getId(), tenant.getId(), roleCodes, permissions,
                 user.getTokenVersion(), "invitation-accept");
         com.gymmind.shared.security.jwt.TokenPair pair = jwt.issue(actor);

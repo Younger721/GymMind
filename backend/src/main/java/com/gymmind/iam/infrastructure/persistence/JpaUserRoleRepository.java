@@ -10,9 +10,15 @@ import java.util.Set;
 @Repository
 class JpaUserRoleRepository implements UserRoleRepository {
     private final SpringDataUserRoleRepository delegate;
+    private final SpringDataRolePermissionRepository globalPermissions;
+    private final SpringDataTenantRolePermissionRepository tenantPermissions;
 
-    JpaUserRoleRepository(SpringDataUserRoleRepository delegate) {
+    JpaUserRoleRepository(SpringDataUserRoleRepository delegate,
+                          SpringDataRolePermissionRepository globalPermissions,
+                          SpringDataTenantRolePermissionRepository tenantPermissions) {
         this.delegate = delegate;
+        this.globalPermissions = globalPermissions;
+        this.tenantPermissions = tenantPermissions;
     }
 
     @Override
@@ -43,6 +49,28 @@ class JpaUserRoleRepository implements UserRoleRepository {
     @Override
     public Set<String> findPermissionCodesByUserId(Long userId) {
         return delegate.findPermissionCodesByUserId(userId);
+    }
+
+    @Override
+    public Set<String> findPermissionCodesByUserId(Long userId, Long tenantId) {
+        if (tenantId == null) {
+            return findPermissionCodesByUserId(userId);
+        }
+        Set<Long> roleIds = delegate.findActiveRoleIdsByUserId(userId);
+        if (roleIds == null || roleIds.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> configuredRoleIds = tenantPermissions.findConfiguredRoleIdsByTenantId(tenantId);
+        java.util.Set<String> resolved = new java.util.HashSet<>();
+        for (Long roleId : roleIds) {
+            Set<String> codes = configuredRoleIds.contains(roleId)
+                    ? tenantPermissions.findPermissionCodesByTenantIdAndRoleId(tenantId, roleId)
+                    : globalPermissions.findPermissionCodesByRoleId(roleId);
+            if (codes != null) {
+                resolved.addAll(codes);
+            }
+        }
+        return Set.copyOf(resolved);
     }
 
     @Override
