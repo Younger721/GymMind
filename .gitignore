@@ -65,6 +65,9 @@ storage/
 # Temporary files
 tmp/
 temp/
+*.tsbuildinfo
+vite.config.ts.timestamp-*.mjs
+*.rdb
 
 # Node modules (for frontend)
 node_modules/
