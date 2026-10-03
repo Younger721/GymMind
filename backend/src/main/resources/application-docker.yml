@@ -21,4 +21,8 @@ gymmind:
     milvus-url: ${GYMMIND_MILVUS_URL:http://localhost:19530}
     recover-published: false
   object-store: ${GYMMIND_OBJECT_STORE:minio}
+  object-store.minio-endpoint: ${GYMMIND_OBJECT_STORE_MINIO_ENDPOINT:http://localhost:9000}
+  object-store.minio-access-key: ${GYMMIND_OBJECT_STORE_MINIO_ACCESS_KEY:minioadmin}
+  object-store.minio-secret-key: ${GYMMIND_OBJECT_STORE_MINIO_SECRET_KEY:minioadmin123}
+  object-store.minio-bucket: ${GYMMIND_OBJECT_STORE_MINIO_BUCKET:gymmind}
   # MinIO 细项通过环境变量注入（见 .env 中 GYMMIND_OBJECT_STORE_MINIO_*）
