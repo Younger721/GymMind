@@ -30,10 +30,10 @@
           <el-tag size="small" :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="发布状态" width="110"><template #default="{ row }"><el-tag size="small" :type="row.published ? 'success' : 'warning'">{{ row.published ? '已发布' : '待发布' }}</el-tag></template></el-table-column>
+      <el-table-column label="发布状态" width="110"><template #default="{ row }"><el-tag size="small" :type="publicationType(row)">{{ publicationText(row) }}</el-tag></template></el-table-column>
       <el-table-column label="资料来源" width="120">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.tenantId == null ? 'info' : 'success'">{{ row.tenantId == null ? '平台默认' : '本店资料' }}</el-tag>
+          <span>{{ row.uploaderName || '未知上传者' }}</span>
         </template>
       </el-table-column>
       <el-table-column label="面向角色" min-width="180">
@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
 import { knowledgeApi, type KnowledgeDocumentView } from '@/api/knowledge'
@@ -97,6 +97,7 @@ import { hasMenuPermission, MENU_CODES } from '@/utils/menuPermissions'
 const authStore = useAuthStore()
 const documents = ref<KnowledgeDocumentView[]>([])
 const loading = ref(false)
+let pollTimer: ReturnType<typeof setInterval> | undefined
 const uploading = ref(false)
 const uploadCategory = ref('GENERAL')
 const allAudienceRoles = ['PLATFORM_ADMIN', 'GYM_ADMIN', 'COACH', 'MEMBER']
@@ -136,6 +137,7 @@ const handleUpload = async (options: UploadRequestOptions) => {
     await knowledgeApi.uploadDocument(options.file as File, 'TENANT', uploadCategory.value, uploadAudienceRoles.value)
     ElMessage.success('上传成功，正在解析')
     await load()
+    startPolling()
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || '上传失败')
   } finally {
@@ -216,7 +218,31 @@ const statusType = (s: string) => {
   return 'info'
 }
 
-onMounted(load)
+const publicationText = (row: KnowledgeDocumentView) => {
+  if (row.status === 'UPLOADING' || row.status === 'PARSING') return '处理中'
+  if (row.status === 'FAILED') return '不可用'
+  return row.published ? '已发布' : '待发布'
+}
+
+const publicationType = (row: KnowledgeDocumentView) => {
+  if (row.status === 'FAILED') return 'danger'
+  if (row.status !== 'READY') return 'warning'
+  return row.published ? 'success' : 'warning'
+}
+
+const startPolling = () => {
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = setInterval(async () => {
+    await load()
+    if (documents.value.every(row => !['UPLOADING', 'PARSING'].includes(row.status))) {
+      if (pollTimer) clearInterval(pollTimer)
+      pollTimer = undefined
+    }
+  }, 3000)
+}
+
+onMounted(async () => { await load(); if (documents.value.some(row => ['UPLOADING', 'PARSING'].includes(row.status))) startPolling() })
+onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>
 
 <style scoped>

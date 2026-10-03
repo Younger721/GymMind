@@ -133,6 +133,25 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
+    void publishedDocumentIsNotReportedAsPublishedWhileBeingReindexed() {
+        KnowledgeDocumentView uploaded = useCase.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
+        KnowledgeDocument document = repository.findByTenantIdAndId(7L, uploaded.id()).orElseThrow();
+        document.markParsing();
+        document.markReady();
+
+        assertThat(useCase.publish(admin, uploaded.id(), true).published()).isTrue();
+
+        document.markParsing();
+        assertThat(useCase.list(admin)).singleElement().extracting(KnowledgeDocumentView::published)
+                .isEqualTo(false);
+
+        document.markReady();
+        assertThat(useCase.list(admin)).singleElement().extracting(KnowledgeDocumentView::published)
+                .isEqualTo(true);
+    }
+
+    @Test
     void gymAdminCanUpdateDocumentVisibilityWithinTenant() {
         KnowledgeDocumentView view = useCase.upload(admin,
                 new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
