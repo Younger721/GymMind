@@ -15,12 +15,15 @@ platform-admin:
   email: ${PLATFORM_ADMIN_EMAIL:admin@gymmind.local}
   username: ${PLATFORM_ADMIN_USERNAME:admin}
   password: ${PLATFORM_ADMIN_PASSWORD:123456}
+  force-password-sync: ${PLATFORM_ADMIN_FORCE_PASSWORD_SYNC:false}
 gymmind:
   dev:
     reset-demo-password: ${GYMMIND_RESET_DEMO_PASSWORD:false}
+  job-queue: ${GYMMIND_JOB_QUEUE:memory}
   search:
     keyword-backend: memory
     vector-backend: memory
+    recover-published: true
   object-store: local
   ai:
     harness:

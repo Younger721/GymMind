@@ -19,7 +19,7 @@ class KnowledgeIndexRecoveryRunnerTest {
         document.markParsing();
         when(documents.findAllDocuments()).thenReturn(List.of(document));
 
-        new KnowledgeIndexRecoveryRunner(documents, worker).run(mock(ApplicationArguments.class));
+        new KnowledgeIndexRecoveryRunner(documents, worker, false).run(mock(ApplicationArguments.class));
 
         verify(worker).enqueue(null, 7L);
     }
@@ -34,9 +34,24 @@ class KnowledgeIndexRecoveryRunnerTest {
         document.publish();
         when(documents.findAllDocuments()).thenReturn(List.of(document));
 
-        new KnowledgeIndexRecoveryRunner(documents, worker).run(mock(ApplicationArguments.class));
+        new KnowledgeIndexRecoveryRunner(documents, worker, false).run(mock(ApplicationArguments.class));
 
         verify(worker, never()).enqueue(any(), eq(8L));
+    }
+
+    @Test
+    void requeuesPublishedReadyDocumentsWhenRecoveryIsEnabled() {
+        KnowledgeDocumentRepository documents = mock(KnowledgeDocumentRepository.class);
+        KnowledgeIngestWorker worker = mock(KnowledgeIngestWorker.class);
+        KnowledgeDocument document = platformDocument(9L);
+        document.markParsing();
+        document.markReady();
+        document.publish();
+        when(documents.findAllDocuments()).thenReturn(List.of(document));
+
+        new KnowledgeIndexRecoveryRunner(documents, worker, true).run(mock(ApplicationArguments.class));
+
+        verify(worker).enqueue(null, 9L);
     }
 
     private static KnowledgeDocument platformDocument(long id) {

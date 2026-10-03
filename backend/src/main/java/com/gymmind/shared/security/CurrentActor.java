@@ -49,15 +49,10 @@ public record CurrentActor(
         return roles.contains(RoleCode.PLATFORM_ADMIN);
     }
 
-    /**
-     * Permission codes are exposed for the frontend menu model. Backend
-     * endpoints rely on authentication, tenant scope, and business role
-     * boundaries; menu visibility is the frontend operation gate.
-     */
     public boolean hasPermission(String permission) {
         if (permission == null || permission.isBlank()) {
             return false;
         }
-        return true;
+        return isPlatformAdmin() || permissions.contains(permission.trim());
     }
 }

@@ -9,11 +9,14 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -29,8 +32,11 @@ class PlatformTenantContextFilterTest {
     }
 
     @Test
-    void platformRequestWithoutTenantHeaderDoesNotCreateTenantContext() throws Exception {
+    void platformRequestWithoutTenantHeaderUsesFirstActiveTenant() throws Exception {
         TenantRepository tenants = mock(TenantRepository.class);
+        Tenant tenant = Tenant.create("gym-east", "Gym East");
+        ReflectionTestUtils.setField(tenant, "id", 7L);
+        when(tenants.findAll(any())).thenReturn(new PageImpl<>(java.util.List.of(tenant), PageRequest.of(0, 1), 1));
         PlatformTenantContextFilter filter = new PlatformTenantContextFilter(tenants);
         installPlatformAuthentication();
 
@@ -38,14 +44,13 @@ class PlatformTenantContextFilterTest {
             @Override
             public void doFilter(jakarta.servlet.ServletRequest request,
                                  jakarta.servlet.ServletResponse response) {
-                assertThat(TenantContextHolder.get()).isNull();
+                assertThat(TenantContextHolder.get()).isEqualTo(7L);
             }
         };
         filter.doFilter(new MockHttpServletRequest("GET", "/api/v1/users"),
                 new MockHttpServletResponse(), chain);
 
         assertThat(TenantContextHolder.get()).isNull();
-        verifyNoInteractions(tenants);
     }
 
     @Test
@@ -67,6 +72,28 @@ class PlatformTenantContextFilterTest {
         filter.doFilter(requestWithTenant("7"), new MockHttpServletResponse(), chain);
 
         assertThat(TenantContextHolder.get()).isNull();
+    }
+
+    @Test
+    void nonPlatformRequestWithoutTenantHeaderDoesNotUseFirstActiveTenant() throws Exception {
+        TenantRepository tenants = mock(TenantRepository.class);
+        PlatformTenantContextFilter filter = new PlatformTenantContextFilter(tenants);
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(
+                        new GymMindPrincipal(com.gymmind.support.SecurityTestActors.gymAdmin()), "",
+                        java.util.List.of()));
+
+        MockFilterChain chain = new MockFilterChain() {
+            @Override
+            public void doFilter(jakarta.servlet.ServletRequest request,
+                                 jakarta.servlet.ServletResponse response) {
+                assertThat(TenantContextHolder.get()).isNull();
+            }
+        };
+        filter.doFilter(new MockHttpServletRequest("GET", "/api/v1/users"),
+                new MockHttpServletResponse(), chain);
+
+        verifyNoInteractions(tenants);
     }
 
     @Test

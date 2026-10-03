@@ -156,9 +156,10 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
         if (ActorAccess.isSuperAdmin(actor)) {
             Pageable effective = pageable == null ? Pageable.ofSize(20) : pageable;
             Long tenantId = ActorAccess.tenantId(actor);
-            Page<UserAccount> page = tenantId == null
-                    ? users.findAll(effective)
-                    : users.findAllByTenantId(tenantId, effective);
+            if (tenantId == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            Page<UserAccount> page = users.findAllByTenantId(tenantId, effective);
             return new PageResponse<>(page.map(this::summary).getContent(), page.getNumber(), page.getSize(),
                     page.getTotalElements(), page.getTotalPages());
         }

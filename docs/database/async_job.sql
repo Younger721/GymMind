@@ -1,6 +1,7 @@
 create table if not exists async_job (
   id bigint primary key auto_increment,
   type varchar(64) not null,
+  -- 0 represents a platform-scoped job; tenant jobs use their positive id.
   tenant_id bigint not null,
   status varchar(16) not null,
   attempts int not null default 0,

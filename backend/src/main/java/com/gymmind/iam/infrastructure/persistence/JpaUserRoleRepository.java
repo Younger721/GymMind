@@ -2,6 +2,7 @@ package com.gymmind.iam.infrastructure.persistence;
 
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.iam.domain.model.UserRole;
+import com.gymmind.platform.bootstrap.PermissionCatalog;
 import com.gymmind.iam.domain.repository.UserRoleRepository;
 import org.springframework.stereotype.Repository;
 
@@ -48,7 +49,12 @@ class JpaUserRoleRepository implements UserRoleRepository {
 
     @Override
     public Set<String> findPermissionCodesByUserId(Long userId) {
-        return delegate.findPermissionCodesByUserId(userId);
+        Set<String> resolved = new java.util.HashSet<>();
+        for (RoleCode roleCode : delegate.findRoleCodesByUserId(userId)) {
+            resolved.addAll(allowedPermissionCodes(roleCode, globalPermissions.findPermissionCodesByRoleId(
+                    delegate.findRoleIdByUserIdAndRoleCode(userId, roleCode))));
+        }
+        return Set.copyOf(resolved);
     }
 
     @Override
@@ -67,10 +73,23 @@ class JpaUserRoleRepository implements UserRoleRepository {
                     ? tenantPermissions.findPermissionCodesByTenantIdAndRoleId(tenantId, roleId)
                     : globalPermissions.findPermissionCodesByRoleId(roleId);
             if (codes != null) {
-                resolved.addAll(codes);
+                resolved.addAll(allowedPermissionCodes(roleCodeForId(roleId), codes));
             }
         }
         return Set.copyOf(resolved);
+    }
+
+    private RoleCode roleCodeForId(Long roleId) {
+        return delegate.findRoleCodeById(roleId);
+    }
+
+    private static Set<String> allowedPermissionCodes(RoleCode roleCode, Set<String> codes) {
+        if (roleCode == RoleCode.PLATFORM_ADMIN) return codes == null ? Set.of() : codes;
+        Set<String> allowed = new java.util.HashSet<>(PermissionCatalog.defaultMenus(roleCode));
+        PermissionCatalog.defaultMenus(roleCode).forEach(menu -> allowed.addAll(
+                PermissionCatalog.operationPermissionsFor(roleCode, menu)));
+        allowed.add(PermissionCatalog.MENU_CONFIGURED_MARKER);
+        return codes == null ? Set.of() : codes.stream().filter(allowed::contains).collect(java.util.stream.Collectors.toSet());
     }
 
     @Override

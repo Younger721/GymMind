@@ -34,6 +34,13 @@ class UserAccountTest {
     }
 
     @Test
+    void legacyTenantUserFactoryDerivesUsernameFromEmail() {
+        UserAccount user = UserAccount.tenantUser(7L, "Admin@Example.COM", HASH, "Admin");
+
+        assertThat(user.getNormalizedUsername()).isEqualTo("admin");
+    }
+
+    @Test
     void disablingAndResettingPasswordIncrementTokenVersion() {
         UserAccount user = UserAccount.tenantUser(7L, "admin@example.com", HASH, "Admin");
         assertThat(user.getTokenVersion()).isZero();

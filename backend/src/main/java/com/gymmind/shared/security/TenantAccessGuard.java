@@ -23,6 +23,9 @@ public class TenantAccessGuard {
 
     public void requirePermission(CurrentActor actor, String permission) {
         requireActor(actor);
+        if (!actor.hasPermission(permission)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private void requireActor(CurrentActor actor) {

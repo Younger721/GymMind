@@ -12,11 +12,13 @@ spring:
 gymmind:
   # 会话 Redis 命名空间只用单段环境名，不能直接用 dev,docker
   environment: dev
+  # Docker infrastructure supplies Elasticsearch/Milvus/MinIO; MySQL remains local.
   job-queue: ${GYMMIND_JOB_QUEUE:mysql}
   search:
     keyword-backend: ${GYMMIND_SEARCH_KEYWORD_BACKEND:elasticsearch}
     vector-backend: ${GYMMIND_SEARCH_VECTOR_BACKEND:milvus}
     elasticsearch-url: ${GYMMIND_ES_URL:http://localhost:9202}
     milvus-url: ${GYMMIND_MILVUS_URL:http://localhost:19530}
+    recover-published: false
   object-store: ${GYMMIND_OBJECT_STORE:minio}
   # MinIO 细项通过环境变量注入（见 .env 中 GYMMIND_OBJECT_STORE_MINIO_*）

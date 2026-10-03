@@ -151,7 +151,7 @@ public class DefaultAgentManagementService implements AgentManagementService {
 
     /** 平台管理员跨租户只读白名单 */
     private static boolean canBrowseAllTenants(CurrentActor actor) {
-        return actor != null && actor.isPlatformAdmin() && ActorAccess.tenantId(actor) == null;
+        return false;
     }
 
     private static void validate(CreateAgentCommand command) {

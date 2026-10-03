@@ -67,7 +67,8 @@ public class PlatformAdminInitializer implements ApplicationRunner {
 
     /** 开发环境配置变更时同步平台管理员密码 */
     private UserAccount syncPlatformAdminPassword(UserAccount user) {
-        if (!passwordEncoder.matches(properties.getPassword(), user.getPasswordHash())) {
+        if (properties.isForcePasswordSync()
+                && !passwordEncoder.matches(properties.getPassword(), user.getPasswordHash())) {
             user.resetPassword(passwordEncoder.encode(properties.getPassword()));
             return userRepository.save(user);
         }
