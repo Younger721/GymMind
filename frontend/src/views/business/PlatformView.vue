@@ -78,6 +78,7 @@ import JsonBlock from '@/components/business/JsonBlock.vue'
 import { tenancyApi } from '@/api/tenancy'
 import { useAuthStore } from '@/stores/auth'
 import { isTenantRequestCurrent } from '@/utils/tenantContext'
+import { buildTenantCreatePayload, isTenantCreateFormValid } from '@/utils/tenantCreate.mjs'
 
 const tab = ref('stats')
 const loading = ref(false)
@@ -107,11 +108,10 @@ const settingsReady = computed(() => selectedTenantId.value != null
   && !settingsLoading.value)
 
 const tenantFields: FieldDef[] = [
-  { key: 'tenantCode', label: '租户编码', placeholder: 'gym-east' },
-  { key: 'tenantName', label: '租户名称' },
-  { key: 'adminEmail', label: '管理员邮箱' },
-  { key: 'adminPassword', label: '管理员密码' },
-  { key: 'adminDisplayName', label: '管理员姓名' }
+  { key: 'tenantName', label: '租户名称', required: true },
+  { key: 'adminEmail', label: '管理员邮箱', required: true },
+  { key: 'adminPassword', label: '管理员密码', required: true },
+  { key: 'adminDisplayName', label: '管理员姓名', required: true }
 ]
 
 const tenantActions: RowAction[] = [
@@ -175,7 +175,11 @@ watch(() => selectedTenantId.value, tenantId => {
 }, { immediate: true })
 
 async function createTenant(p: Record<string, string>) {
-  return tenancyApi.createTenant(p)
+  if (!isTenantCreateFormValid(p)) {
+    ElMessage.warning('请填写租户和管理员必填信息')
+    throw new Error('tenant create form is incomplete')
+  }
+  return tenancyApi.createTenant(buildTenantCreatePayload(p))
 }
 
 async function loadQuota() {

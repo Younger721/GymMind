@@ -48,14 +48,12 @@
       </div>
 
       <el-dialog v-model="createVisible" title="新建租户" width="480px" destroy-on-close>
-        <el-form label-width="110px">
-          <el-form-item label="租户编码" required><el-input v-model="createForm.tenantCode" placeholder="例如 gym-east" /></el-form-item>
-          <el-form-item label="租户名称" required><el-input v-model="createForm.tenantName" /></el-form-item>
-          <el-form-item label="管理员邮箱">
-            <el-input v-model="createForm.adminEmail" placeholder="选填" />
-            <div class="field-hint">不填写时，登录名自动使用 admin_租户编码</div>
+        <el-form label-width="110px" autocomplete="off">
+          <el-form-item label="租户名称" required><el-input v-model="createForm.tenantName" autocomplete="off" /></el-form-item>
+          <el-form-item label="管理员邮箱" required>
+            <el-input v-model="createForm.adminEmail" placeholder="请输入管理员邮箱" autocomplete="off" />
           </el-form-item>
-          <el-form-item label="管理员密码" required><el-input v-model="createForm.adminPassword" type="password" show-password /></el-form-item>
+          <el-form-item label="管理员密码" required><el-input v-model="createForm.adminPassword" type="password" placeholder="请输入管理员密码" show-password autocomplete="new-password" /></el-form-item>
           <el-form-item label="管理员姓名" required><el-input v-model="createForm.adminDisplayName" /></el-form-item>
         </el-form>
         <template #footer>
@@ -115,6 +113,7 @@ import HarnessConfigPanel from '@/components/business/HarnessConfigPanel.vue'
 import { tenancyApi } from '@/api/tenancy'
 import { useAuthStore } from '@/stores/auth'
 import { hasPermission } from '@/utils/permissions'
+import { buildTenantCreatePayload, isTenantCreateFormValid } from '@/utils/tenantCreate.mjs'
 
 interface TenantRow {
   id: number
@@ -133,7 +132,7 @@ const tenants = ref<TenantRow[]>([])
 const createVisible = ref(false)
 const editVisible = ref(false)
 const editTenantId = ref<number | null>(null)
-const createForm = reactive({ tenantCode: '', tenantName: '', adminEmail: '', adminPassword: '', adminDisplayName: '' })
+const createForm = reactive({ tenantName: '', adminEmail: '', adminPassword: '', adminDisplayName: '' })
 const editForm = reactive({ code: '', name: '' })
 const activeCount = computed(() => tenants.value.filter(item => item.status === 'ACTIVE').length)
 const disabledCount = computed(() => tenants.value.filter(item => item.status === 'DISABLED').length)
@@ -170,7 +169,7 @@ async function loadTenants() {
 }
 
 function openCreate() {
-  Object.assign(createForm, { tenantCode: '', tenantName: '', adminEmail: '', adminPassword: '', adminDisplayName: '' })
+  Object.assign(createForm, { tenantName: '', adminEmail: '', adminPassword: '', adminDisplayName: '' })
   createVisible.value = true
 }
 
@@ -181,10 +180,10 @@ function openEdit(row: TenantRow) {
 }
 
 async function submitCreate() {
-  if (!createForm.tenantCode.trim() || !createForm.tenantName.trim() || !createForm.adminPassword.trim() || !createForm.adminDisplayName.trim()) return ElMessage.warning('请填写租户和管理员必填信息')
+  if (!isTenantCreateFormValid(createForm)) return ElMessage.warning('请填写租户和管理员必填信息')
   submitting.value = true
   try {
-    await tenancyApi.createTenant({ ...createForm })
+    await tenancyApi.createTenant(buildTenantCreatePayload(createForm))
     ElMessage.success('租户创建成功')
     createVisible.value = false
     await loadTenants()

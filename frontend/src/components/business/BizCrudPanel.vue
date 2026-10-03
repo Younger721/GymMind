@@ -45,13 +45,14 @@
     <JsonBlock v-if="result" :data="result" />
 
     <el-dialog v-model="createVisible" :title="'新建' + title" width="480px" destroy-on-close>
-      <el-form label-width="100px" @submit.prevent>
+      <el-form label-width="100px" autocomplete="off" @submit.prevent>
         <el-form-item v-for="f in createFields" :key="f.key" :label="f.label">
           <el-input
             v-if="f.type !== 'select'"
             v-model="form[f.key]"
             :placeholder="f.placeholder"
             :type="f.type === 'number' ? 'number' : 'text'"
+            :autocomplete="f.key === 'adminPassword' ? 'new-password' : 'off'"
           />
           <el-select v-else v-model="form[f.key]" style="width: 100%">
             <el-option v-for="o in f.options ?? []" :key="o.value" :label="o.label" :value="o.value" />
@@ -77,6 +78,7 @@ import { hasPermission } from '@/utils/permissions'
 export interface FieldDef {
   key: string
   label: string
+  required?: boolean
   placeholder?: string
   type?: 'text' | 'number' | 'select'
   options?: { label: string; value: string }[]
@@ -131,6 +133,10 @@ async function openCreate() {
 
 async function submitCreate() {
   if (!props.creator) return
+  if (createFields.some(field => field.required && !(form[field.key] ?? '').trim())) {
+    ElMessage.warning('请填写必填信息')
+    return
+  }
   submitting.value = true
   try {
     const payload: Record<string, string> = {}
