@@ -13,6 +13,8 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
 
+import java.util.Optional;
+
 @Component
 @Order(200)
 public class PlatformAdminInitializer implements ApplicationRunner {
@@ -47,8 +49,12 @@ public class PlatformAdminInitializer implements ApplicationRunner {
     private void initialize() {
         Role role = roleRepository.findByCode(RoleCode.PLATFORM_ADMIN)
                 .orElseThrow(() -> new IllegalStateException("PLATFORM_ADMIN role is not initialized"));
-        UserAccount user = userRepository.findByNormalizedEmail(UserAccount.normalizeEmail(properties.getEmail()))
-                .map(existing -> syncPlatformAdminPassword(requirePlatformAccount(existing)))
+        Optional<UserAccount> existing = userRepository.findByNormalizedEmail(UserAccount.normalizeEmail(properties.getEmail()));
+        if (existing.isEmpty() && properties.getUsername() != null && !properties.getUsername().isBlank()) {
+            existing = userRepository.findByNormalizedUsername(UserAccount.normalizeUsername(properties.getUsername()));
+        }
+        UserAccount user = existing
+                .map(account -> syncPlatformAdminPassword(requirePlatformAccount(account)))
                 .orElseGet(() -> userRepository.save(UserAccount.platformAdmin(
                         properties.getEmail(),
                         properties.getUsername(),

@@ -5,6 +5,7 @@ import com.gymmind.iam.domain.model.UserAccount;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
 import com.gymmind.tenancy.application.command.CreateTenantCommand;
 import com.gymmind.tenancy.application.command.UpdateTenantCommand;
+import com.gymmind.tenancy.api.response.TenantView;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.tenancy.domain.model.Tenant;

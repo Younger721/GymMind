@@ -12,6 +12,7 @@ import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -33,6 +34,7 @@ public class BailianChatAdapter implements ChatModelGateway {
     private final String apiKey;
     private final String model;
 
+    @Autowired
     public BailianChatAdapter(RestClient.Builder builder) {
         this(builder,
                 firstEnv("DASHSCOPE_BASE_URL", "AI_API_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
