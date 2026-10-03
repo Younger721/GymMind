@@ -3,7 +3,9 @@ spring:
     activate:
       on-profile: test
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/gymmind?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    # Testcontainers overrides this URL in integration tests. The isolated
+    # default prevents accidental create-drop against the development database.
+    url: jdbc:mysql://${MYSQL_TEST_HOST:localhost}:${MYSQL_TEST_PORT:3306}/${MYSQL_TEST_DATABASE:gymmind_test}?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
