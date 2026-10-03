@@ -22,7 +22,10 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DefaultPlatformTenantServiceTest {
@@ -78,7 +81,6 @@ class DefaultPlatformTenantServiceTest {
         TenantRepository tenants = mock(TenantRepository.class);
         TenantProvisioningService provisioning = mock(TenantProvisioningService.class);
         UserAccountRepository users = mock(UserAccountRepository.class);
-        when(tenants.existsByCode("new-gym")).thenReturn(false);
         when(users.findByNormalizedEmail("admin@example.com"))
                 .thenReturn(Optional.of(UserAccount.platformAdmin("admin@example.com", "hash", "Admin")));
         DefaultPlatformTenantService service = new DefaultPlatformTenantService(tenants, provisioning, users);
@@ -86,7 +88,60 @@ class DefaultPlatformTenantServiceTest {
                 Set.of("platform:tenant:write"), 0L, "platform-token");
 
         assertThatThrownBy(() -> service.create(
-                new CreateTenantCommand("new-gym", "New Gym", "admin@example.com", "password123", "Admin"), actor))
+                new CreateTenantCommand("New Gym", "admin@example.com", "password123", "Admin"), actor))
                 .extracting("errorCode").isEqualTo(ErrorCode.CONFLICT);
+    }
+
+    @Test
+    void createsTenantWithGeneratedCode() {
+        TenantRepository tenants = mock(TenantRepository.class);
+        TenantProvisioningService provisioning = mock(TenantProvisioningService.class);
+        UserAccountRepository users = mock(UserAccountRepository.class);
+        when(tenants.existsByCode(anyString())).thenReturn(false);
+        when(provisioning.provision(any(Tenant.class), any())).thenAnswer(invocation ->
+                new TenantProvisioningService.ProvisionedTenant(invocation.getArgument(0), null));
+        DefaultPlatformTenantService service = new DefaultPlatformTenantService(tenants, provisioning, users);
+        CurrentActor actor = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:tenant:write"), 0L, "platform-token");
+
+        TenantView view = service.create(
+                new CreateTenantCommand("New Gym", "admin@example.com", "password123", "Admin"), actor);
+
+        assertThat(view.code()).matches("gym-[a-z0-9]{8}");
+        verify(tenants).existsByCode(view.code());
+    }
+
+    @Test
+    void retriesWhenGeneratedCodeAlreadyExists() {
+        TenantRepository tenants = mock(TenantRepository.class);
+        TenantProvisioningService provisioning = mock(TenantProvisioningService.class);
+        UserAccountRepository users = mock(UserAccountRepository.class);
+        when(tenants.existsByCode(anyString())).thenReturn(true, false);
+        when(provisioning.provision(any(Tenant.class), any())).thenAnswer(invocation ->
+                new TenantProvisioningService.ProvisionedTenant(invocation.getArgument(0), null));
+        DefaultPlatformTenantService service = new DefaultPlatformTenantService(tenants, provisioning, users);
+        CurrentActor actor = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:tenant:write"), 0L, "platform-token");
+
+        service.create(new CreateTenantCommand("New Gym", "admin@example.com", "password123", "Admin"), actor);
+
+        verify(tenants, times(2)).existsByCode(anyString());
+    }
+
+    @Test
+    void requiresAdministratorEmailAndPassword() {
+        TenantRepository tenants = mock(TenantRepository.class);
+        TenantProvisioningService provisioning = mock(TenantProvisioningService.class);
+        UserAccountRepository users = mock(UserAccountRepository.class);
+        DefaultPlatformTenantService service = new DefaultPlatformTenantService(tenants, provisioning, users);
+        CurrentActor actor = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:tenant:write"), 0L, "platform-token");
+
+        assertThatThrownBy(() -> service.create(
+                new CreateTenantCommand("New Gym", "", "password123", "Admin"), actor))
+                .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
+        assertThatThrownBy(() -> service.create(
+                new CreateTenantCommand("New Gym", "admin@example.com", "", "Admin"), actor))
+                .extracting("errorCode").isEqualTo(ErrorCode.VALIDATION_FAILED);
     }
 }

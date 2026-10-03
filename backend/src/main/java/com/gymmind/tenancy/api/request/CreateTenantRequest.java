@@ -6,13 +6,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 public record CreateTenantRequest(
-        @NotBlank @Size(max = 64) String tenantCode,
         @NotBlank @Size(max = 128) String tenantName,
-        @Email @Size(max = 320) String adminEmail,
+        @NotBlank @Email @Size(max = 320) String adminEmail,
         @NotBlank @Size(min = 8, max = 72) String adminPassword,
         @NotBlank @Size(max = 128) String adminDisplayName) {
 
     public CreateTenantCommand toCommand() {
-        return new CreateTenantCommand(tenantCode, tenantName, adminEmail, adminPassword, adminDisplayName);
+        return new CreateTenantCommand(tenantName, adminEmail, adminPassword, adminDisplayName);
     }
 }

@@ -18,9 +18,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
+import java.util.UUID;
 
 @Service
 public class DefaultPlatformTenantService implements PlatformTenantService {
+    private static final int MAX_CODE_ATTEMPTS = 5;
 
     private final TenantRepository tenantRepository;
     private final TenantProvisioningService provisioningService;
@@ -40,26 +42,29 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
     public TenantView create(CreateTenantCommand command, CurrentActor actor) {
         requirePlatform(actor, "platform:tenant:write");
         Objects.requireNonNull(command, "command");
-        String code = required(command.tenantCode(), "Tenant code");
         String name = required(command.tenantName(), "Tenant name");
-        String email = UserAccount.normalizeEmail(command.adminEmail());
-        String username = email == null ? defaultAdminUsername(code) : null;
+        String email = UserAccount.normalizeEmail(required(command.adminEmail(), "Admin email"));
         String password = required(command.adminPassword(), "Admin password");
         String displayName = required(command.adminDisplayName(), "Admin display name");
-        if (tenantRepository.existsByCode(code.trim().toLowerCase(java.util.Locale.ROOT))) {
-            throw new BusinessException(ErrorCode.CONFLICT);
-        }
+        String code = generateTenantCode();
         if (email != null && userRepository.findByNormalizedEmail(email).isPresent()) {
-            throw new BusinessException(ErrorCode.CONFLICT);
-        }
-        if (username != null && userRepository.findByNormalizedUsername(username).isPresent()) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
         TenantProvisioningService.ProvisionedTenant result = provisioningService.provision(
                 Tenant.create(code, name),
                 new TenantProvisioningService.Administrator(
-                        email, username, passwordEncoder.encode(password), displayName));
+                        email, null, passwordEncoder.encode(password), displayName));
         return tenantView(result.tenant());
+    }
+
+    private String generateTenantCode() {
+        for (int attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+            String code = "gym-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            if (!tenantRepository.existsByCode(code)) {
+                return code;
+            }
+        }
+        throw new BusinessException(ErrorCode.CONFLICT);
     }
 
     @Override
@@ -135,8 +140,4 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
         return value.trim();
     }
 
-    private static String defaultAdminUsername(String tenantCode) {
-        String username = "admin_" + tenantCode.trim().toLowerCase(java.util.Locale.ROOT);
-        return username.length() <= 64 ? username : username.substring(0, 64);
-    }
 }

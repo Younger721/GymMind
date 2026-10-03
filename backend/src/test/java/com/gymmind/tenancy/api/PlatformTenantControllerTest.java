@@ -60,7 +60,7 @@ class PlatformTenantControllerTest {
         mockMvc.perform(post("/api/v1/platform/tenants")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"tenantCode":"gym-a","tenantName":"Gym A",
+                                {"tenantName":"Gym A",
                                  "adminEmail":"admin@example.com","adminPassword":"password123",
                                  "adminDisplayName":"Admin"}
                                 """))
