@@ -9,6 +9,8 @@ import com.gymmind.ai.application.ChatModelResponse;
 import com.gymmind.ai.application.ChatToolCall;
 import com.gymmind.ai.application.ChatToolDefinition;
 import com.gymmind.ai.domain.ContextSegment;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import org.springframework.stereotype.Component;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
@@ -32,13 +34,23 @@ public class BailianChatAdapter implements ChatModelGateway {
     private final String model;
 
     public BailianChatAdapter(RestClient.Builder builder) {
-        String baseUrl = firstEnv("DASHSCOPE_BASE_URL", "AI_API_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1");
+        this(builder,
+                firstEnv("DASHSCOPE_BASE_URL", "AI_API_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                firstEnv("DASHSCOPE_API_KEY", "AI_API_KEY", ""),
+                env("DASHSCOPE_CHAT_MODEL", "qwen3.7-plus"));
+    }
+
+    BailianChatAdapter(RestClient.Builder builder, String apiKey, String model) {
+        this(builder, "https://dashscope.aliyuncs.com/compatible-mode/v1", apiKey, model);
+    }
+
+    private BailianChatAdapter(RestClient.Builder builder, String baseUrl, String apiKey, String model) {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(3)).build());
         requestFactory.setReadTimeout(Duration.ofSeconds(30));
         this.client = builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
-        this.apiKey = firstEnv("DASHSCOPE_API_KEY", "AI_API_KEY", "");
-        this.model = env("DASHSCOPE_CHAT_MODEL", "qwen3.7-plus");
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.model = model == null || model.isBlank() ? "qwen3.7-plus" : model.trim();
     }
 
     @Override
@@ -50,7 +62,7 @@ public class BailianChatAdapter implements ChatModelGateway {
     public ChatModelCallResult completeWithUsage(String prompt, List<ContextSegment> context) {
         long started = System.currentTimeMillis();
         if (apiKey.isBlank()) {
-            return ChatModelCallResult.unavailable(localFallback(), elapsed(started), "FALLBACK");
+            throw providerUnavailable();
         }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = Map.of(
@@ -69,21 +81,23 @@ public class BailianChatAdapter implements ChatModelGateway {
             String answer = root.path("choices").path(0).path("message").path("content").asText(raw);
             return new ChatModelCallResult(answer, usage, elapsed(started), "OK");
         } catch (RuntimeException | java.io.IOException failure) {
-            return new ChatModelCallResult(null,
-                    BailianUsageParser.parse(mapper.createObjectNode()), elapsed(started), "ERROR");
+            throw providerUnavailable();
         }
     }
 
     @Override
     public boolean supportsToolCalling() {
-        return !apiKey.isBlank();
+        // DashScope supports OpenAI-compatible tool calling. Credentials are
+        // validated when a request is sent so a missing key cannot trigger the
+        // legacy deterministic plugin path.
+        return true;
     }
 
     @Override
     public ChatModelResponse completeWithTools(String prompt, List<ContextSegment> context,
                                                List<ChatToolDefinition> tools) {
         if (apiKey.isBlank()) {
-            return ChatModelResponse.direct(localFallback(), BailianUsageParser.parse(mapper.createObjectNode()));
+            throw providerUnavailable();
         }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = new java.util.LinkedHashMap<>();
@@ -117,8 +131,10 @@ public class BailianChatAdapter implements ChatModelGateway {
             String content = message.path("content").asText("");
             ModelUsage usage = BailianUsageParser.parse(mapper.readTree(raw));
             return calls.isEmpty() ? ChatModelResponse.direct(content, usage) : ChatModelResponse.toolCalls(calls, usage);
+        } catch (BusinessException failure) {
+            throw failure;
         } catch (RuntimeException | java.io.IOException failure) {
-            throw new IllegalStateException("模型工具调用暂时不可用", failure);
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "阿里百炼工具调用失败");
         }
     }
 
@@ -131,11 +147,7 @@ public class BailianChatAdapter implements ChatModelGateway {
     public ChatModelCallResult streamWithUsage(String prompt, List<ContextSegment> context, Consumer<String> onToken) {
         long started = System.currentTimeMillis();
         if (apiKey.isBlank()) {
-            String answer = localFallback();
-            for (int i = 0; i < answer.length(); i += 12) {
-                onToken.accept(answer.substring(i, Math.min(answer.length(), i + 12)));
-            }
-            return ChatModelCallResult.unavailable(answer, elapsed(started), "FALLBACK");
+            throw providerUnavailable();
         }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = Map.of(
@@ -190,16 +202,16 @@ public class BailianChatAdapter implements ChatModelGateway {
                 break;
             } catch (ResourceAccessException failure) {
                 if (attempt >= 3 || emitted.get()) {
-                    return new ChatModelCallResult(answer.toString(), finalUsage[0], elapsed(started), "ERROR");
+                    throw providerUnavailable();
                 }
                 try {
                     Thread.sleep(100L * (1L << (attempt - 1)));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
-                    return new ChatModelCallResult(answer.toString(), finalUsage[0], elapsed(started), "ERROR");
+                    throw providerUnavailable();
                 }
             } catch (RuntimeException failure) {
-                return new ChatModelCallResult(answer.toString(), finalUsage[0], elapsed(started), "ERROR");
+                throw providerUnavailable();
             }
         }
         return new ChatModelCallResult(answer.toString(), finalUsage[0], elapsed(started), "OK");
@@ -209,8 +221,8 @@ public class BailianChatAdapter implements ChatModelGateway {
         return Math.max(0, System.currentTimeMillis() - started);
     }
 
-    static String localFallback() {
-        return "当前未配置 AI 模型密钥，暂时无法生成回答。请配置 DASHSCOPE_API_KEY 后重试。";
+    private static BusinessException providerUnavailable() {
+        return new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "未配置或无法访问阿里百炼 AI 服务");
     }
 
     private static String env(String name, String fallback) {

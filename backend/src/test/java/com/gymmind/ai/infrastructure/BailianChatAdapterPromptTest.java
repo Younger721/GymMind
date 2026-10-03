@@ -1,8 +1,12 @@
 package com.gymmind.ai.infrastructure;
 
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class BailianChatAdapterPromptTest {
     @Test
@@ -24,11 +28,21 @@ class BailianChatAdapterPromptTest {
     }
 
     @Test
-    void localFallbackDoesNotEchoInternalPrompt() {
-        String answer = BailianChatAdapter.localFallback();
+    void missingApiKeyDoesNotReturnLocalAnswer() {
+        BailianChatAdapter adapter = new BailianChatAdapter(RestClient.builder(), "", "qwen3.7-plus");
 
-        assertThat(answer).doesNotContain("当前身份规则");
-        assertThat(answer).doesNotContain("纯AI回答规则");
-        assertThat(answer).contains("DASHSCOPE_API_KEY");
+        assertThat(adapter.supportsToolCalling()).isTrue();
+        assertThatThrownBy(() -> adapter.completeWithTools("查训练记录", java.util.List.of(), java.util.List.of()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).errorCode())
+                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE);
+        assertThatThrownBy(() -> adapter.completeWithUsage("回答问题", java.util.List.of()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).errorCode())
+                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE);
+        assertThatThrownBy(() -> adapter.streamWithUsage("回答问题", java.util.List.of(), ignored -> { }))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).errorCode())
+                .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE);
     }
 }

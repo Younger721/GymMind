@@ -18,7 +18,6 @@ import com.gymmind.ai.harness.domain.PlatformHarnessConfig;
 import com.gymmind.ai.harness.domain.PlatformHarnessConfigRepository;
 import com.gymmind.ai.harness.domain.TenantHarnessConfig;
 import com.gymmind.ai.harness.domain.TenantHarnessConfigRepository;
-import com.gymmind.ai.harness.plugins.GymOperationsMetricsTool;
 import com.gymmind.ai.harness.capability.AiCapabilityRegistry;
 import com.gymmind.ai.chat.application.AiChatHistoryService;
 import com.gymmind.ai.chat.application.AiRoleProfile;
@@ -196,15 +195,6 @@ public class DefaultAiHarnessService implements AiHarnessService {
             enabled = HarnessPluginList.intersect(new LinkedHashSet<>(capabilityDefaults).stream().toList(),
                     profile.enabledPlugins());
         }
-        if (actor.roles().contains(com.gymmind.iam.domain.model.RoleCode.GYM_ADMIN)
-                && GymOperationsMetricsTool.matchesQuestion(question)
-                && registry.find("gym_operations_metrics").map(plugin -> plugin.supports(actor)).orElse(false)) {
-            List<String> autoEnabled = new ArrayList<>(enabled);
-            if (!autoEnabled.contains("gym_operations_metrics")) {
-                autoEnabled.add("gym_operations_metrics");
-            }
-            enabled = HarnessPluginList.intersect(autoEnabled, profile.enabledPlugins());
-        }
         if (enabled.isEmpty()) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
@@ -261,12 +251,6 @@ public class DefaultAiHarnessService implements AiHarnessService {
                     }
                 });
             }
-            if (toolOrchestrator != null && capabilityRegistry != null) {
-                List<String> fallbackTools = fallbackToolIds(actor, question, profile);
-                if (!fallbackTools.isEmpty()) {
-                    context.addAll(toolOrchestrator.executeNamed(actor, question, fallbackTools, progress).context());
-                }
-            }
         }
 
         long started = System.currentTimeMillis();
@@ -291,17 +275,6 @@ public class DefaultAiHarnessService implements AiHarnessService {
         boolean directToolAnswerUsageRecorded = false;
         if (nativeToolFlow) {
             orchestration = toolOrchestrator.decide(actor, prompt, context, enabled, progress);
-            if (orchestration.toolResults().isEmpty()
-                    && actor.roles().contains(com.gymmind.iam.domain.model.RoleCode.GYM_ADMIN)
-                    && GymOperationsMetricsTool.matchesQuestion(question)
-                    && capabilityRegistry.find("gym_operations_metrics").map(capability -> capability.supports(actor)).orElse(false)) {
-                // tool_choice=auto may still return text for a current-data question; ground it with a safe default query.
-                progress.accept(new AiProgressEvent("orchestrator", "tool_decision", AiProgressEvent.Status.COMPLETED,
-                        "经营问题未触发工具，使用安全查询兜底", 1));
-                AiToolOrchestrationResult fallback = toolOrchestrator.executeNamed(
-                        actor, question, List.of("gym_operations_metrics"), progress);
-                orchestration = new AiToolOrchestrationResult(null, fallback.toolResults(), fallback.context());
-            }
             if (orchestration.usage() != null && usage != null) {
                 directToolAnswerUsageRecorded = orchestration.directAnswer() != null;
                 try {
@@ -333,9 +306,18 @@ public class DefaultAiHarnessService implements AiHarnessService {
                         model.stream(prompt, context, onToken), Math.max(0, System.currentTimeMillis() - started), "OK");
             }
         }
+        if (call == null || !"OK".equalsIgnoreCase(call.status())) {
+            if (call != null) {
+                recordUsage(actor, call, "harness");
+            } else {
+                recordUsage(actor, started, "ERROR");
+            }
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+        }
         String answer = call.content();
         if (answer == null || answer.isBlank()) {
-            answer = "模型暂时不可用，请稍后重试。";
+            recordUsage(actor, started, "EMPTY_RESPONSE");
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         }
         if (chatHistory != null) {
             chatHistory.append(actor, sessionId, AiChatMessageRole.ASSISTANT, answer);
@@ -377,24 +359,6 @@ public class DefaultAiHarnessService implements AiHarnessService {
                 .limit(10)
                 .map(turn -> ("user".equalsIgnoreCase(turn.role()) ? "用户" : "助手") + "：" + turn.content())
                 .reduce((left, right) -> left + "\n" + right).orElse("");
-    }
-
-    private List<String> fallbackToolIds(CurrentActor actor, String question, AiRoleProfile profile) {
-        if (question == null || profile == null) return List.of();
-        List<String> candidates = new ArrayList<>();
-        if (question.matches("(?s).*(最近训练|训练记录|训练少|训练次数|训练情况|训练趋势|我的训练).*")) {
-            candidates.add("member_training_context");
-        }
-        if (question.matches("(?s).*(训练日历|训练排期|安排.*训练|本周训练计划|我的计划).*")) {
-            candidates.add("training_plan_calendar");
-        }
-        if (question.matches("(?s).*(课程预约|预约.*课程|这周.*课程|我的预约|课程签到).*")) {
-            candidates.add("course_booking_context");
-        }
-        return candidates.stream()
-                .filter(profile.enabledPlugins()::contains)
-                .filter(id -> capabilityRegistry.find(id).map(capability -> capability.supports(actor)).orElse(false))
-                .distinct().limit(2).toList();
     }
 
     private static List<String> concat(List<String> values, String value) {

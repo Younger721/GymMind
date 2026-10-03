@@ -105,33 +105,6 @@ public class AiToolOrchestrator {
                 Math.max(0, System.currentTimeMillis() - started));
     }
 
-    /** Deterministic read-only fallback used when the model cannot call tools. */
-    public AiToolOrchestrationResult executeNamed(CurrentActor actor, String question,
-                                                    List<String> ids, Consumer<AiProgressEvent> progress) {
-        List<ToolResult> results = new ArrayList<>();
-        List<ContextSegment> context = new ArrayList<>();
-        if (ids == null || ids.isEmpty()) return new AiToolOrchestrationResult(null, results, context);
-        if (ids.size() > MAX_TOOL_CALLS) throw new IllegalArgumentException("一次最多执行 2 个只读工具");
-        ToolExecutionContext executionContext = new ToolExecutionContext(UUID.randomUUID().toString(), question, progress);
-        for (String id : ids) {
-            AiCapability capability = registry.find(id).orElseThrow(() -> new IllegalArgumentException("工具不支持：" + id));
-            if (!capability.supports(actor)) throw new IllegalArgumentException("当前身份无权使用该工具");
-            if (!"READ".equalsIgnoreCase(capability.descriptor().type())) {
-                throw new IllegalArgumentException("首期只允许只读工具");
-            }
-            progress.accept(new AiProgressEvent(id, "tool_start", AiProgressEvent.Status.STARTED,
-                    "正在查询 " + capability.descriptor().name(), null));
-            ToolResult result = capability.execute(actor,
-                    com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode(), executionContext);
-            results.add(result);
-            context.addAll(result.context());
-            progress.accept(new AiProgressEvent(id, "tool_result",
-                    result.success() ? AiProgressEvent.Status.COMPLETED : AiProgressEvent.Status.FAILED,
-                    result.success() ? "查询完成" : "数据暂时不可用", result.context().size()));
-        }
-        return new AiToolOrchestrationResult(null, results, context);
-    }
-
     private static String summarizeArguments(JsonNode arguments) {
         if (arguments == null || !arguments.isObject()) return "{}";
         List<String> names = new ArrayList<>();
