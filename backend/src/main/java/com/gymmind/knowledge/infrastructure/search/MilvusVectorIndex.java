@@ -89,7 +89,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
     public void upsert(IndexedChunk chunk) {
         requireVector(chunk.vector());
         ensureCollection();
-        client.post().uri("/v2/vectordb/entities/insert").body(insertBody(collection, chunk))
+        client.post().uri("/v2/vectordb/entities/upsert").body(insertBody(collection, chunk))
                 .retrieve().toBodilessEntity();
     }
 

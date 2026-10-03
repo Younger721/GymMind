@@ -1,11 +1,14 @@
 package com.gymmind.knowledge.infrastructure.search;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class IndexGenerationService {
+    private static final Logger log = LoggerFactory.getLogger(IndexGenerationService.class);
     private final KeywordIndexPort keyword;
     private final VectorIndexPort vector;
     private final Map<Long, String> published = new ConcurrentHashMap<>();
@@ -21,6 +24,8 @@ public class IndexGenerationService {
             published.put(tenantId, generation.trim());
             return true;
         } catch (RuntimeException ex) {
+            log.error("Knowledge index publish failed: tenantId={}, generation={}, chunks={}",
+                    tenantId, generation, chunks.size(), ex);
             return false;
         }
     }

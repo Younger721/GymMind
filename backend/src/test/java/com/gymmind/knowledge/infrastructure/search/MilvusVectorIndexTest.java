@@ -29,7 +29,7 @@ class MilvusVectorIndexTest {
     }
 
     @Test
-    void insertCarriesTenantOwnerTextAndVector() {
+    void upsertCarriesTenantOwnerTextAndVector() {
         float[] vector = new float[1024];
         Map<String, Object> body = MilvusVectorIndex.insertBody(
                 "gymmind_knowledge", new IndexedChunk("chunk-1", 7L, 99L, 11L, "private text", vector));
@@ -86,7 +86,7 @@ class MilvusVectorIndexTest {
         server.expect(once(), requestTo("http://localhost:19530/v2/vectordb/collections/create"))
                 .andExpect(method(POST))
                 .andRespond(withSuccess("{\"code\":0}", MediaType.APPLICATION_JSON));
-        server.expect(once(), requestTo("http://localhost:19530/v2/vectordb/entities/insert"))
+        server.expect(once(), requestTo("http://localhost:19530/v2/vectordb/entities/upsert"))
                 .andExpect(method(POST))
                 .andRespond(withSuccess("{\"code\":0}", MediaType.APPLICATION_JSON));
 

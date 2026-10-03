@@ -1,6 +1,7 @@
 package com.gymmind.knowledge.application;
 
 import com.gymmind.knowledge.domain.model.DocumentStatus;
+import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -19,7 +20,13 @@ public class KnowledgeIndexRecoveryRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         documents.findAllDocuments().stream()
-                .filter(document -> document.status() == DocumentStatus.READY && document.published())
+                .filter(KnowledgeIndexRecoveryRunner::shouldRecover)
                 .forEach(document -> worker.enqueue(document.tenantId(), document.id()));
+    }
+
+    private static boolean shouldRecover(KnowledgeDocument document) {
+        return document.status() == DocumentStatus.UPLOADING
+                || document.status() == DocumentStatus.PARSING
+                || document.status() == DocumentStatus.READY && document.published();
     }
 }
