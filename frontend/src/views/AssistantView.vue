@@ -22,15 +22,7 @@
       <div class="chat-box simple-card">
       <div class="plugin-bar">
         <div class="assistant-avatar">AI</div>
-        <div class="assistant-meta"><strong>{{ assistantName }}</strong><span>{{ isGymAdmin && operationsAvailable ? '门店数据已连接 · 回答经过权限校验' : '已连接本店知识库 · 回答经过权限校验' }}</span></div>
-        <el-tooltip v-if="ragAvailable" :content="ragEnabled ? '已启用 RAG 知识库，点击关闭' : '未启用 RAG 知识库，点击开启'" placement="top">
-          <el-button class="skill-button" :class="{ active: ragEnabled }" :type="ragEnabled ? 'success' : 'info'" plain @click="toggleRag">
-            <span class="rag-status-dot" aria-hidden="true"></span>
-            <el-icon><Collection /></el-icon>
-            <span class="rag-label">RAG</span>
-            <span class="rag-state">{{ ragEnabled ? '已启用' : '未启用' }}</span>
-          </el-button>
-        </el-tooltip>
+        <div class="assistant-meta"><strong>{{ assistantName }}</strong><span>{{ isGymAdmin && operationsAvailable ? '知识库与门店数据按权限自动匹配' : '知识库按权限自动检索 · 回答经过权限校验' }}</span></div>
         <el-tag v-if="operationsAvailable && isGymAdmin" type="success" effect="plain" class="operations-skill">
           门店数据已连接
         </el-tag>
@@ -214,16 +206,8 @@ const roleProfile = computed(() => {
   return { name: '我的训练助手', samples: ['如何开始力量训练', '帮我安排本周训练'] }
 })
 const samples = computed(() => roleProfile.value.samples)
-const ragAvailable = computed(() => availablePlugins.value.some(plugin => plugin.id === 'knowledge_search'))
-const ragEnabled = computed(() => sessionPlugins.value.includes('knowledge_search'))
 const isGymAdmin = computed(() => authStore.roles.includes('GYM_ADMIN') && !authStore.isPlatformAdmin)
 const operationsAvailable = computed(() => availablePlugins.value.some(plugin => plugin.id === 'gym_operations_metrics'))
-const toggleRag = () => {
-  if (!ragAvailable.value) return
-  sessionPlugins.value = ragEnabled.value
-    ? sessionPlugins.value.filter(plugin => plugin !== 'knowledge_search')
-    : [...new Set([...sessionPlugins.value, 'knowledge_search'])]
-}
 const scrollBottom = () => nextTick(() => { if (boxRef.value) boxRef.value.scrollTop = boxRef.value.scrollHeight })
 const sourceLabel = (s: NonNullable<UiMessage['sources']>[number]) => typeof s === 'string' ? s : s.documentName || s.excerpt || s.text || '知识库片段'
 const renderMarkdown = (content: string) => {
@@ -394,16 +378,6 @@ onMounted(async () => {
 .history-item:hover, .history-item.active { background:#ecfdf5; color:var(--primary); }
 .chat-box { display: flex; flex-direction: column; height: calc(100vh - 240px); min-height: 470px; padding: 0; overflow: hidden; border:1px solid #dfe5eb; box-shadow:0 8px 28px rgba(27,43,61,.06); }
 .plugin-bar { padding: 14px 18px; border-bottom: 1px solid #edf0f3; background:#fff; display: flex; align-items: center; gap: 11px; }
-.skill-button { margin-left: 8px; height: 34px; padding: 0 11px; border-radius: 9px; display:inline-flex; align-items:center; gap:6px; font-weight:700; transition: all .2s ease; }
-.skill-button:not(.active) { color:#65717d; border-color:#cbd4dc; background:#f6f8fa; }
-.skill-button:not(.active):hover { color:#277a5c; border-color:#9ed9bd; background:#f0fbf5; }
-.skill-button.active { color:#087e63; border-color:#55c995; background:#ecfdf5; box-shadow:0 0 0 3px rgba(33,183,122,.14), 0 5px 14px rgba(8,126,99,.18); }
-.skill-button.active:hover { box-shadow:0 0 0 4px rgba(33,183,122,.2), 0 7px 18px rgba(8,126,99,.22); }
-.rag-status-dot { width:7px; height:7px; border-radius:50%; background:#98a4ad; box-shadow:0 0 0 2px rgba(152,164,173,.16); }
-.skill-button.active .rag-status-dot { background:#16b978; box-shadow:0 0 0 3px rgba(22,185,120,.18); animation:rag-pulse 1.8s ease-in-out infinite; }
-.rag-label { font-size:12px; letter-spacing:.35px; }
-.rag-state { font-size:11px; font-weight:600; }
-@keyframes rag-pulse { 0%,100% { box-shadow:0 0 0 2px rgba(22,185,120,.12); } 50% { box-shadow:0 0 0 5px rgba(22,185,120,.24); } }
 .assistant-avatar { width:34px; height:34px; display:grid; place-items:center; border-radius:10px; background:linear-gradient(145deg,#0d9f77,#087e63); color:#fff; font-size:12px; font-weight:800; letter-spacing:.5px; box-shadow:0 4px 10px rgba(8,126,99,.22); flex:none; }
 .assistant-avatar.small { width:26px; height:26px; border-radius:8px; font-size:10px; margin:5px 8px 0 0; }
 .assistant-meta { display:flex; flex-direction:column; gap:3px; font-size:13px; }

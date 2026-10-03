@@ -50,6 +50,7 @@ public class AiToolOrchestrator {
         List<AiCapability> capabilities = registry.listFor(actor, enabledIds);
         capabilities = capabilities.stream()
                 .filter(capability -> !"basic_chat".equals(capability.descriptor().id()))
+                .filter(capability -> !"knowledge_search".equals(capability.descriptor().id()))
                 .filter(capability -> "READ".equalsIgnoreCase(capability.descriptor().type()))
                 .toList();
         List<ChatToolDefinition> definitions = capabilities.stream()

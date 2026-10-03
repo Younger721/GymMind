@@ -223,9 +223,14 @@ public class DefaultAiHarnessService implements AiHarnessService {
         Consumer<AiProgressEvent> progress = onProgress == null ? ignored -> { } : onProgress;
         List<ContextSegment> context = new ArrayList<>();
         boolean nativeToolFlow = model.supportsToolCalling() && toolOrchestrator != null;
+        boolean knowledgeRetrieved = false;
+        if (enabled.contains("knowledge_search")) {
+            contributeKnowledge(actor, question, context, progress);
+            knowledgeRetrieved = true;
+        }
         if (!nativeToolFlow) {
             for (String pluginId : enabled) {
-                if ("basic_chat".equals(pluginId)) {
+                if ("basic_chat".equals(pluginId) || (knowledgeRetrieved && "knowledge_search".equals(pluginId))) {
                     continue;
                 }
                 registry.find(pluginId).ifPresent(plugin -> {
@@ -285,7 +290,7 @@ public class DefaultAiHarnessService implements AiHarnessService {
         AiToolOrchestrationResult orchestration = null;
         boolean directToolAnswerUsageRecorded = false;
         if (nativeToolFlow) {
-            orchestration = toolOrchestrator.decide(actor, prompt, List.of(), enabled, progress);
+            orchestration = toolOrchestrator.decide(actor, prompt, context, enabled, progress);
             if (orchestration.toolResults().isEmpty()
                     && actor.roles().contains(com.gymmind.iam.domain.model.RoleCode.GYM_ADMIN)
                     && GymOperationsMetricsTool.matchesQuestion(question)
@@ -398,6 +403,25 @@ public class DefaultAiHarnessService implements AiHarnessService {
         return result;
     }
 
+    private void contributeKnowledge(CurrentActor actor, String question, List<ContextSegment> context,
+                                    Consumer<AiProgressEvent> progress) {
+        registry.find("knowledge_search").ifPresent(plugin -> {
+            int contextBefore = context.size();
+            progress.accept(new AiProgressEvent("knowledge_search", "plugin_start", AiProgressEvent.Status.STARTED,
+                    "自动检索知识库", null));
+            try {
+                plugin.contribute(actor, question, context, progress);
+                progress.accept(new AiProgressEvent("knowledge_search", "plugin_complete", AiProgressEvent.Status.COMPLETED,
+                        "知识库检索完成", context.size() - contextBefore,
+                        documentDetails(context.subList(contextBefore, context.size()))));
+            } catch (RuntimeException exception) {
+                progress.accept(new AiProgressEvent("knowledge_search", "plugin_error", AiProgressEvent.Status.FAILED,
+                        "知识库检索失败", null));
+                throw exception;
+            }
+        });
+    }
+
     private static List<AiProgressDetail> documentDetails(List<ContextSegment> segments) {
         if (segments == null || segments.isEmpty()) return List.of();
         List<AiProgressDetail> details = new ArrayList<>();
@@ -460,6 +484,11 @@ public class DefaultAiHarnessService implements AiHarnessService {
         List<String> base = sessionPlugins != null && !sessionPlugins.isEmpty()
                 ? sessionPlugins
                 : configured;
+        if (configured.contains("knowledge_search")) {
+            base = concat(base, "knowledge_search");
+        } else {
+            base = base.stream().filter(id -> !"knowledge_search".equals(id)).toList();
+        }
         return HarnessPluginList.intersect(base, allowed);
     }
 
