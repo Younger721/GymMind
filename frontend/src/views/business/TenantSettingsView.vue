@@ -51,7 +51,7 @@
         <el-form label-width="110px">
           <el-form-item label="租户编码" required><el-input v-model="createForm.tenantCode" placeholder="例如 gym-east" /></el-form-item>
           <el-form-item label="租户名称" required><el-input v-model="createForm.tenantName" /></el-form-item>
-          <el-form-item label="管理员邮箱" required><el-input v-model="createForm.adminEmail" /></el-form-item>
+          <el-form-item label="管理员邮箱"><el-input v-model="createForm.adminEmail" placeholder="选填" /></el-form-item>
           <el-form-item label="管理员密码" required><el-input v-model="createForm.adminPassword" type="password" show-password /></el-form-item>
           <el-form-item label="管理员姓名" required><el-input v-model="createForm.adminDisplayName" /></el-form-item>
         </el-form>
@@ -178,7 +178,7 @@ function openEdit(row: TenantRow) {
 }
 
 async function submitCreate() {
-  if (Object.values(createForm).some(value => !value.trim())) return ElMessage.warning('请完整填写租户和管理员信息')
+  if (!createForm.tenantCode.trim() || !createForm.tenantName.trim() || !createForm.adminPassword.trim() || !createForm.adminDisplayName.trim()) return ElMessage.warning('请填写租户和管理员必填信息')
   submitting.value = true
   try {
     await tenancyApi.createTenant({ ...createForm })

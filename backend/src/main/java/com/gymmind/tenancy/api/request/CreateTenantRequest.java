@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
 public record CreateTenantRequest(
         @NotBlank @Size(max = 64) String tenantCode,
         @NotBlank @Size(max = 128) String tenantName,
-        @NotBlank @Email @Size(max = 320) String adminEmail,
+        @Email @Size(max = 320) String adminEmail,
         @NotBlank @Size(min = 8, max = 72) String adminPassword,
         @NotBlank @Size(max = 128) String adminDisplayName) {
 

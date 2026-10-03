@@ -43,18 +43,22 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
         String code = required(command.tenantCode(), "Tenant code");
         String name = required(command.tenantName(), "Tenant name");
         String email = UserAccount.normalizeEmail(command.adminEmail());
+        String username = email == null ? defaultAdminUsername(code) : null;
         String password = required(command.adminPassword(), "Admin password");
         String displayName = required(command.adminDisplayName(), "Admin display name");
         if (tenantRepository.existsByCode(code.trim().toLowerCase(java.util.Locale.ROOT))) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
-        if (userRepository.findByNormalizedEmail(email).isPresent()) {
+        if (email != null && userRepository.findByNormalizedEmail(email).isPresent()) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+        if (username != null && userRepository.findByNormalizedUsername(username).isPresent()) {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
         TenantProvisioningService.ProvisionedTenant result = provisioningService.provision(
                 Tenant.create(code, name),
                 new TenantProvisioningService.Administrator(
-                        email, passwordEncoder.encode(password), displayName));
+                        email, username, passwordEncoder.encode(password), displayName));
         return tenantView(result.tenant());
     }
 
@@ -129,5 +133,10 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED, label + " must not be blank");
         }
         return value.trim();
+    }
+
+    private static String defaultAdminUsername(String tenantCode) {
+        String username = "admin_" + tenantCode.trim().toLowerCase(java.util.Locale.ROOT);
+        return username.length() <= 64 ? username : username.substring(0, 64);
     }
 }

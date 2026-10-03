@@ -40,7 +40,11 @@ public class DefaultTenantProvisioningService implements TenantProvisioningServi
             throw new IllegalArgumentException("Tenant administrator is required");
         }
         Tenant saved = tenantRepository.save(tenant);
-        UserAccount user = userRepository.save(UserAccount.tenantUser(saved.getId(), administrator.email(),
+        String email = UserAccount.normalizeEmail(administrator.email());
+        String username = administrator.username() == null || administrator.username().isBlank()
+                ? UserAccount.defaultUsernameFromEmail(email)
+                : UserAccount.normalizeUsername(administrator.username());
+        UserAccount user = userRepository.save(UserAccount.tenantUser(saved.getId(), email, username,
                 administrator.passwordHash(), administrator.displayName(), RoleCode.GYM_ADMIN));
         Role gymAdminRole = roleRepository.findByCode(RoleCode.GYM_ADMIN)
                 .orElseThrow(() -> new IllegalStateException("GYM_ADMIN role is not initialized"));
