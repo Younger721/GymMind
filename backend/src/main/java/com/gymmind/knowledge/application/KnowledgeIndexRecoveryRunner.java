@@ -26,7 +26,6 @@ public class KnowledgeIndexRecoveryRunner implements ApplicationRunner {
 
     private static boolean shouldRecover(KnowledgeDocument document) {
         return document.status() == DocumentStatus.UPLOADING
-                || document.status() == DocumentStatus.PARSING
-                || document.status() == DocumentStatus.READY && document.published();
+                || document.status() == DocumentStatus.PARSING;
     }
 }

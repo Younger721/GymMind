@@ -154,6 +154,23 @@ class SystemCatalogInitializerTest {
     }
 
     @Test
+    void existingRolePermissionLinksAreNotDeletedOnRestart() {
+        RoleRepository roles = mock(RoleRepository.class);
+        PermissionRepository permissions = mock(PermissionRepository.class);
+        RolePermissionRepository links = mock(RolePermissionRepository.class);
+        DatabaseInitializationLock lock = mock(DatabaseInitializationLock.class);
+        Map<RoleCode, Role> roleByCode = configureCatalog(roles, permissions, links, lock);
+        Set<String> existing = Set.of(PermissionCatalog.MENU_CONFIGURED_MARKER, "menu:assistant", "custom:permission");
+        when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.GYM_ADMIN).getId())).thenReturn(existing);
+        when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.COACH).getId())).thenReturn(existing);
+        when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.MEMBER).getId())).thenReturn(existing);
+
+        new SystemCatalogInitializer(roles, permissions, lock, links).run();
+
+        verify(links, never()).deleteByRoleId(anyLong());
+    }
+
+    @Test
     void configuredDisallowedMenuIsDroppedAtInitializerRestart() {
         RoleRepository roles = mock(RoleRepository.class);
         PermissionRepository permissions = mock(PermissionRepository.class);

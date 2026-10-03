@@ -24,6 +24,21 @@ class KnowledgeIndexRecoveryRunnerTest {
         verify(worker).enqueue(null, 7L);
     }
 
+    @Test
+    void doesNotRequeuePublishedReadyDocumentsOnEveryRestart() {
+        KnowledgeDocumentRepository documents = mock(KnowledgeDocumentRepository.class);
+        KnowledgeIngestWorker worker = mock(KnowledgeIngestWorker.class);
+        KnowledgeDocument document = platformDocument(8L);
+        document.markParsing();
+        document.markReady();
+        document.publish();
+        when(documents.findAllDocuments()).thenReturn(List.of(document));
+
+        new KnowledgeIndexRecoveryRunner(documents, worker).run(mock(ApplicationArguments.class));
+
+        verify(worker, never()).enqueue(any(), eq(8L));
+    }
+
     private static KnowledgeDocument platformDocument(long id) {
         KnowledgeDocument document = KnowledgeDocument.create(null, null, "guide.txt", "text/plain",
                 DocumentVisibility.TENANT, "recovery-test");

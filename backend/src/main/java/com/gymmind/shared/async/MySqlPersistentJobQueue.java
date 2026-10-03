@@ -2,6 +2,7 @@ package com.gymmind.shared.async;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +21,37 @@ public class MySqlPersistentJobQueue implements PersistentJobQueue {
     @Override @Transactional
     public Long enqueue(String type, Long tenantId) {
         validate(type, tenantId);
+        String normalizedType = type.trim();
+        Long existing = findExistingJob(normalizedType, tenantId);
+        if (existing != null) {
+            return existing;
+        }
+        Long terminal = findJobByStatus(normalizedType, tenantId, JobStatus.COMPLETED.name(), JobStatus.FAILED.name());
+        if (terminal != null) {
+            jdbc.update("update async_job set status=?, attempts=0, next_attempt_at=?, lease_until=null, last_error=null where id=?",
+                    JobStatus.PENDING.name(), Timestamp.from(Instant.EPOCH), terminal);
+            return terminal;
+        }
         jdbc.update("insert into async_job(type,tenant_id,status,attempts,next_attempt_at) values(?,?,?,0,?)",
-                type.trim(), tenantId, JobStatus.PENDING.name(), Timestamp.from(Instant.EPOCH));
+                normalizedType, tenantId, JobStatus.PENDING.name(), Timestamp.from(Instant.EPOCH));
         return jdbc.queryForObject("select last_insert_id()", Long.class);
+    }
+
+    private Long findExistingJob(String type, Long tenantId) {
+        return findJobByStatus(type, tenantId, JobStatus.PENDING.name(), JobStatus.RUNNING.name());
+    }
+
+    private Long findJobByStatus(String type, Long tenantId, String firstStatus, String secondStatus) {
+        String sql = tenantId == null
+                ? "select id from async_job where type=? and tenant_id is null and status in (?,?) order by id limit 1"
+                : "select id from async_job where type=? and tenant_id=? and status in (?,?) order by id limit 1";
+        try {
+            return tenantId == null
+                    ? jdbc.queryForObject(sql, Long.class, type, firstStatus, secondStatus)
+                    : jdbc.queryForObject(sql, Long.class, type, tenantId, firstStatus, secondStatus);
+        } catch (EmptyResultDataAccessException ignored) {
+            return null;
+        }
     }
 
     @Override @Transactional

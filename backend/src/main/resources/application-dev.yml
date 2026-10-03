@@ -16,6 +16,8 @@ platform-admin:
   username: ${PLATFORM_ADMIN_USERNAME:admin}
   password: ${PLATFORM_ADMIN_PASSWORD:123456}
 gymmind:
+  dev:
+    reset-demo-password: ${GYMMIND_RESET_DEMO_PASSWORD:false}
   search:
     keyword-backend: memory
     vector-backend: memory

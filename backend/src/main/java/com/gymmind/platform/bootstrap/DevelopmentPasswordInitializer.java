@@ -4,6 +4,7 @@ import com.gymmind.iam.domain.model.UserAccount;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -23,12 +24,18 @@ public class DevelopmentPasswordInitializer implements ApplicationRunner {
     private final UserAccountRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    @Value("${gymmind.dev.reset-demo-password:false}")
+    private boolean resetDemoPassword;
+
     public DevelopmentPasswordInitializer(UserAccountRepository userRepository) {
         this.userRepository = userRepository;
     }
 
     @Override
     public void run(ApplicationArguments args) {
+        if (!resetDemoPassword) {
+            return;
+        }
         userRepository.findAll().stream()
                 .filter(user -> DEMO_USERNAMES.contains(user.getNormalizedUsername()))
                 .filter(user -> !passwordEncoder.matches(DEVELOPMENT_PASSWORD, user.getPasswordHash()))

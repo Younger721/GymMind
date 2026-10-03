@@ -146,9 +146,9 @@ public class SystemCatalogInitializer implements ApplicationRunner {
             configuredMenus.addAll(PermissionCatalog.defaultMenus(role.getCode()));
         }
 
-        // Old installations only had operation links. Replace those links with
-        // the selected menu links and their complete operation expansion.
-        rolePermissionRepository.deleteByRoleId(role.getId());
+        // Old installations only had operation links. Add the selected menu
+        // links and their complete operation expansion without deleting any
+        // existing links, so tenant customizations survive a restart.
         for (String menuCode : configuredMenus) {
             link(role, permissions.get(menuCode));
             for (String operationCode : PermissionCatalog.operationPermissionsFor(role.getCode(), menuCode)) {
