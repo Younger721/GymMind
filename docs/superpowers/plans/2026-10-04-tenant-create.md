@@ -59,7 +59,10 @@ Run `git add backend/src/main/java/com/gymmind/tenancy/api/request/CreateTenantR
 **Files:**
 - Modify: `frontend/src/views/business/TenantSettingsView.vue`
 - Modify: `frontend/src/views/business/PlatformView.vue`
-- Test: `frontend/tests/tenantCreateForm.test.mjs`
+- Modify: `frontend/src/components/business/BizCrudPanel.vue`
+- Create: `frontend/src/utils/tenantCreate.mjs`
+- Create: `frontend/src/utils/tenantCreate.types.d.ts`
+- Test: `frontend/tests/tenantCreate.test.mjs`
 
 **Interfaces:**
 - Both platform creation entry points send `{ tenantName, adminEmail, adminPassword, adminDisplayName }` and never send `tenantCode`.
@@ -67,27 +70,27 @@ Run `git add backend/src/main/java/com/gymmind/tenancy/api/request/CreateTenantR
 
 - [ ] **Step 1: Add failing form tests**
 
-Add tests that load the form helpers or extracted payload builder and assert the payload has no `tenantCode`, and that empty email/password are rejected while a fully populated form is accepted.
+Add a Node built-in test for the shared payload builder that asserts the payload has no `tenantCode`, and that empty email/password are rejected while a fully populated form is accepted.
 
 - [ ] **Step 2: Run the focused frontend test**
 
-Run `npm test -- --run frontend/tests/tenantCreateForm.test.mjs` from the repository root if the frontend test script is available.
+Run `node --test frontend/tests/tenantCreate.test.mjs` from the repository root.
 
-Expected: FAIL because both current views still render and validate `tenantCode`, and one path treats email as optional.
+Expected: FAIL because the shared payload builder and validation helpers do not exist yet.
 
 - [ ] **Step 3: Remove the code field and clear credential defaults**
 
-Remove the create-form tenant code input and state from `TenantSettingsView.vue`; remove the `tenantCode` field definition from `PlatformView.vue`'s `tenantFields`. Require trimmed `tenantName`, `adminEmail`, `adminPassword`, and `adminDisplayName` in both submit paths. Keep the existing tenant list `code` column so the generated value remains visible after creation.
+Remove the create-form tenant code input and state from `TenantSettingsView.vue`; remove the `tenantCode` field definition from `PlatformView.vue`'s `tenantFields`. Add the shared `tenantCreate.mjs` payload and validation helpers, mark the four platform fields required in `BizCrudPanel`, and disable browser autocomplete for administrator credentials. Require trimmed `tenantName`, `adminEmail`, `adminPassword`, and `adminDisplayName` in both submit paths. Keep the existing tenant list `code` column so the generated value remains visible after creation.
 
 - [ ] **Step 4: Run frontend tests and type/build checks**
 
-Run the focused test, then run the existing frontend build command from `frontend/package.json`.
+Run `node --test frontend/tests/tenantCreate.test.mjs`, then run `npm run build` from `frontend`.
 
 Expected: PASS with no TypeScript errors and no request payload containing `tenantCode`.
 
 - [ ] **Step 5: Commit the frontend change**
 
-Run `git add frontend/src/views/business/TenantSettingsView.vue frontend/src/views/business/PlatformView.vue frontend/tests/tenantCreateForm.test.mjs` and commit with `fix: 调整租户创建表单`.
+Run `git add frontend/src/views/business/TenantSettingsView.vue frontend/src/views/business/PlatformView.vue frontend/src/components/business/BizCrudPanel.vue frontend/src/utils/tenantCreate.mjs frontend/src/utils/tenantCreate.types.d.ts frontend/tests/tenantCreate.test.mjs` and commit with `fix: 调整租户创建表单`.
 
 ### Task 3: Full verification
 
@@ -102,7 +105,7 @@ Run `mvn -q -DskipTests compile` and the focused tenancy service tests from `bac
 
 - [ ] **Step 2: Run frontend tests/build**
 
-Run the frontend test and build commands recorded in `frontend/package.json`.
+Run `node --test frontend/tests/tenantCreate.test.mjs` and `npm run build` from `frontend`.
 
 - [ ] **Step 3: Inspect the final diff**
 
