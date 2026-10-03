@@ -51,7 +51,10 @@
         <el-form label-width="110px">
           <el-form-item label="租户编码" required><el-input v-model="createForm.tenantCode" placeholder="例如 gym-east" /></el-form-item>
           <el-form-item label="租户名称" required><el-input v-model="createForm.tenantName" /></el-form-item>
-          <el-form-item label="管理员邮箱"><el-input v-model="createForm.adminEmail" placeholder="选填" /></el-form-item>
+          <el-form-item label="管理员邮箱">
+            <el-input v-model="createForm.adminEmail" placeholder="选填" />
+            <div class="field-hint">不填写时，登录名自动使用 admin_租户编码</div>
+          </el-form-item>
           <el-form-item label="管理员密码" required><el-input v-model="createForm.adminPassword" type="password" show-password /></el-form-item>
           <el-form-item label="管理员姓名" required><el-input v-model="createForm.adminDisplayName" /></el-form-item>
         </el-form>
@@ -259,5 +262,6 @@ onMounted(() => { if (authStore.isPlatformAdmin) void loadTenants(); else void l
 .summary-card { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .summary-card span { display: block; color: var(--text-muted); font-size: 13px; }
 .summary-card strong { display: block; margin-top: 8px; font-size: 24px; }
+.field-hint { margin-top: 4px; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
 @media (max-width: 640px) { .summary-grid { grid-template-columns: 1fr; } }
 </style>
