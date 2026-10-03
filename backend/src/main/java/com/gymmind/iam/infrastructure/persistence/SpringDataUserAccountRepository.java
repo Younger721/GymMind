@@ -11,5 +11,6 @@ interface SpringDataUserAccountRepository extends JpaRepository<UserAccount, Lon
     Optional<UserAccount> findByNormalizedUsername(String normalizedUsername);
     Optional<UserAccount> findByTenantIdAndId(Long tenantId, Long id);
     Page<UserAccount> findAllByTenantId(Long tenantId, Pageable pageable);
+    long countByTenantId(Long tenantId);
     Page<UserAccount> findByTenantIdOrTenantIdIsNullOrderByIdAsc(Long tenantId, Pageable pageable);
 }

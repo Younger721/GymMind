@@ -4,6 +4,7 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.iam.domain.model.UserAccount;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
 import com.gymmind.tenancy.application.command.CreateTenantCommand;
+import com.gymmind.tenancy.application.command.UpdateTenantCommand;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.tenancy.domain.model.Tenant;
@@ -46,7 +47,29 @@ class DefaultPlatformTenantServiceTest {
         service.disable(10L, actor);
         tenant.activate();
 
+        assertThat(user.getStatus()).isEqualTo(com.gymmind.iam.domain.model.UserStatus.DISABLED);
         assertThat(user.getTokenVersion()).isEqualTo(1L);
+    }
+
+    @Test
+    void updateChangesOnlyTenantName() {
+        TenantRepository tenants = mock(TenantRepository.class);
+        TenantProvisioningService provisioning = mock(TenantProvisioningService.class);
+        UserAccountRepository users = mock(UserAccountRepository.class);
+        Tenant tenant = Tenant.create("gym", "原名称");
+        ReflectionTestUtils.setField(tenant, "id", 10L);
+        when(tenants.findById(10L)).thenReturn(Optional.of(tenant));
+        when(tenants.save(any(Tenant.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(users.countByTenantId(10L)).thenReturn(3L);
+        DefaultPlatformTenantService service = new DefaultPlatformTenantService(tenants, provisioning, users);
+        CurrentActor actor = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("platform:tenant:write"), 0L, "platform-token");
+
+        TenantView view = service.update(10L, new UpdateTenantCommand("新名称"), actor);
+
+        assertThat(view.name()).isEqualTo("新名称");
+        assertThat(view.code()).isEqualTo("gym");
+        assertThat(view.userCount()).isEqualTo(3L);
     }
 
     @Test

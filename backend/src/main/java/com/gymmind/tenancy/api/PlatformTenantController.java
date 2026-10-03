@@ -10,6 +10,7 @@ import com.gymmind.tenancy.api.request.CreateTenantRequest;
 import com.gymmind.tenancy.api.response.TenantView;
 import com.gymmind.tenancy.api.response.TenantSettingsView;
 import com.gymmind.tenancy.api.request.UpdateTenantSettingsRequest;
+import com.gymmind.tenancy.api.request.UpdateTenantRequest;
 import com.gymmind.tenancy.application.PlatformTenantService;
 import com.gymmind.tenancy.application.TenantSettingsService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -63,6 +64,13 @@ public class PlatformTenantController {
     @GetMapping
     public ApiResponse<PageResponse<TenantView>> list(Pageable pageable) {
         return ApiResponse.success(service.list(requirePlatform("platform:tenant:read"), pageable));
+    }
+
+    @PutMapping("/{tenantId}")
+    public ApiResponse<TenantView> update(@PathVariable Long tenantId,
+                                          @Valid @RequestBody UpdateTenantRequest request) {
+        return ApiResponse.success(service.update(tenantId, request.toCommand(),
+                requirePlatform("platform:tenant:write")));
     }
 
     @PatchMapping("/{tenantId}/activate")

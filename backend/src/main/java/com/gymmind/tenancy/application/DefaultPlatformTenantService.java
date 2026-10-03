@@ -7,6 +7,7 @@ import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.tenancy.api.response.TenantView;
 import com.gymmind.tenancy.application.command.CreateTenantCommand;
+import com.gymmind.tenancy.application.command.UpdateTenantCommand;
 import com.gymmind.tenancy.domain.model.Tenant;
 import com.gymmind.tenancy.domain.repository.TenantRepository;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
@@ -54,7 +55,18 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
                 Tenant.create(code, name),
                 new TenantProvisioningService.Administrator(
                         email, passwordEncoder.encode(password), displayName));
-        return TenantView.from(result.tenant());
+        return tenantView(result.tenant());
+    }
+
+    @Override
+    @Transactional
+    public TenantView update(Long tenantId, UpdateTenantCommand command, CurrentActor actor) {
+        requirePlatform(actor, "platform:tenant:write");
+        Objects.requireNonNull(command, "command");
+        Tenant tenant = tenantRepository.findById(requireId(tenantId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        tenant.rename(required(command.tenantName(), "Tenant name"));
+        return tenantView(tenantRepository.save(tenant));
     }
 
     @Override
@@ -63,7 +75,7 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
         requirePlatform(actor, "platform:tenant:read");
         Pageable effective = pageable == null ? Pageable.ofSize(20) : pageable;
         Page<Tenant> page = tenantRepository.findAll(effective);
-        return new PageResponse<>(page.map(TenantView::from).getContent(),
+        return new PageResponse<>(page.map(this::tenantView).getContent(),
                 page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
     }
 
@@ -88,11 +100,15 @@ public class DefaultPlatformTenantService implements PlatformTenantService {
         } else {
             tenant.disable();
             userRepository.findAllByTenantId(tenant.getId(), Pageable.unpaged()).forEach(user -> {
-                user.incrementTokenVersion();
+                user.disable();
                 userRepository.save(user);
             });
         }
-        return TenantView.from(tenantRepository.save(tenant));
+        return tenantView(tenantRepository.save(tenant));
+    }
+
+    private TenantView tenantView(Tenant tenant) {
+        return TenantView.from(tenant, userRepository.countByTenantId(tenant.getId()));
     }
 
     private static void requirePlatform(CurrentActor actor, String permission) {

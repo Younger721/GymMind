@@ -12,6 +12,9 @@ export const tenancyApi = {
   createTenant(body: Record<string, unknown>) {
     return apiClient.post('/v1/platform/tenants', body)
   },
+  updateTenant(id: number, body: { tenantName: string }) {
+    return apiClient.put(`/v1/platform/tenants/${id}`, body)
+  },
   activateTenant(id: number) {
     return apiClient.patch(`/v1/platform/tenants/${id}/activate`)
   },

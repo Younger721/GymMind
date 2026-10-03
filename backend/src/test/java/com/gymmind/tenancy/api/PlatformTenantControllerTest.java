@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -54,6 +55,7 @@ class PlatformTenantControllerTest {
         when(service.list(any(), any())).thenReturn(new com.gymmind.shared.api.PageResponse<>(
                 java.util.List.of(new TenantView(7L, "gym-a", "Gym A", "ACTIVE")), 0, 20, 1, 1));
         when(service.disable(7L, platformAdmin())).thenReturn(new TenantView(7L, "gym-a", "Gym A", "DISABLED"));
+        when(service.update(eq(7L), any(), eq(platformAdmin()))).thenReturn(new TenantView(7L, "gym-a", "Gym Updated", "ACTIVE"));
 
         mockMvc.perform(post("/api/v1/platform/tenants")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -74,9 +76,16 @@ class PlatformTenantControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DISABLED"));
 
+        mockMvc.perform(put("/api/v1/platform/tenants/7")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenantName\":\"Gym Updated\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("Gym Updated"));
+
         verify(service).create(any(), eq(platformAdmin()));
         verify(service).list(any(), any());
         verify(service).disable(7L, platformAdmin());
+        verify(service).update(eq(7L), any(), eq(platformAdmin()));
     }
 
     @Test

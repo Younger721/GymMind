@@ -13,6 +13,7 @@ public interface UserAccountRepository {
     Optional<UserAccount> findByNormalizedUsername(String normalizedUsername);
     Optional<UserAccount> findByTenantIdAndId(Long tenantId, Long id);
     Page<UserAccount> findAllByTenantId(Long tenantId, Pageable pageable);
+    long countByTenantId(Long tenantId);
     Page<UserAccount> findAll(Pageable pageable);
     /** 当前租户用户 + 全部平台管理员（tenantId 为空） */
     Page<UserAccount> findByTenantIdOrTenantIdIsNullOrderByIdAsc(Long tenantId, Pageable pageable);

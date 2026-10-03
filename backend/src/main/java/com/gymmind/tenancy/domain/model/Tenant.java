@@ -45,6 +45,10 @@ public class Tenant extends AuditableEntity {
         status = TenantStatus.DISABLED;
     }
 
+    public void rename(String newName) {
+        name = requireName(newName);
+    }
+
     public boolean isActive() {
         return status == TenantStatus.ACTIVE;
     }
