@@ -1,9 +1,22 @@
 import apiClient from './client'
 import type { ApiResponse } from '@/types/api'
 
+export interface CoachView {
+  id: number
+  tenantId: number
+  userId?: number
+  coachNumber: string
+  fullName: string
+  phone: string
+  status: string
+}
+
 export const coachesApi = {
   find(id: number) {
-    return apiClient.get<any, ApiResponse<unknown>>(`/v1/coaches/${id}`)
+    return apiClient.get<any, ApiResponse<CoachView>>(`/v1/coaches/${id}`)
+  },
+  list(tenantId?: number) {
+    return apiClient.get<any, ApiResponse<CoachView[]>>('/v1/coaches', { params: tenantId ? { tenantId } : undefined })
   },
   create(body: { coachNumber: string; fullName: string; phone: string; userId?: number }) {
     return apiClient.post('/v1/coaches', body)

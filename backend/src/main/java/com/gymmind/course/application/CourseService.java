@@ -13,5 +13,9 @@ public interface CourseService {
         return list(actor);
     }
     void update(CurrentActor actor, Long id, String title, String type, java.time.Instant startsAt, java.time.Instant endsAt, int capacity, String location);
+    default void update(CurrentActor actor, Long id, String title, String type, java.time.Instant startsAt,
+                        java.time.Instant endsAt, int capacity, String location, String description) {
+        update(actor, id, title, type, startsAt, endsAt, capacity, location);
+    }
     void cancel(CurrentActor actor, Long id);
 }

@@ -25,7 +25,6 @@
             v-if="authStore.isPlatformAdmin"
             :model-value="authStore.platformContextTenantId"
             class="tenant-context-select"
-            clearable
             filterable
             placeholder="选择门店上下文"
             size="small"
@@ -52,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
@@ -68,9 +67,9 @@ const tenants = ref<Array<{ id: number; name: string; status: string }>>([])
 const tenantsLoaded = ref(false)
 const allMenuGroups = ['概览', '智能', '门店运营', '系统管理'].map(title => ({
   title,
-  items: (title === '智能'
-    ? [...MENU_CATALOG.filter(item => item.group === title), { code: 'menu:assistant', label: 'AI 配置', group: '智能', path: '/agents/manage' }]
-    : [...MENU_CATALOG.filter(item => item.group === title), ...(title === '门店运营' ? [{ code: 'menu:operations', label: '签到管理', group: title, path: '/check-ins' }, { code: 'menu:analytics', label: '会员预警', group: title, path: '/member-risks' }] : [])])
+    items: title === '智能'
+      ? [...MENU_CATALOG.filter(item => item.group === title), { code: 'menu:assistant', label: 'AI 配置', group: '智能', path: '/agents/manage' }]
+      : MENU_CATALOG.filter(item => item.group === title)
 }))
 
 const menuGroups = computed(() => {
@@ -101,7 +100,16 @@ async function loadTenants() {
       id: Number(tenant.id),
       name: String(tenant.name || tenant.code || `门店 ${tenant.id}`),
       status: String(tenant.status || '')
-    })).filter((tenant: { id: number }) => Number.isSafeInteger(tenant.id) && tenant.id > 0)
+    }))
+      .filter((tenant: { id: number; status: string }) => Number.isSafeInteger(tenant.id)
+        && tenant.id > 0
+        && tenant.status === 'ACTIVE')
+      .sort((a: { id: number }, b: { id: number }) => a.id - b.id)
+    const selectedTenantId = authStore.platformContextTenantId
+    if (tenants.value.length > 0
+      && (selectedTenantId == null || !tenants.value.some(tenant => tenant.id === selectedTenantId))) {
+      authStore.setPlatformContextTenantId(tenants.value[0].id)
+    }
     tenantsLoaded.value = true
   } catch {
     // Keep the selector available so an invalid or disabled saved context can
@@ -114,7 +122,8 @@ function onTenantSelectVisible(visible: boolean) {
 }
 
 function onTenantContextChange(value: number | null | undefined) {
-  authStore.setPlatformContextTenantId(value == null ? null : Number(value))
+  const nextTenantId = value == null ? tenants.value[0]?.id : Number(value)
+  if (nextTenantId != null) authStore.setPlatformContextTenantId(nextTenantId)
 }
 
 const handleLogout = async () => {
@@ -125,6 +134,9 @@ const handleLogout = async () => {
     /* 取消 */
   }
 }
+onMounted(() => {
+  if (authStore.isPlatformAdmin) void loadTenants()
+})
 </script>
 
 <style scoped>

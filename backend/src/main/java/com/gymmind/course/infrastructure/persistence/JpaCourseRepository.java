@@ -21,6 +21,11 @@ class JpaCourseRepository implements CourseRepository {
     }
 
     @Override
+    public Optional<Course> findById(Long id) {
+        return delegate.findById(id);
+    }
+
+    @Override
     public Optional<Course> findByTenantIdAndId(Long tenantId, Long id) {
         return delegate.findByTenantIdAndId(tenantId, id);
     }

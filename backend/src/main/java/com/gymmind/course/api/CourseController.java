@@ -44,8 +44,8 @@ public class CourseController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<CourseView> create(@Valid @RequestBody CreateRequest request) {
         return ApiResponse.success(service.create(actors.requireCurrent(),
-                new CreateCourseCommand(null, request.coachId(), request.title(), request.type(),
-                        request.startsAt(), request.endsAt(), request.capacity(), request.location())));
+                new CreateCourseCommand(request.tenantId(), request.coachId(), request.title(), request.type(),
+                        request.startsAt(), request.endsAt(), request.capacity(), request.location(), request.description())));
     }
 
     @GetMapping
@@ -68,7 +68,7 @@ public class CourseController {
     @PatchMapping("/{id}")
     public ApiResponse<Void> update(@PathVariable Long id, @Valid @RequestBody UpdateRequest request) {
         service.update(actors.requireCurrent(), id, request.title(), request.type(), request.startsAt(),
-                request.endsAt(), request.capacity(), request.location());
+                request.endsAt(), request.capacity(), request.location(), request.description());
         return ApiResponse.success(null);
     }
 
@@ -78,12 +78,13 @@ public class CourseController {
         return ApiResponse.success(null);
     }
 
-    public record CreateRequest(Long coachId, @NotBlank String title, @NotBlank String type,
-                                Instant startsAt, Instant endsAt, int capacity, @NotBlank String location) {
+    public record CreateRequest(Long tenantId, Long coachId, @NotBlank String title, @NotBlank String type,
+                                Instant startsAt, Instant endsAt, int capacity, @NotBlank String location,
+                                String description) {
     }
 
     public record UpdateRequest(@NotBlank String title, @NotBlank String type, Instant startsAt, Instant endsAt,
-                                int capacity, @NotBlank String location) {
+                                int capacity, @NotBlank String location, String description) {
     }
 
     private static Instant parseDate(String value, boolean endOfDay) {

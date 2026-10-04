@@ -6,6 +6,7 @@ import java.util.Optional;
 
 public interface CourseRepository {
     Course save(Course course);
+    Optional<Course> findById(Long id);
     Optional<Course> findByTenantIdAndId(Long tenantId, Long id);
     List<Course> findAllByTenantId(Long tenantId);
     List<Course> findAll();

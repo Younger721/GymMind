@@ -14,12 +14,14 @@ import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.booking.domain.repository.BookingRepository;
 import com.gymmind.booking.domain.model.BookingStatus;
 import com.gymmind.member.domain.repository.MemberRepository;
+import com.gymmind.tenancy.domain.repository.TenantRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class DefaultCourseService implements CourseService {
@@ -29,31 +31,44 @@ public class DefaultCourseService implements CourseService {
     private final AuditRecorder audit;
     private final BookingRepository bookings;
     private final MemberRepository members;
+    private final TenantRepository tenants;
 
     public DefaultCourseService(CourseRepository courses, CoachRepository coaches, AuditRecorder audit) {
-        this(courses, coaches, audit, null, null);
+        this(courses, coaches, audit, null, null, null);
+    }
+
+    public DefaultCourseService(CourseRepository courses, CoachRepository coaches, AuditRecorder audit, BookingRepository bookings, MemberRepository members) {
+        this(courses, coaches, audit, bookings, members, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    public DefaultCourseService(CourseRepository courses, CoachRepository coaches, AuditRecorder audit, BookingRepository bookings, MemberRepository members) {
+    public DefaultCourseService(CourseRepository courses, CoachRepository coaches, AuditRecorder audit,
+                                BookingRepository bookings, MemberRepository members, TenantRepository tenants) {
         this.courses = courses;
         this.coaches = coaches;
         this.audit = audit;
         this.bookings = bookings;
         this.members = members;
+        this.tenants = tenants;
     }
 
     @Override
     @Transactional
     public CourseView create(CurrentActor actor, CreateCourseCommand command) {
         requireAuthenticated(actor);
-        Long tenantId = ActorAccess.requireTenantId(actor);
-        if (command == null || command.tenantId() != null && !tenantId.equals(command.tenantId())) {
+        if (!actor.roles().contains(RoleCode.COACH)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        if (command == null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        if (ActorAccess.isSuperAdmin(actor) && command.tenantId() == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        Long tenantId = ActorAccess.isSuperAdmin(actor) ? command.tenantId() : ActorAccess.requireTenantId(actor);
+        if (!ActorAccess.isSuperAdmin(actor) && command.tenantId() != null && !tenantId.equals(command.tenantId())) throw new BusinessException(ErrorCode.FORBIDDEN);
+        if (ActorAccess.isSuperAdmin(actor) && (tenants == null || tenants.findById(tenantId).filter(t -> t.isActive()).isEmpty())) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         Long coachId = resolveCoachForCreate(actor, tenantId, command.coachId());
         Course saved = courses.save(Course.create(tenantId, coachId, command.title(),
-                command.type(), command.startsAt(), command.endsAt(), command.capacity(), command.location()));
+                command.type(), command.startsAt(), command.endsAt(), command.capacity(), command.location(), command.description()));
         audit.record(new AuditEvent("COURSE_CREATED", "COURSE", saved.getId(), AuditResult.SUCCESS,
                 "course-service", Map.of()));
         return view(saved);
@@ -108,7 +123,7 @@ public class DefaultCourseService implements CourseService {
                 .filter(course -> type == null || type.isBlank() || type.equalsIgnoreCase(course.getType()))
                 .filter(course -> !availableOnly || course.getStatus() == com.gymmind.course.domain.model.CourseStatus.SCHEDULED
                         && course.getReservedCount() < course.getCapacity() && course.getEndsAt().isAfter(now))
-                .map(DefaultCourseService::view)
+                .map(this::view)
                 .toList();
     }
 
@@ -120,11 +135,18 @@ public class DefaultCourseService implements CourseService {
     @Transactional
     public void update(CurrentActor actor, Long id, String title, String type, Instant startsAt, Instant endsAt,
                        int capacity, String location) {
+        update(actor, id, title, type, startsAt, endsAt, capacity, location, null);
+    }
+
+    @Override
+    @Transactional
+    public void update(CurrentActor actor, Long id, String title, String type, Instant startsAt, Instant endsAt,
+                       int capacity, String location, String description) {
         requireAuthenticated(actor);
         Course course = findCourse(actor, id);
         ensureCanManage(actor, course);
         try {
-            course.update(title, type, startsAt, endsAt, capacity, location);
+            course.update(title, type, startsAt, endsAt, capacity, location, description);
         } catch (IllegalStateException ex) {
             throw new BusinessException(ErrorCode.CONFLICT);
         } catch (IllegalArgumentException ex) {
@@ -146,7 +168,10 @@ public class DefaultCourseService implements CourseService {
     }
 
     private Course findCourse(CurrentActor actor, Long id) {
-        Course course = courses.findByTenantIdAndId(ActorAccess.requireTenantId(actor), id)
+        Optional<Course> result = ActorAccess.isSuperAdmin(actor)
+                ? courses.findById(id)
+                : courses.findByTenantIdAndId(ActorAccess.requireTenantId(actor), id);
+        Course course = result
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (actor.roles().contains(RoleCode.COACH) && !ActorAccess.canManageTenant(actor)) {
             ensureCanManage(actor, course);
@@ -156,9 +181,12 @@ public class DefaultCourseService implements CourseService {
 
     private Course findCourseForRead(CurrentActor actor, Long id) {
         if (ActorAccess.isSuperAdmin(actor)) {
-            return courses.findAll().stream()
-                    .filter(course -> id.equals(course.getId()))
-                    .findFirst()
+            return courses.findById(id).orElseGet(() -> courses.findAll().stream()
+                    .filter(course -> id.equals(course.getId())).findFirst()
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)));
+        }
+        if (actor.roles().contains(RoleCode.COACH) && !ActorAccess.canManageTenant(actor)) {
+            return courses.findByTenantIdAndId(ActorAccess.requireTenantId(actor), id)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
         return findCourse(actor, id);
@@ -207,9 +235,11 @@ public class DefaultCourseService implements CourseService {
         }
     }
 
-    private static CourseView view(Course course) {
+    private CourseView view(Course course) {
+        String tenantName = tenants == null ? null : tenants.findById(course.getTenantId()).map(t -> t.getName()).orElse(null);
+        String coachName = coaches.findByTenantIdAndId(course.getTenantId(), course.getCoachId()).map(c -> c.getFullName()).orElse(null);
         return new CourseView(course.getId(), course.getTenantId(), course.getCoachId(), course.getTitle(),
                 course.getType(), course.getStartsAt(), course.getEndsAt(), course.getCapacity(),
-                course.getReservedCount(), course.getLocation(), course.getStatus());
+                course.getReservedCount(), course.getLocation(), course.getStatus(), tenantName, coachName, course.getDescription());
     }
 }
