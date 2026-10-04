@@ -249,7 +249,7 @@ public final class PermissionCatalog {
                 Map.entry("menu:knowledge", Set.of("knowledge:read", "knowledge:write")),
                 Map.entry("menu:courses", Set.of("course:read", "course:write", "booking:write")),
                 Map.entry("menu:training", Set.of(
-                        "exercise:read", "video:read", "workout:read", "workout:write",
+                        "exercise:read", "exercise:write", "video:read", "workout:read", "workout:write",
                         "workout-record:read", "nutrition:read", "nutrition:write",
                         "ai:recommend", "ai:plan"))));
         mappings.put(RoleCode.MEMBER, roleOperations(
@@ -257,7 +257,7 @@ public final class PermissionCatalog {
                 Map.entry("menu:courses", Set.of("course:read", "booking:write")),
                 Map.entry("menu:training", Set.of(
                         "exercise:read", "video:read", "workout:read", "workout-record:read",
-                        "workout-record:write", "nutrition:read", "nutrition:write",
+                        "workout:write", "workout-record:write", "nutrition:read", "nutrition:write",
                         "ai:recommend", "ai:plan"))));
         return mappings.entrySet().stream().collect(Collectors.toUnmodifiableMap(
                 Map.Entry::getKey, entry -> entry.getValue().entrySet().stream()

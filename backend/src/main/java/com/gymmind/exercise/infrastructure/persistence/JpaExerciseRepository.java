@@ -20,6 +20,9 @@ class JpaExerciseRepository implements ExerciseRepository {
     @Override public List<Exercise> findAllByTenantId(Long tenantId) {
         return delegate.findAllByTenantId(tenantId);
     }
+    @Override public List<Exercise> findAllByTenantIdAndActiveTrue(Long tenantId) {
+        return delegate.findAllByTenantIdAndActiveTrue(tenantId);
+    }
     @Override public boolean existsByTenantIdAndName(Long tenantId, String name) {
         return delegate.existsByTenantIdAndName(tenantId, name);
     }

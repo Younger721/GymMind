@@ -28,7 +28,9 @@ class WorkoutPlanServiceTest {
         MemberRepository members = mock(MemberRepository.class);
         CoachAssignmentService assignments = mock(CoachAssignmentService.class);
         when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(mock(com.gymmind.member.domain.model.Member.class)));
-        when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(mock(com.gymmind.exercise.domain.model.Exercise.class)));
+        var exercise = mock(com.gymmind.exercise.domain.model.Exercise.class);
+        when(exercise.isActive()).thenReturn(true);
+        when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(exercise));
         when(assignments.canAccess(any(), eq(41L))).thenReturn(true);
         when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(items.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -67,7 +69,9 @@ class WorkoutPlanServiceTest {
         when(member.getId()).thenReturn(41L);
         when(members.findByTenantIdAndUserId(11L, 9L)).thenReturn(Optional.of(member));
         when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(member));
-        when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(mock(com.gymmind.exercise.domain.model.Exercise.class)));
+        var exercise = mock(com.gymmind.exercise.domain.model.Exercise.class);
+        when(exercise.isActive()).thenReturn(true);
+        when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(exercise));
         when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(items.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 

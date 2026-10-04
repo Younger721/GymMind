@@ -30,6 +30,8 @@ public class Exercise extends TenantScopedEntity {
     private String safetyNotes;
     @Column(nullable = false, length = 1000)
     private String tags;
+    @Column(nullable = false)
+    private boolean active = true;
 
     protected Exercise() {}
 
@@ -70,6 +72,10 @@ public class Exercise extends TenantScopedEntity {
         this.tags = required(tags, "tags");
     }
 
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
     private static String required(String value, String field) {
         if (value == null || value.isBlank()) throw new IllegalArgumentException(field + " must not be blank");
         return value.trim();
@@ -86,4 +92,5 @@ public class Exercise extends TenantScopedEntity {
     public String getCommonMistakes() { return commonMistakes; }
     public String getSafetyNotes() { return safetyNotes; }
     public String getTags() { return tags; }
+    public boolean isActive() { return active; }
 }

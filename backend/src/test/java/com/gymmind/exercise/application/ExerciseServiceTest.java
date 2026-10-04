@@ -17,6 +17,46 @@ import static org.mockito.Mockito.*;
 
 class ExerciseServiceTest {
     @Test
+    void coachCanCreateExerciseButCannotUpdateIt() {
+        ExerciseRepository exercises = mock(ExerciseRepository.class);
+        when(exercises.existsByTenantIdAndName(11L, "Lat pulldown")).thenReturn(false);
+        when(exercises.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        ExerciseService service = new DefaultExerciseService(exercises, mock(AuditRecorder.class));
+
+        ExerciseView view = service.create(coach(11L), new CreateExerciseCommand(null, "Lat pulldown",
+                "BACK", "LATS", "BEGINNER", "CABLE", "desc", "steps", "mistakes", "safety", "back"));
+
+        assertThat(view.name()).isEqualTo("Lat pulldown");
+        assertThatThrownBy(() -> service.update(coach(11L), 8L, new ExerciseUpdateCommand(
+                "Changed", "BACK", "LATS", "BEGINNER", "CABLE", "desc", "steps", "mistakes", "safety", "back")))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+    }
+
+    @Test
+    void memberOnlySeesActiveExercises() {
+        ExerciseRepository exercises = mock(ExerciseRepository.class);
+        when(exercises.findAllByTenantIdAndActiveTrue(11L)).thenReturn(java.util.List.of());
+        ExerciseService service = new DefaultExerciseService(exercises, mock(AuditRecorder.class));
+
+        service.list(member(11L));
+
+        verify(exercises).findAllByTenantIdAndActiveTrue(11L);
+        verify(exercises, never()).findAllByTenantId(11L);
+    }
+
+    @Test
+    void gymAdminCanChangeExerciseStatus() {
+        ExerciseRepository exercises = mock(ExerciseRepository.class);
+        var exercise = mock(com.gymmind.exercise.domain.model.Exercise.class);
+        when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(exercise));
+        ExerciseService service = new DefaultExerciseService(exercises, mock(AuditRecorder.class));
+
+        service.setActive(admin(11L), 8L, false);
+
+        verify(exercise).setActive(false);
+        verify(exercises).save(exercise);
+    }
+    @Test
     void createsExerciseInsideActorTenant() {
         ExerciseRepository exercises = mock(ExerciseRepository.class);
         when(exercises.existsByTenantIdAndName(11L, "Barbell squat")).thenReturn(false);
@@ -80,5 +120,15 @@ class ExerciseServiceTest {
 
     private static CurrentActor platform() {
         return new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token");
+    }
+
+    private static CurrentActor coach(long tenantId) {
+        return new CurrentActor(2L, tenantId, Set.of(RoleCode.COACH),
+                Set.of("exercise:read", "exercise:write"), 0L, "coach-token");
+    }
+
+    private static CurrentActor member(long tenantId) {
+        return new CurrentActor(3L, tenantId, Set.of(RoleCode.MEMBER),
+                Set.of("exercise:read"), 0L, "member-token");
     }
 }

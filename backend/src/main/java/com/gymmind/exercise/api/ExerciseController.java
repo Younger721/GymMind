@@ -46,6 +46,12 @@ public class ExerciseController {
         return ApiResponse.success(null);
     }
 
+    @PatchMapping("/{id}/status")
+    public ApiResponse<Void> status(@PathVariable Long id, @RequestBody StatusRequest request) {
+        service.setActive(actors.requireCurrent(), id, request.active());
+        return ApiResponse.success(null);
+    }
+
     public record ExerciseRequest(@NotBlank String name, @NotBlank String category, @NotBlank String targetMuscle,
                                   @NotBlank String difficulty, @NotBlank String equipment, @NotBlank String description,
                                   @NotBlank String steps, @NotBlank String commonMistakes, @NotBlank String safetyNotes,
@@ -59,4 +65,6 @@ public class ExerciseController {
                     steps, commonMistakes, safetyNotes, tags);
         }
     }
+
+    public record StatusRequest(boolean active) { }
 }

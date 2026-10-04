@@ -63,18 +63,36 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         }
         for (var item : command.items()) {
             exercises.findByTenantIdAndId(tenantId, item.exerciseId())
+                    .filter(com.gymmind.exercise.domain.model.Exercise::isActive)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
         WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
         for (var item : command.items()) {
+            var exercise = exercises.findByTenantIdAndId(tenantId, item.exerciseId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
-                    item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes()));
+                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes()));
         }
         plan.publish();
         audit.record(new AuditEvent("WORKOUT_PLAN_CREATED", "WORKOUT_PLAN", plan.getId(), AuditResult.SUCCESS,
                 "workout-plan-service", Map.of("resourceName", plan.getName())));
-        return WorkoutPlanView.from(plan);
+        return view(plan);
+    }
+
+    @Override
+    @Transactional
+    public WorkoutPlanView createForCurrentMember(CurrentActor actor, CreateWorkoutPlanCommand command) {
+        if (actor == null || !actor.roles().contains(RoleCode.MEMBER)
+                || ActorAccess.tenantId(actor) == null || !actor.hasPermission("workout:write")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        Long tenantId = ActorAccess.tenantId(actor);
+        Long memberId = members.findByTenantIdAndUserId(tenantId, actor.userId())
+                .map(com.gymmind.member.domain.model.Member::getId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (command == null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        return saveValidatedDraft(actor, new CreateWorkoutPlanCommand(command.tenantId(), memberId, null,
+                command.name(), command.goal(), command.startDate(), command.endDate(), command.description(), command.items()));
     }
 
     @Override
@@ -93,17 +111,19 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         }
         for (var item : command.items()) {
             exercises.findByTenantIdAndId(tenantId, item.exerciseId())
+                    .filter(com.gymmind.exercise.domain.model.Exercise::isActive)
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
         WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
         for (var item : command.items()) {
+            var exercise = exercises.findByTenantIdAndId(tenantId, item.exerciseId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
-                    item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes()));
+                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes()));
         }
         audit.record(new AuditEvent("WORKOUT_PLAN_DRAFT_SAVED", "WORKOUT_PLAN", plan.getId(), AuditResult.SUCCESS,
                 "workout-plan-service", Map.of("resourceName", plan.getName())));
-        return WorkoutPlanView.from(plan);
+        return view(plan);
     }
 
     @Override
@@ -115,7 +135,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         if (!canAccessPlanMember(actor, plan.getMemberId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return WorkoutPlanView.from(plan);
+        return view(plan);
     }
 
     @Override
@@ -124,7 +144,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         requireReader(actor);
         return plans.findAllByTenantId(ActorAccess.tenantId(actor)).stream()
                 .filter(plan -> canAccessPlanMember(actor, plan.getMemberId()))
-                .map(WorkoutPlanView::from)
+                .map(this::view)
                 .toList();
     }
 
@@ -138,13 +158,19 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (plan.getStatus() == WorkoutPlanStatus.PUBLISHED) {
-            return WorkoutPlanView.from(plan);
+            return view(plan);
         }
         plan.publish();
         WorkoutPlan saved = plans.save(plan);
         audit.record(new AuditEvent("WORKOUT_PLAN_PUBLISHED", "WORKOUT_PLAN", saved.getId(), AuditResult.SUCCESS,
                 "workout-plan-service", Map.of("resourceName", saved.getName())));
-        return WorkoutPlanView.from(saved);
+        return view(saved);
+    }
+
+    private WorkoutPlanView view(WorkoutPlan plan) {
+        List<com.gymmind.workout.domain.model.WorkoutPlanItem> planItems = items.findAllByPlanId(plan.getId());
+        if (planItems == null) planItems = List.of();
+        return WorkoutPlanView.from(plan, planItems.stream().map(WorkoutPlanItemView::from).toList());
     }
 
     private static void require(CurrentActor actor) {
@@ -159,7 +185,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         if (actor != null && actor.roles().contains(RoleCode.MEMBER)) {
             Long tenantId = ActorAccess.tenantId(actor);
             boolean ownMember = tenantId != null && command != null && command.memberId() != null
-                    && actor.hasPermission("ai:plan")
+                    && (actor.hasPermission("ai:plan") || actor.hasPermission("workout:write"))
                     && members.findByTenantIdAndUserId(tenantId, actor.userId())
                     .map(member -> member.getId().equals(command.memberId()))
                     .orElse(false);
@@ -173,7 +199,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
 
     private void requireReader(CurrentActor actor) {
         if (actor != null && actor.roles().contains(RoleCode.MEMBER)) {
-            if (ActorAccess.tenantId(actor) == null || !actor.hasPermission("ai:plan")) {
+            if (ActorAccess.tenantId(actor) == null || (!actor.hasPermission("ai:plan") && !actor.hasPermission("workout:write"))) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             return;
@@ -184,7 +210,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     private boolean canAccessPlanMember(CurrentActor actor, Long memberId) {
         if (actor != null && actor.roles().contains(RoleCode.MEMBER)) {
             Long tenantId = ActorAccess.tenantId(actor);
-            return tenantId != null && actor.hasPermission("ai:plan")
+            return tenantId != null && (actor.hasPermission("ai:plan") || actor.hasPermission("workout:write"))
                     && members.findByTenantIdAndUserId(tenantId, actor.userId())
                     .map(member -> member.getId().equals(memberId))
                     .orElse(false);

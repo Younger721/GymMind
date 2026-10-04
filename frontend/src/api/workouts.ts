@@ -14,6 +14,9 @@ export const workoutPlansApi = {
   saveDraft(body: Record<string, unknown>) {
     return apiClient.post('/v1/workout-plans/drafts', body)
   },
+  createMember(body: Record<string, unknown>) {
+    return apiClient.post('/v1/workout-plans/member', body)
+  },
   publish(id: number) {
     return apiClient.post(`/v1/workout-plans/${id}/publish`)
   },

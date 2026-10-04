@@ -9,5 +9,6 @@ public interface ExerciseRepository {
     Exercise save(Exercise exercise);
     Optional<Exercise> findByTenantIdAndId(Long tenantId, Long id);
     List<Exercise> findAllByTenantId(Long tenantId);
+    List<Exercise> findAllByTenantIdAndActiveTrue(Long tenantId);
     boolean existsByTenantIdAndName(Long tenantId, String name);
 }

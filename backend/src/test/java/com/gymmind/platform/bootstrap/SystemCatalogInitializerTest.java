@@ -90,11 +90,11 @@ class SystemCatalogInitializerTest {
                 .contains("course:read", "booking:write");
 
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.COACH, "menu:training"))
-                .contains("exercise:read", "video:read", "workout:write", "ai:plan")
-                .doesNotContain("exercise:write", "video:write", "workout-record:write");
+                .contains("exercise:read", "exercise:write", "video:read", "workout:write", "ai:plan")
+                .doesNotContain("video:write", "workout-record:write");
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.MEMBER, "menu:training"))
-                .contains("exercise:read", "video:read", "workout-record:write", "nutrition:write", "ai:plan")
-                .doesNotContain("exercise:write", "video:write", "workout:write");
+                .contains("exercise:read", "video:read", "workout:write", "workout-record:write", "nutrition:write", "ai:plan")
+                .doesNotContain("exercise:write", "video:write");
     }
 
     @Test

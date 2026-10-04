@@ -29,7 +29,7 @@ public class DefaultExerciseService implements ExerciseService {
     @Override
     @Transactional
     public ExerciseView create(CurrentActor actor, CreateExerciseCommand command) {
-        require(actor, "exercise:write");
+        requireCreate(actor);
         Long tenantId = ActorAccess.tenantId(actor);
         if (command == null || command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -48,16 +48,22 @@ public class DefaultExerciseService implements ExerciseService {
     @Override
     @Transactional(readOnly = true)
     public List<ExerciseView> list(CurrentActor actor) {
-        require(actor, "exercise:read");
-        return exercises.findAllByTenantId(ActorAccess.tenantId(actor)).stream().map(ExerciseView::from).toList();
+        requireRead(actor);
+        List<Exercise> source = ActorAccess.canManageTenant(actor)
+                ? exercises.findAllByTenantId(ActorAccess.tenantId(actor))
+                : exercises.findAllByTenantIdAndActiveTrue(ActorAccess.tenantId(actor));
+        return source.stream().map(ExerciseView::from).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public ExerciseView find(CurrentActor actor, Long id) {
-        require(actor, "exercise:read");
+        requireRead(actor);
         Exercise exercise = exercises.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!ActorAccess.canManageTenant(actor) && !exercise.isActive()) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
         return ExerciseView.from(exercise);
     }
 
@@ -75,7 +81,32 @@ public class DefaultExerciseService implements ExerciseService {
                 "exercise-service", Map.of("resourceName", exercise.getName())));
     }
 
+    @Override
+    @Transactional
+    public void setActive(CurrentActor actor, Long id, boolean active) {
+        require(actor, "exercise:write");
+        Exercise exercise = exercises.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        exercise.setActive(active);
+        exercises.save(exercise);
+        audit.record(new AuditEvent("EXERCISE_STATUS_CHANGED", "EXERCISE", id, AuditResult.SUCCESS,
+                "exercise-service", Map.of("resourceName", String.valueOf(exercise.getName()))));
+    }
+
     private static void require(CurrentActor actor, String permission) {
         ActorAccess.requireGymAdmin(actor, permission);
+    }
+
+    private static void requireCreate(CurrentActor actor) {
+        if (actor == null || ActorAccess.tenantId(actor) == null || !actor.hasPermission("exercise:write")
+                || (!ActorAccess.canManageTenant(actor) && !actor.roles().contains(RoleCode.COACH))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private static void requireRead(CurrentActor actor) {
+        if (actor == null || ActorAccess.tenantId(actor) == null || !actor.hasPermission("exercise:read")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 }

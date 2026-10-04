@@ -9,4 +9,5 @@ public interface ExerciseService {
     ExerciseView find(CurrentActor actor, Long id);
     List<ExerciseView> list(CurrentActor actor);
     void update(CurrentActor actor, Long id, ExerciseUpdateCommand command);
+    void setActive(CurrentActor actor, Long id, boolean active);
 }

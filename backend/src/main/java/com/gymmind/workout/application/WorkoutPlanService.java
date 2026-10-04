@@ -6,6 +6,7 @@ import java.util.List;
 
 public interface WorkoutPlanService {
     WorkoutPlanView create(CurrentActor actor, CreateWorkoutPlanCommand command);
+    WorkoutPlanView createForCurrentMember(CurrentActor actor, CreateWorkoutPlanCommand command);
     WorkoutPlanView saveValidatedDraft(CurrentActor actor, CreateWorkoutPlanCommand command);
     WorkoutPlanView find(CurrentActor actor, Long id);
     List<WorkoutPlanView> list(CurrentActor actor);

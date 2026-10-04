@@ -16,5 +16,6 @@ public class WorkoutPlanTemplateItem extends BaseEntity {
     @Column(length=1000) private String notes;
     protected WorkoutPlanTemplateItem(){}
     public WorkoutPlanTemplateItem(WorkoutPlanTemplate t,String exerciseName,String phase,int sortOrder,int sets,int reps,int restSeconds,double weight,String notes){if(exerciseName==null||exerciseName.isBlank())throw new IllegalArgumentException("exerciseName is required");this.template=t;this.exerciseName=exerciseName.trim();this.phase=phase;this.sortOrder=sortOrder;this.sets=sets;this.reps=reps;this.restSeconds=restSeconds;this.weight=weight;this.notes=notes;}
+    public WorkoutPlanTemplateItem(WorkoutPlanTemplate t,Long exerciseId,String exerciseName,String phase,int sortOrder,int sets,int reps,int restSeconds,double weight,String notes){this(t,exerciseName,phase,sortOrder,sets,reps,restSeconds,weight,notes);this.exerciseId=exerciseId;}
     public WorkoutPlanTemplate getTemplate(){return template;} public Long getExerciseId(){return exerciseId;} public String getExerciseName(){return exerciseName;} public String getPhase(){return phase;} public int getSortOrder(){return sortOrder;} public int getSets(){return sets;} public int getReps(){return reps;} public int getRestSeconds(){return restSeconds;} public double getWeight(){return weight;} public String getNotes(){return notes;}
 }

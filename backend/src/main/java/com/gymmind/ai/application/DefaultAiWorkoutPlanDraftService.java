@@ -200,7 +200,7 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
         StringBuilder prompt = new StringBuilder("请仅输出结构化训练计划JSON，不要输出解释。\n用户需求：").append(request);
         if (exercises != null) {
             prompt.append("\n动作目录（只能使用以下动作ID）：");
-            for (Exercise exercise : exercises.findAllByTenantId(tenantId)) {
+            for (Exercise exercise : exercises.findAllByTenantIdAndActiveTrue(tenantId)) {
                 if (exercise != null && exercise.getId() != null) {
                     prompt.append("\n").append(exercise.getId()).append("=").append(exercise.getName());
                 }

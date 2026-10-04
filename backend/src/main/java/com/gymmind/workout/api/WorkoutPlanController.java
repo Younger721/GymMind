@@ -50,6 +50,12 @@ public class WorkoutPlanController {
         return ApiResponse.success(service.saveValidatedDraft(actors.requireCurrent(), request.toCommand()));
     }
 
+    @PostMapping("/member")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<WorkoutPlanView> createForCurrentMember(@Valid @RequestBody MemberRequest request) {
+        return ApiResponse.success(service.createForCurrentMember(actors.requireCurrent(), request.toCommand()));
+    }
+
     @GetMapping
     public ApiResponse<List<WorkoutPlanView>> list() {
         return ApiResponse.success(service.list(actors.requireCurrent()));
@@ -90,6 +96,19 @@ public class WorkoutPlanController {
             String notes) {
         WorkoutPlanItemCommand toCommand() {
             return new WorkoutPlanItemCommand(exerciseId, dayOfWeek, sets, reps, restSeconds, weight, notes);
+        }
+    }
+
+    public record MemberRequest(
+            @NotBlank String name,
+            @NotBlank String goal,
+            @NotNull LocalDate startDate,
+            @NotNull LocalDate endDate,
+            @NotBlank String description,
+            @NotEmpty List<RequestItem> items) {
+        CreateWorkoutPlanCommand toCommand() {
+            return new CreateWorkoutPlanCommand(null, null, null, name, goal, startDate, endDate, description,
+                    items.stream().map(RequestItem::toCommand).toList());
         }
     }
 }
