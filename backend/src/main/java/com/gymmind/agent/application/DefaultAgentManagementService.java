@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Comparator;
 
 @Service
 public class DefaultAgentManagementService implements AgentManagementService {
@@ -68,34 +69,28 @@ public class DefaultAgentManagementService implements AgentManagementService {
     @Override
     @Transactional
     public AgentView create(CurrentActor actor, CreateAgentCommand command) {
-        requireManage(actor);
-        validate(command);
-        Long tenantId = ActorAccess.tenantId(actor);
-        quotas.ensureAgentCreationAllowed(tenantId);
-        TenantAgent agent = TenantAgent.create(
-                tenantId,
-                command.name(),
-                command.description(),
-                command.systemPrompt(),
-                command.knowledgeEnabled(),
-                joinTools(command.enabledTools()),
-                actor.userId());
-        TenantAgent saved = agents.save(agent);
-        audit.record(new AuditEvent("AGENT_CREATED", "TENANT_AGENT", saved.getId(), AuditResult.SUCCESS,
-                "agent-service", Map.of("resourceName", saved.getName())));
-        return AgentView.from(saved);
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     @Override
     @Transactional
     public AgentView update(CurrentActor actor, Long agentId, UpdateAgentCommand command) {
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    @Override
+    @Transactional
+    public AgentView updatePrompt(CurrentActor actor, Long agentId, String systemPrompt) {
         requireManage(actor);
-        validate(command);
-        TenantAgent agent = getScoped(actor, agentId);
-        agent.update(command.name(), command.description(), command.systemPrompt(),
-                command.knowledgeEnabled(), joinTools(command.enabledTools()));
+        validatePrompt(systemPrompt);
+        TenantAgent agent = getDefaultScoped(actor, agentId);
+        try {
+            agent.updateSystemPrompt(systemPrompt);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
         TenantAgent saved = agents.save(agent);
-        audit.record(new AuditEvent("AGENT_UPDATED", "TENANT_AGENT", saved.getId(), AuditResult.SUCCESS,
+        audit.record(new AuditEvent("AGENT_PROMPT_UPDATED", "TENANT_AGENT", saved.getId(), AuditResult.SUCCESS,
                 "agent-service", Map.of("resourceName", saved.getName())));
         return AgentView.from(saved);
     }
@@ -103,28 +98,34 @@ public class DefaultAgentManagementService implements AgentManagementService {
     @Override
     @Transactional
     public AgentView disable(CurrentActor actor, Long agentId) {
-        requireManage(actor);
-        TenantAgent agent = getScoped(actor, agentId);
-        agent.disable();
-        TenantAgent saved = agents.save(agent);
-        audit.record(new AuditEvent("AGENT_DISABLED", "TENANT_AGENT", saved.getId(), AuditResult.SUCCESS,
-                "agent-service", Map.of("resourceName", saved.getName())));
-        return AgentView.from(saved);
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     @Override
     @Transactional
     public AgentView activate(CurrentActor actor, Long agentId) {
-        requireManage(actor);
-        TenantAgent agent = getScoped(actor, agentId);
-        agent.activate();
-        TenantAgent saved = agents.save(agent);
-        return AgentView.from(saved);
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     private TenantAgent getScoped(CurrentActor actor, Long agentId) {
         return agents.findByTenantIdAndId(ActorAccess.tenantId(actor), agentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    private TenantAgent getDefaultScoped(CurrentActor actor, Long agentId) {
+        Long tenantId = ActorAccess.tenantId(actor);
+        TenantAgent defaultAgent = agents.findAllByTenantIdAndStatus(tenantId, AgentStatus.ACTIVE).stream()
+                .filter(java.util.Objects::nonNull)
+                .min(Comparator.comparing(TenantAgent::getId, Comparator.nullsLast(Long::compareTo)))
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        TenantAgent target = getScoped(actor, agentId);
+        if (defaultAgent.getId() != null && !java.util.Objects.equals(defaultAgent.getId(), agentId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (defaultAgent.getId() == null && defaultAgent != target) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return target;
     }
 
     private static void requireTenant(CurrentActor actor) {
@@ -133,7 +134,7 @@ public class DefaultAgentManagementService implements AgentManagementService {
 
     private static void requireManage(CurrentActor actor) {
         requireTenant(actor);
-        if (!canManage(actor)) {
+        if (actor == null || actor.isPlatformAdmin() || !canManage(actor)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
@@ -164,6 +165,12 @@ public class DefaultAgentManagementService implements AgentManagementService {
     private static void validate(UpdateAgentCommand command) {
         if (command == null || command.name() == null || command.name().isBlank()
                 || command.systemPrompt() == null || command.systemPrompt().isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
+
+    private static void validatePrompt(String systemPrompt) {
+        if (systemPrompt == null || systemPrompt.isBlank() || systemPrompt.trim().length() > 4000) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
     }

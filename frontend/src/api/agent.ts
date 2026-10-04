@@ -40,32 +40,8 @@ export const agentApi = {
     })
   },
 
-  create(payload: {
-    name: string
-    description?: string
-    systemPrompt: string
-    knowledgeEnabled: boolean
-    enabledTools: string[]
-  }) {
-    return apiClient.post<any, { data: AgentView }>('/v1/agents', payload)
-  },
-
-  update(id: number, payload: {
-    name: string
-    description?: string
-    systemPrompt: string
-    knowledgeEnabled: boolean
-    enabledTools: string[]
-  }) {
-    return apiClient.put<any, { data: AgentView }>(`/v1/agents/${id}`, payload)
-  },
-
-  disable(id: number) {
-    return apiClient.post<any, { data: AgentView }>(`/v1/agents/${id}/disable`)
-  },
-
-  activate(id: number) {
-    return apiClient.post<any, { data: AgentView }>(`/v1/agents/${id}/activate`)
+  updatePrompt(id: number, payload: { systemPrompt: string }) {
+    return apiClient.put<any, { data: AgentView }>(`/v1/agents/${id}/prompt`, payload)
   },
 
   chat(agentId: number, sessionId: string, question: string) {

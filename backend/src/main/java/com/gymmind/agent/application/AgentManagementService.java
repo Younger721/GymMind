@@ -13,6 +13,8 @@ public interface AgentManagementService {
 
     AgentView update(CurrentActor actor, Long agentId, UpdateAgentCommand command);
 
+    AgentView updatePrompt(CurrentActor actor, Long agentId, String systemPrompt);
+
     AgentView disable(CurrentActor actor, Long agentId);
 
     AgentView activate(CurrentActor actor, Long agentId);

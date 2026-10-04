@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -56,6 +57,13 @@ public class AgentController {
         return ApiResponse.success(service.update(actors.requireCurrent(), id, request.toUpdateCommand()));
     }
 
+    @PutMapping("/{id}/prompt")
+    public ApiResponse<AgentView> updatePrompt(@PathVariable Long id,
+                                               @Valid @RequestBody PromptRequest request) {
+        return ApiResponse.success(service.updatePrompt(
+                actors.requireCurrent(), id, request.systemPrompt()));
+    }
+
     @PostMapping("/{id}/disable")
     public ApiResponse<AgentView> disable(@PathVariable Long id) {
         return ApiResponse.success(service.disable(actors.requireCurrent(), id));
@@ -79,5 +87,8 @@ public class AgentController {
         UpdateAgentCommand toUpdateCommand() {
             return new UpdateAgentCommand(name, description, systemPrompt, knowledgeEnabled, enabledTools);
         }
+    }
+
+    public record PromptRequest(@NotBlank @Size(max = 4000) String systemPrompt) {
     }
 }

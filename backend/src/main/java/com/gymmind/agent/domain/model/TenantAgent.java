@@ -41,7 +41,7 @@ public class TenantAgent extends TenantScopedEntity {
         super(tenantId);
         this.name = requireText(name, "Agent name");
         this.description = description == null ? "" : description.trim();
-        this.systemPrompt = requireText(systemPrompt, "System prompt");
+        this.systemPrompt = requirePrompt(systemPrompt);
         this.status = AgentStatus.ACTIVE;
         this.createdByUserId = createdByUserId;
     }
@@ -58,9 +58,13 @@ public class TenantAgent extends TenantScopedEntity {
                        String enabledTools) {
         this.name = requireText(name, "Agent name");
         this.description = description == null ? "" : description.trim();
-        this.systemPrompt = requireText(systemPrompt, "System prompt");
+        this.systemPrompt = requirePrompt(systemPrompt);
         this.knowledgeEnabled = knowledgeEnabled;
         this.enabledTools = normalizeTools(enabledTools);
+    }
+
+    public void updateSystemPrompt(String systemPrompt) {
+        this.systemPrompt = requirePrompt(systemPrompt);
     }
 
     public void disable() {
@@ -115,5 +119,13 @@ public class TenantAgent extends TenantScopedEntity {
             return "knowledge_search";
         }
         return tools.trim();
+    }
+
+    private static String requirePrompt(String prompt) {
+        String value = requireText(prompt, "System prompt");
+        if (value.length() > 4000) {
+            throw new IllegalArgumentException("System prompt must not exceed 4000 characters");
+        }
+        return value;
     }
 }

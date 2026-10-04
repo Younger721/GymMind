@@ -1,5 +1,8 @@
 package com.gymmind.ai.harness.application;
 
+import com.gymmind.agent.domain.model.AgentStatus;
+import com.gymmind.agent.domain.model.TenantAgent;
+import com.gymmind.agent.domain.repository.TenantAgentRepository;
 import com.gymmind.ai.application.AiChatView;
 import com.gymmind.ai.application.AiUsageCommand;
 import com.gymmind.ai.application.ChatModelGateway;
@@ -36,6 +39,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Comparator;
 import java.util.function.Consumer;
 
 @Service
@@ -52,6 +56,7 @@ public class DefaultAiHarnessService implements AiHarnessService {
     private final AiRoleProfileResolver roleProfiles;
     private final AiCapabilityRegistry capabilityRegistry;
     private final AiToolOrchestrator toolOrchestrator;
+    private final TenantAgentRepository tenantAgents;
     private final PromptInjectionGuard guard = new PromptInjectionGuard();
 
     public DefaultAiHarnessService(
@@ -66,6 +71,36 @@ public class DefaultAiHarnessService implements AiHarnessService {
                 new AiRoleProfileResolver(), null, null);
     }
 
+    /** Compatibility constructor used by focused tests and legacy integrations. */
+    public DefaultAiHarnessService(
+            AiHarnessPluginRegistry registry,
+            TenantHarnessConfigRepository tenantConfigs,
+            PlatformHarnessConfigRepository platformConfigs,
+            AiHarnessProperties properties,
+            ChatModelGateway model,
+            DefaultAiUsageService usage,
+            TenantQuotaService quotas,
+            TenantAgentRepository tenantAgents) {
+        this(registry, tenantConfigs, platformConfigs, properties, model, usage, quotas,
+                tenantAgents, null, new AiRoleProfileResolver(), null, null);
+    }
+
+    public DefaultAiHarnessService(
+            AiHarnessPluginRegistry registry,
+            TenantHarnessConfigRepository tenantConfigs,
+            PlatformHarnessConfigRepository platformConfigs,
+            AiHarnessProperties properties,
+            ChatModelGateway model,
+            DefaultAiUsageService usage,
+            TenantQuotaService quotas,
+            AiChatHistoryService chatHistory,
+            AiRoleProfileResolver roleProfiles,
+            AiCapabilityRegistry capabilityRegistry,
+            AiToolOrchestrator toolOrchestrator) {
+        this(registry, tenantConfigs, platformConfigs, properties, model, usage, quotas,
+                null, chatHistory, roleProfiles, capabilityRegistry, toolOrchestrator);
+    }
+
     @org.springframework.beans.factory.annotation.Autowired
     public DefaultAiHarnessService(
             AiHarnessPluginRegistry registry,
@@ -75,6 +110,7 @@ public class DefaultAiHarnessService implements AiHarnessService {
             ChatModelGateway model,
             DefaultAiUsageService usage,
             TenantQuotaService quotas,
+            TenantAgentRepository tenantAgents,
             AiChatHistoryService chatHistory,
             AiRoleProfileResolver roleProfiles,
             AiCapabilityRegistry capabilityRegistry,
@@ -90,6 +126,7 @@ public class DefaultAiHarnessService implements AiHarnessService {
         this.roleProfiles = roleProfiles == null ? new AiRoleProfileResolver() : roleProfiles;
         this.capabilityRegistry = capabilityRegistry;
         this.toolOrchestrator = toolOrchestrator;
+        this.tenantAgents = tenantAgents;
     }
 
     /** Compatibility constructor retained for existing unit tests and integrations. */
@@ -460,6 +497,17 @@ public class DefaultAiHarnessService implements AiHarnessService {
         Long tenantId = ActorAccess.tenantId(actor);
         if (actor.isPlatformAdmin() && tenantId == null) {
             return requirePlatformConfig().getSystemPrompt();
+        }
+        if (tenantAgents != null && tenantId != null) {
+            String agentPrompt = tenantAgents.findAllByTenantIdAndStatus(tenantId, AgentStatus.ACTIVE).stream()
+                    .filter(Objects::nonNull)
+                    .min(Comparator.comparing(TenantAgent::getId, Comparator.nullsLast(Long::compareTo)))
+                    .map(TenantAgent::getSystemPrompt)
+                    .filter(prompt -> prompt != null && !prompt.isBlank())
+                    .orElse(null);
+            if (agentPrompt != null) {
+                return agentPrompt;
+            }
         }
         return requireTenantConfig(tenantId).getSystemPrompt();
     }

@@ -2,11 +2,10 @@
   <div class="agent-manage">
     <div class="page-header">
       <div>
-        <h2 class="simple-page-title">Agent 管理</h2>
-        <p class="simple-page-desc">配置门店 AI 助手（会员仅可使用）</p>
+        <h2 class="simple-page-title">门店 AI 提示词</h2>
+        <p class="simple-page-desc">自定义本店 AI 助手的角色、口吻和业务规则</p>
       </div>
-      <el-button v-if="canWrite" type="primary" @click="openCreate">新建</el-button>
-      <el-tag v-else type="info">平台管理员 · 全租户只读</el-tag>
+      <el-tag v-if="authStore.isPlatformAdmin" type="info">平台管理员 · 全租户只读</el-tag>
     </div>
 
     <el-card v-if="quota && !authStore.isPlatformAdmin" class="quota-card" shadow="never">
@@ -44,6 +43,7 @@
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="systemPrompt" label="系统提示词" min-width="300" show-overflow-tooltip />
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'danger'" size="small">
@@ -51,45 +51,23 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column v-if="canWrite" label="操作" width="180" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="120" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-          <el-button
-            link
-            :type="row.status === 'ACTIVE' ? 'danger' : 'success'"
-            @click="toggleStatus(row)"
-          >
-            {{ row.status === 'ACTIVE' ? '停用' : '启用' }}
-          </el-button>
+          <el-button v-if="row.id === editableAgentId" link type="primary" @click="openPromptEdit(row)">编辑提示词</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑 Agent' : '新建 Agent'" width="640px">
+    <el-dialog v-model="dialogVisible" title="编辑门店 AI 提示词" width="640px">
       <el-form :model="form" label-width="110px">
-        <el-form-item label="名称" required>
-          <el-input v-model="form.name" placeholder="如：门店私教助手" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="2" />
-        </el-form-item>
         <el-form-item label="系统提示词" required>
-          <el-input v-model="form.systemPrompt" type="textarea" :rows="5" />
-        </el-form-item>
-        <el-form-item label="启用知识库">
-          <el-switch v-model="form.knowledgeEnabled" />
-        </el-form-item>
-        <el-form-item label="MCP 工具">
-          <el-checkbox-group v-model="form.enabledTools">
-            <el-checkbox label="knowledge_search">知识库检索</el-checkbox>
-            <el-checkbox label="search_articles">文章搜索</el-checkbox>
-            <el-checkbox label="import_article">文章导入</el-checkbox>
-          </el-checkbox-group>
+          <el-input v-model="form.systemPrompt" type="textarea" :rows="10" maxlength="4000" show-word-limit
+            placeholder="例如：你是本店的健身助手，请使用专业、友好的语气回答会员问题。" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button v-if="canWrite" type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button v-if="canWrite" type="primary" :loading="saving" @click="savePrompt">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -99,6 +77,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { agentApi, type AgentView, type TenantQuotaView } from '@/api/agent'
 import { useAuthStore } from '@/stores/auth'
+import { hasOperationPermission } from '@/utils/permissions'
 import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
@@ -107,19 +86,18 @@ const quota = ref<TenantQuotaView | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
-const editing = ref(false)
 const editingId = ref<number | null>(null)
 
 const form = reactive({
-  name: '',
-  description: '',
-  systemPrompt: '',
-  knowledgeEnabled: true,
-  enabledTools: ['knowledge_search'] as string[]
+  systemPrompt: ''
 })
 // The page itself is the permission boundary. Once visible, all page actions
 // are available; the backend still enforces tenant scope for writes.
-const canWrite = computed(() => !authStore.isPlatformAdmin)
+const canWrite = computed(() => !authStore.isPlatformAdmin && hasOperationPermission('agent:write'))
+const editableAgentId = computed(() => agents.value
+  .filter(agent => agent.status === 'ACTIVE')
+  .slice()
+  .sort((left, right) => left.id - right.id)[0]?.id ?? null)
 
 const load = async () => {
   loading.value = true
@@ -139,68 +117,27 @@ const load = async () => {
   }
 }
 
-const resetForm = () => {
-  form.name = ''
-  form.description = ''
-  form.systemPrompt = '你是本健身房的智能助手，请基于本店知识库给出专业、安全的健身建议。'
-  form.knowledgeEnabled = true
-  form.enabledTools = ['knowledge_search']
-}
-
-const openCreate = () => {
-  editing.value = false
-  editingId.value = null
-  resetForm()
-  dialogVisible.value = true
-}
-
-const openEdit = (row: AgentView) => {
-  editing.value = true
+const openPromptEdit = (row: AgentView) => {
   editingId.value = row.id
-  form.name = row.name
-  form.description = row.description
   form.systemPrompt = row.systemPrompt
-  form.knowledgeEnabled = row.knowledgeEnabled
-  form.enabledTools = [...row.enabledTools]
   dialogVisible.value = true
 }
 
-const save = async () => {
-  if (!form.name.trim() || !form.systemPrompt.trim()) {
-    ElMessage.warning('请填写名称和系统提示词')
+const savePrompt = async () => {
+  if (!editingId.value || !form.systemPrompt.trim()) {
+    ElMessage.warning('请填写系统提示词')
     return
   }
   saving.value = true
   try {
-    const payload = { ...form, enabledTools: form.enabledTools.length ? form.enabledTools : ['knowledge_search'] }
-    if (editing.value && editingId.value) {
-      await agentApi.update(editingId.value, payload)
-      ElMessage.success('Agent 已更新')
-    } else {
-      await agentApi.create(payload)
-      ElMessage.success('Agent 已创建')
-    }
+    await agentApi.updatePrompt(editingId.value, { systemPrompt: form.systemPrompt.trim() })
+    ElMessage.success('提示词已保存')
     dialogVisible.value = false
     await load()
   } catch {
-    ElMessage.error('保存失败，可能已超出配额')
+    ElMessage.error('保存失败，请确认提示词内容和当前权限')
   } finally {
     saving.value = false
-  }
-}
-
-const toggleStatus = async (row: AgentView) => {
-  try {
-    if (row.status === 'ACTIVE') {
-      await agentApi.disable(row.id)
-      ElMessage.success('已停用')
-    } else {
-      await agentApi.activate(row.id)
-      ElMessage.success('已启用')
-    }
-    await load()
-  } catch {
-    ElMessage.error('操作失败')
   }
 }
 
