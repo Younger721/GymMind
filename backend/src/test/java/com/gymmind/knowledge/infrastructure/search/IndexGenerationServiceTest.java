@@ -26,6 +26,13 @@ class IndexGenerationServiceTest {
         assertThat(k.deleted).containsExactly("0:platform-chunk");
         assertThat(v.deleted).containsExactly("0:platform-chunk");
     }
-    static class RecordingKeyword implements KeywordIndexPort { boolean fail; java.util.List<String> deleted=new java.util.ArrayList<>(); public void upsert(IndexedChunk c){if(fail)throw new IllegalStateException();} public List<IndexedChunk> search(String q,Long t){return List.of();} public void delete(String id,Long t){deleted.add(t+":"+id);} }
+    @Test void deleteRemainsIdempotentWhenOneBackendCannotFindTheChunk() {
+        var k = new RecordingKeyword(); var v = new RecordingVector(); var s = new IndexGenerationService(k, v);
+        k.deleteFail = true;
+
+        assertThatCode(() -> s.delete(7L, "c")).doesNotThrowAnyException();
+        assertThat(v.deleted).containsExactly("7:c");
+    }
+    static class RecordingKeyword implements KeywordIndexPort { boolean fail; boolean deleteFail; java.util.List<String> deleted=new java.util.ArrayList<>(); public void upsert(IndexedChunk c){if(fail)throw new IllegalStateException();} public List<IndexedChunk> search(String q,Long t){return List.of();} public void delete(String id,Long t){if(deleteFail)throw new IllegalStateException("missing"); deleted.add(t+":"+id);} }
     static class RecordingVector implements VectorIndexPort { boolean fail; java.util.List<String> deleted=new java.util.ArrayList<>(); public void upsert(IndexedChunk c){if(fail)throw new IllegalStateException();} public List<IndexedChunk> search(float[] q,Long t){return List.of();} public void delete(String id,Long t){deleted.add(t+":"+id);} }
 }

@@ -34,7 +34,15 @@ public class IndexGenerationService {
 
     public void delete(Long tenantId, String chunkId) {
         if (tenantId == null || tenantId < 0 || chunkId == null || chunkId.isBlank()) throw new IllegalArgumentException("invalid delete target");
-        keyword.delete(chunkId, tenantId);
-        vector.delete(chunkId, tenantId);
+        try {
+            keyword.delete(chunkId, tenantId);
+        } catch (RuntimeException ex) {
+            log.warn("Knowledge keyword index delete failed: tenantId={}, chunkId={}", tenantId, chunkId, ex);
+        }
+        try {
+            vector.delete(chunkId, tenantId);
+        } catch (RuntimeException ex) {
+            log.warn("Knowledge vector index delete failed: tenantId={}, chunkId={}", tenantId, chunkId, ex);
+        }
     }
 }
