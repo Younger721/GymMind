@@ -20,7 +20,6 @@
     </el-tabs>
 
     <div v-if="activeTab === 'overview'" class="overview-grid" v-loading="loading">
-      <div class="stat-card"><span>健身房数</span><strong>{{ statistics?.tenantCount ?? 0 }}</strong></div>
       <div class="stat-card"><span>器械种类</span><strong>{{ statistics?.catalogCount ?? 0 }}</strong></div>
       <div class="stat-card"><span>已配送数量</span><strong>{{ statistics?.deliveredQuantity ?? 0 }}</strong></div>
       <div class="stat-card"><span>已入库数量</span><strong>{{ statistics?.receivedQuantity ?? 0 }}</strong></div>
