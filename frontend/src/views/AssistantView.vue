@@ -193,9 +193,10 @@ const draft = ref<WorkoutPlanDraft>()
 const history = ref<WorkoutPlanHistory>({ included: false, recordCount: 0 })
 const planForm = reactive({ goal: '', frequency: 3, experience: 'beginner', durationWeeks: 8, equipment: '', limitations: '' })
 
-const canConfigure = computed(() => authStore.isPlatformAdmin
-  || (authStore.roles.includes('GYM_ADMIN') && hasPermission('tenant:settings:read')))
-const configLink = computed(() => authStore.isPlatformAdmin ? '/platform' : '/tenant-settings')
+const canConfigure = computed(() => authStore.roles.includes('GYM_ADMIN')
+  && !authStore.isPlatformAdmin
+  && hasPermission('tenant:settings:read'))
+const configLink = '/tenant-settings'
 const canGenerate = computed(() => canGeneratePlan.value
   && Boolean(planForm.goal.trim() && planForm.experience && !targetsLoading.value
     && targets.value.length > 0 && selectedTargetId.value))
