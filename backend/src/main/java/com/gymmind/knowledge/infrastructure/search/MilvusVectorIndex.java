@@ -110,12 +110,14 @@ public class MilvusVectorIndex implements VectorIndexPort {
     @Override
     public List<IndexedChunk> search(float[] vector, Long tenantId) {
         requireVector(vector);
+        ensureCollection();
         return search(searchBody(collection, vector, tenantId, "tenantId == " + tenantId));
     }
 
     @Override
     public List<IndexedChunk> search(float[] vector, Long tenantId, Long userId) {
         requireVector(vector);
+        ensureCollection();
         return userId == null ? search(vector, tenantId) : search(searchBody(collection, vector, tenantId, userId));
     }
 
@@ -126,8 +128,16 @@ public class MilvusVectorIndex implements VectorIndexPort {
 
     @Override
     public void delete(String id, Long tenantId) {
+        ensureCollection();
         client.post().uri("/v2/vectordb/entities/delete").body(Map.of("collectionName", collection,
                         "filter", "tenantId == " + tenantId + " && id == '" + id.replace("'", "''") + "'"))
+                .retrieve().toBodilessEntity();
+    }
+
+    public void deleteDocument(Long tenantId, Long documentId) {
+        ensureCollection();
+        client.post().uri("/v2/vectordb/entities/delete").body(Map.of("collectionName", collection,
+                        "filter", "tenantId == " + tenantId + " && documentId == " + documentId))
                 .retrieve().toBodilessEntity();
     }
 

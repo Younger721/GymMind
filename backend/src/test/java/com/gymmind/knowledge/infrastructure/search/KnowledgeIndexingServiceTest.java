@@ -25,7 +25,7 @@ class KnowledgeIndexingServiceTest {
         when(embedding.embed(anyList())).thenReturn(List.of(new float[1024]));
         when(index.publish(eq(7L), startsWith("document-3-"), anyList())).thenReturn(true);
         var service = new KnowledgeIndexingService(index, embedding,
-                DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180), null);
+                DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180));
 
         assertThat(service.publish(7L, 3L, 11L, "guide.txt", "text/plain", "training tips".getBytes())).isTrue();
         verify(embedding).embed(argThat(xs -> xs.size() == 1 && xs.get(0).contains("training tips")));
@@ -44,11 +44,11 @@ class KnowledgeIndexingServiceTest {
         when(index.publish(eq(7L), startsWith("document-3-"), anyList())).thenReturn(true);
 
         var service = new KnowledgeIndexingService(index, embedding,
-                DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180), chunks);
+                DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180));
 
         assertThat(service.publish(7L, 3L, 11L, "guide.txt", "text/plain", "new text".getBytes())).isTrue();
 
-        verify(index).delete(7L, "old-chunk");
-        verify(chunks).deleteByTenantIdAndDocumentId(7L, 3L);
+        verify(index).deleteDocument(7L, 3L);
+        org.mockito.Mockito.verifyNoInteractions(chunks);
     }
 }

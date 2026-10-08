@@ -45,4 +45,10 @@ public class IndexGenerationService {
             log.warn("Knowledge vector index delete failed: tenantId={}, chunkId={}", tenantId, chunkId, ex);
         }
     }
+
+    public void deleteDocument(Long tenantId, Long documentId) {
+        if (tenantId == null || tenantId < 0 || documentId == null || documentId <= 0) throw new IllegalArgumentException("invalid delete target");
+        keyword.deleteDocument(tenantId, documentId);
+        vector.deleteDocument(tenantId, documentId);
+    }
 }

@@ -35,13 +35,10 @@ class KnowledgeVisibilityRevocationTest {
 
         InMemoryKeywordIndex keyword = new InMemoryKeywordIndex();
         keyword.upsert(new com.gymmind.knowledge.infrastructure.search.IndexedChunk(
-                "old-chunk", 7L, null, "confidential training details", null));
-        KnowledgeChunkRepository chunks = mock(KnowledgeChunkRepository.class);
-        when(chunks.findByTenantIdAndDocumentId(7L, 3L)).thenReturn(List.of(
-                KnowledgeChunk.create(7L, 3L, "old-chunk", 1L, "confidential training details")));
+                "old-chunk", 7L, 3L, null, "confidential training details", null));
         KnowledgeIndexingService indexing = new KnowledgeIndexingService(
                 new IndexGenerationService(keyword, mock(VectorIndexPort.class)),
-                mock(EmbeddingGateway.class), chunks);
+                mock(EmbeddingGateway.class));
         KnowledgeIngestWorker worker = mock(KnowledgeIngestWorker.class);
         DefaultKnowledgeDocumentUseCase useCase = new DefaultKnowledgeDocumentUseCase(
                 documents, mock(KnowledgeObjectStore.class), indexing, worker, null);
@@ -54,6 +51,5 @@ class KnowledgeVisibilityRevocationTest {
 
         assertThat(keyword.search("confidential", 7L, 12L)).isEmpty();
         verify(worker).enqueue(7L, 3L);
-        verify(chunks).deleteByTenantIdAndDocumentId(7L, 3L);
     }
 }

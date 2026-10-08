@@ -1,8 +1,6 @@
 package com.gymmind.knowledge.infrastructure.search;
 
 import com.gymmind.ai.domain.EmbeddingGateway;
-import com.gymmind.knowledge.application.KnowledgeChunkRepository;
-import com.gymmind.knowledge.domain.model.KnowledgeChunk;
 import com.gymmind.knowledge.infrastructure.parser.Chunk;
 import com.gymmind.knowledge.infrastructure.parser.ChunkStrategy;
 import com.gymmind.knowledge.infrastructure.parser.DeterministicChunker;
@@ -23,23 +21,18 @@ public class KnowledgeIndexingService {
     private final DocumentParserRegistry parser;
     private final DeterministicChunker chunker;
     private final StructuredChunker structuredChunker;
-    private final KnowledgeChunkRepository chunkRepository;
 
-    @Autowired
-    public KnowledgeIndexingService(IndexGenerationService index, EmbeddingGateway embedding,
-                                    KnowledgeChunkRepository chunkRepository) {
-        this(index, embedding, DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180), chunkRepository);
+    public KnowledgeIndexingService(IndexGenerationService index, EmbeddingGateway embedding) {
+        this(index, embedding, DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180));
     }
 
     KnowledgeIndexingService(IndexGenerationService index, EmbeddingGateway embedding,
-                             DocumentParserRegistry parser, DeterministicChunker chunker,
-                             KnowledgeChunkRepository chunkRepository) {
+                             DocumentParserRegistry parser, DeterministicChunker chunker) {
         this.index = index;
         this.embedding = embedding;
         this.parser = parser;
         this.chunker = chunker;
         this.structuredChunker = new StructuredChunker(new HeuristicTokenCounter());
-        this.chunkRepository = chunkRepository;
     }
 
     public boolean publish(Long tenantId, Long documentId, Long ownerUserId,
@@ -77,22 +70,8 @@ public class KnowledgeIndexingService {
         }
         long generation = System.currentTimeMillis();
         String generationKey = "document-" + documentId + "-" + strategy.name() + "-v" + version + "-" + generation;
-        if (!index.publish(indexTenantId, generationKey, indexed)) {
-            return false;
-        }
-        if (chunkRepository != null) {
-            var newChunkKeys = indexed.stream().map(IndexedChunk::id).collect(java.util.stream.Collectors.toSet());
-            for (var previous : chunkRepository.findByTenantIdAndDocumentId(indexTenantId, documentId)) {
-                if (!newChunkKeys.contains(previous.chunkKey())) {
-                    index.delete(indexTenantId, previous.chunkKey());
-                }
-            }
-            chunkRepository.deleteByTenantIdAndDocumentId(indexTenantId, documentId);
-            for (Chunk chunk : parsedChunks) {
-                chunkRepository.save(KnowledgeChunk.create(indexTenantId, documentId, chunk.id(), generation, chunk.text()));
-            }
-        }
-        return true;
+        index.deleteDocument(indexTenantId, documentId);
+        return index.publish(indexTenantId, generationKey, indexed);
     }
 
     private static ChunkStrategy parseStrategy(String value) {
@@ -109,12 +88,6 @@ public class KnowledgeIndexingService {
             return;
         }
         long indexTenantId = tenantId == null ? PLATFORM_INDEX_TENANT_ID : tenantId;
-        if (chunkRepository == null) {
-            return;
-        }
-        for (var chunk : chunkRepository.findByTenantIdAndDocumentId(indexTenantId, documentId)) {
-            index.delete(indexTenantId, chunk.chunkKey());
-        }
-        chunkRepository.deleteByTenantIdAndDocumentId(indexTenantId, documentId);
+        index.deleteDocument(indexTenantId, documentId);
     }
 }

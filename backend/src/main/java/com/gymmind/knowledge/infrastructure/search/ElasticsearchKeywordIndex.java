@@ -18,4 +18,12 @@ public class ElasticsearchKeywordIndex implements KeywordIndexPort {
     public void upsert(IndexedChunk c){ensureIndex();client.put().uri("/"+index+"/_doc/"+c.id()).body(documentBody(c)).retrieve().toBodilessEntity();}
     public List<IndexedChunk> search(String q,Long t){return search(q,t,null);} public List<IndexedChunk> search(String q,Long t,Long u){ensureIndex();var filters=new ArrayList<Object>();filters.add(Map.of("term",Map.of("tenantId",t)));if(u!=null)filters.add(Map.of("bool",Map.of("should",List.of(Map.of("bool",Map.of("must_not",Map.of("exists",Map.of("field","ownerUserId")))),Map.of("term",Map.of("ownerUserId",u))),"minimum_should_match",1)));Map<String,Object> body=Map.of("query",Map.of("bool",Map.of("must",List.of(Map.of("match",Map.of("text",q))),"filter",filters)),"size",30);String raw=client.post().uri("/"+index+"/_search").body(body).retrieve().body(String.class);if(raw==null)return List.of();try{JsonNode hits=mapper.readTree(raw).path("hits").path("hits");List<IndexedChunk> out=new ArrayList<>();for(JsonNode h:hits){JsonNode s=h.path("_source");JsonNode owner=s.get("ownerUserId");JsonNode document=s.get("documentId");out.add(new IndexedChunk(h.path("_id").asText(),s.path("tenantId").asLong(),document==null||document.isNull()?null:document.asLong(),owner==null||owner.isNull()?null:owner.asLong(),s.path("text").asText(),null));}return out;}catch(Exception e){return List.of();}}
     public void delete(String id,Long t){ensureIndex();client.delete().uri("/"+index+"/_doc/"+id).retrieve().toBodilessEntity();}
+    public void deleteDocument(Long tenantId, Long documentId) {
+        ensureIndex();
+        var filters = List.of(Map.of("term", Map.of("tenantId", tenantId)),
+                Map.of("term", Map.of("documentId", documentId)));
+        var query = Map.of("query", Map.of("bool", Map.of("filter", filters)));
+        client.post().uri("/" + index + "/_delete_by_query?refresh=true")
+                .body(query).retrieve().toBodilessEntity();
+    }
 }
