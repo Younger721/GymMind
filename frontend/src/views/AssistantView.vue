@@ -156,6 +156,7 @@ import { workoutPlanDraftApi, type WorkoutPlanDraft, type WorkoutPlanHistory, ty
 import { useAuthStore } from '@/stores/auth'
 import { hasPermission } from '@/utils/permissions'
 import { canUseTenantOperation } from '@/utils/operationAccess'
+import { MENU_CODES } from '@/utils/menuPermissions'
 
 type AssistantMode = 'knowledge' | 'workout-plan'
 interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean }
@@ -195,8 +196,8 @@ const planForm = reactive({ goal: '', frequency: 3, experience: 'beginner', dura
 
 const canConfigure = computed(() => authStore.roles.includes('GYM_ADMIN')
   && !authStore.isPlatformAdmin
-  && hasPermission('tenant:settings:read'))
-const configLink = '/tenant-settings'
+  && hasPermission(MENU_CODES.AI_CONFIG))
+const configLink = '/agents/manage'
 const canGenerate = computed(() => canGeneratePlan.value
   && Boolean(planForm.goal.trim() && planForm.experience && !targetsLoading.value
     && targets.value.length > 0 && selectedTargetId.value))

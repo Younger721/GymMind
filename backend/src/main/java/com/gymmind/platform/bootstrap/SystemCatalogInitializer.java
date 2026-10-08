@@ -145,14 +145,9 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         if (!menuConfigurationExists && configuredMenus.isEmpty()) {
             configuredMenus.addAll(PermissionCatalog.defaultMenus(role.getCode()));
         }
-        // Migrate the old assistant menu's agent operations to the split AI
-        // configuration menu. Explicitly empty or already customized role
-        // configurations must remain unchanged across restarts.
-        boolean legacyAgentOperations = existing.stream()
-                .anyMatch(code -> code.equals("agent:read")
-                        || code.equals("agent:write")
-                        || code.equals("agent:chat"));
-        if (role.getCode() == RoleCode.GYM_ADMIN && legacyAgentOperations) {
+        // Keep the tenant administrator's configuration entry available after
+        // splitting it from the shared assistant menu, including old installs.
+        if (role.getCode() == RoleCode.GYM_ADMIN) {
             configuredMenus.add(PermissionCatalog.AI_CONFIG_MENU);
         }
 

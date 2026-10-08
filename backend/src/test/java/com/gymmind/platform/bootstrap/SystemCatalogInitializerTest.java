@@ -184,7 +184,7 @@ class SystemCatalogInitializerTest {
         RolePermissionRepository links = mock(RolePermissionRepository.class);
         DatabaseInitializationLock lock = mock(DatabaseInitializationLock.class);
         Map<RoleCode, Role> roleByCode = configureCatalog(roles, permissions, links, lock);
-        Set<String> configured = Set.of(PermissionCatalog.MENU_CONFIGURED_MARKER, "menu:assistant", "ai:chat", "agent:write");
+        Set<String> configured = Set.of(PermissionCatalog.MENU_CONFIGURED_MARKER, "menu:assistant", "ai:chat");
         when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.GYM_ADMIN).getId())).thenReturn(configured);
         when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.COACH).getId()))
                 .thenReturn(Set.of(PermissionCatalog.MENU_CONFIGURED_MARKER));
