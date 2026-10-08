@@ -3,7 +3,7 @@ import type { ApiResponse } from '@/types/api'
 
 export interface WorkoutPlanItemView {
   id: number
-  exerciseId: number
+  exerciseId?: number
   exerciseName: string
   dayOfWeek: number
   phase: 'WARMUP' | 'MAIN' | 'STRETCH'
@@ -44,6 +44,9 @@ export const workoutPlansApi = {
   },
   createMember(body: Record<string, unknown>) {
     return apiClient.post('/v1/workout-plans/member', body)
+  },
+  update(id: number, body: Record<string, unknown>) {
+    return apiClient.put(`/v1/workout-plans/member/${id}`, body)
   },
   publish(id: number) {
     return apiClient.post(`/v1/workout-plans/${id}/publish`)

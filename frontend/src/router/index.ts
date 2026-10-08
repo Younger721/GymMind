@@ -48,7 +48,7 @@ const router = createRouter({
         { path: 'courses', name: 'courses', component: () => import('@/views/business/CourseCenterView.vue'), meta: { menuPermission: MENU_CODES.COURSES } },
         { path: 'equipment', name: 'equipment', component: () => import('@/views/business/EquipmentManagementView.vue'), meta: { menuPermission: MENU_CODES.EQUIPMENT } },
         { path: 'bookings', redirect: '/courses' },
-        { path: 'exercises', name: 'exercises', component: () => import('@/views/ExerciseLibraryView.vue'), meta: { menuPermission: MENU_CODES.TRAINING } },
+        { path: 'exercises', name: 'exercises', redirect: '/training', meta: { menuPermission: MENU_CODES.TRAINING } },
         { path: 'workouts', redirect: '/training' },
         { path: 'nutrition', redirect: '/training' },
         { path: 'reports', redirect: '/analytics' },
