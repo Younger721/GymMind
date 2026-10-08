@@ -76,13 +76,49 @@ class WorkoutPlanServiceTest {
 
         WorkoutPlanService service = new DefaultWorkoutPlanService(plans, items, exercises, members, assignments,
                 mock(AuditRecorder.class));
-        WorkoutPlanView view = service.create(admin(11L), new CreateWorkoutPlanCommand(null, 41L, 77L,
+        WorkoutPlanView view = service.create(coach(11L), new CreateWorkoutPlanCommand(null, 41L, 77L,
                 "Strength", "muscle gain", LocalDate.now(), LocalDate.now().plusDays(30), "notes",
                 java.util.List.of(new WorkoutPlanItemCommand(8L, 1, 4, 10, 90, 20.0, "controlled"))));
 
         assertThat(view.tenantId()).isEqualTo(11L);
         verify(plans).save(any());
         verify(items).save(any());
+    }
+
+    @Test
+    void gymAdminCannotCreateOrPublishPlan() {
+        WorkoutPlanRepository plans = mock(WorkoutPlanRepository.class);
+        WorkoutPlanService service = new DefaultWorkoutPlanService(plans, mock(WorkoutPlanItemRepository.class),
+                mock(ExerciseRepository.class), mock(MemberRepository.class), mock(CoachAssignmentService.class), mock(AuditRecorder.class));
+
+        assertThatThrownBy(() -> service.create(admin(11L), validCommand(41L)))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class)
+                .extracting("errorCode").isEqualTo(com.gymmind.shared.error.ErrorCode.FORBIDDEN);
+        assertThatThrownBy(() -> service.publish(admin(11L), 1L))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class)
+                .extracting("errorCode").isEqualTo(com.gymmind.shared.error.ErrorCode.FORBIDDEN);
+        verifyNoInteractions(plans);
+    }
+
+    @Test
+    void memberCannotUpdateAnotherMembersPlan() {
+        WorkoutPlanRepository plans = mock(WorkoutPlanRepository.class);
+        MemberRepository members = mock(MemberRepository.class);
+        var ownMember = mock(com.gymmind.member.domain.model.Member.class);
+        when(ownMember.getId()).thenReturn(41L);
+        when(members.findByTenantIdAndUserId(11L, 9L)).thenReturn(Optional.of(ownMember));
+        when(plans.findByTenantIdAndId(11L, 99L)).thenReturn(Optional.of(
+                com.gymmind.workout.domain.model.WorkoutPlan.create(11L, 42L, null, "其他会员计划", "力量",
+                        LocalDate.now(), LocalDate.now().plusMonths(1), "说明")));
+        WorkoutPlanItemRepository items = mock(WorkoutPlanItemRepository.class);
+        WorkoutPlanService service = new DefaultWorkoutPlanService(plans, items, mock(ExerciseRepository.class),
+                members, mock(CoachAssignmentService.class), mock(AuditRecorder.class));
+        var actor = new CurrentActor(9L, 11L, Set.of(RoleCode.MEMBER), Set.of("workout:write"), 0L, "token");
+
+        assertThatThrownBy(() -> service.updateForCurrentMember(actor, 99L, validCommand(41L)))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class)
+                .extracting("errorCode").isEqualTo(com.gymmind.shared.error.ErrorCode.FORBIDDEN);
+        verifyNoInteractions(items);
     }
 
     @Test
@@ -207,6 +243,11 @@ class WorkoutPlanServiceTest {
 
     private static CurrentActor admin(long tenantId) {
         return new CurrentActor(1L, tenantId, Set.of(RoleCode.GYM_ADMIN),
+                Set.of("workout:write"), 0L, "token");
+    }
+
+    private static CurrentActor coach(long tenantId) {
+        return new CurrentActor(1L, tenantId, Set.of(RoleCode.COACH),
                 Set.of("workout:write"), 0L, "token");
     }
 }

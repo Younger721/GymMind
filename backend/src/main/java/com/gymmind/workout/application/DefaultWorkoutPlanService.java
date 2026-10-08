@@ -104,11 +104,13 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         if (command == null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         CreateWorkoutPlanCommand normalized = new CreateWorkoutPlanCommand(tenantId, memberId, null, command.name(), command.goal(), command.startDate(), command.endDate(), command.description(), command.items());
         validator.validate(normalized);
+        var resolvedNames = normalized.items().stream().map(item -> resolveExerciseName(tenantId, item)).toList();
         plan.update(normalized.name(), normalized.goal(), normalized.startDate(), normalized.endDate(), normalized.description());
         items.deleteAllByPlanId(plan.getId());
         int index = 0;
-        for (var item : normalized.items()) {
-            String name = resolveExerciseName(tenantId, item);
+        for (int i = 0; i < normalized.items().size(); i++) {
+            var item = normalized.items().get(i);
+            String name = resolvedNames.get(i);
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(), name, item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), item.sortOrder() > 0 ? item.sortOrder() : ++index));
         }
         return view(plan);
@@ -199,8 +201,8 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     }
 
     private static void require(CurrentActor actor) {
-        if (ActorAccess.tenantId(actor) == null
-                || (!ActorAccess.canManageTenant(actor) && !actor.roles().contains(RoleCode.COACH))
+        if (actor == null || ActorAccess.tenantId(actor) == null
+                || !actor.roles().contains(RoleCode.COACH)
                 || !actor.hasPermission("workout:write")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
@@ -219,7 +221,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
             }
             return;
         }
-        require(actor);
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     private void requireReader(CurrentActor actor) {
@@ -229,7 +231,10 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
             }
             return;
         }
-        require(actor);
+        if (actor == null || ActorAccess.tenantId(actor) == null || !actor.hasPermission("workout:read")
+                || (!actor.roles().contains(RoleCode.COACH) && !actor.roles().contains(RoleCode.GYM_ADMIN))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private boolean canAccessPlanMember(CurrentActor actor, Long memberId) {
