@@ -81,3 +81,6 @@ frontend/.cache/
 
 # Docker volumes
 docker/volumes/
+
+# Generated document/test output
+output/
