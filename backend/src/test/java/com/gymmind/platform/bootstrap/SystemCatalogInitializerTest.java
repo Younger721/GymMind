@@ -44,8 +44,8 @@ class SystemCatalogInitializerTest {
                 .containsExactlyInAnyOrder(
                         "menu:dashboard", "menu:assistant", "menu:knowledge", "menu:operations",
                         "menu:courses",
-                        "menu:training", "menu:analytics", "menu:admin", "menu:tenant-settings",
-                        "menu:platform", "menu:role-permissions", "menu:profile");
+                        "menu:equipment", "menu:training", "menu:analytics", "menu:admin", "menu:tenant-settings",
+                        "menu:platform", "menu:role-permissions", "menu:ai-config", "menu:profile");
         assertThat(PermissionCatalog.menuPermissionFor("user:write")).contains("menu:admin");
         assertThat(PermissionCatalog.menuPermissionFor("workout:read")).contains("menu:training");
         assertThat(PermissionCatalog.menuPermissionFor("platform:tenant:read")).contains("menu:platform");
@@ -56,14 +56,16 @@ class SystemCatalogInitializerTest {
                 .contains("course:read", "course:write", "booking:write");
         assertThat(PermissionCatalog.defaultMenus(RoleCode.GYM_ADMIN))
                 .containsExactlyInAnyOrder("menu:dashboard", "menu:assistant", "menu:knowledge",
-                        "menu:operations", "menu:courses", "menu:training", "menu:analytics", "menu:admin",
-                        "menu:tenant-settings", "menu:profile");
+                        "menu:operations", "menu:courses", "menu:equipment", "menu:training", "menu:analytics", "menu:admin",
+                        "menu:tenant-settings", "menu:role-permissions", "menu:ai-config", "menu:profile");
         assertThat(PermissionCatalog.defaultMenus(RoleCode.COACH))
                 .containsExactlyInAnyOrder("menu:dashboard", "menu:assistant", "menu:knowledge",
                         "menu:courses", "menu:training", "menu:profile");
         assertThat(PermissionCatalog.defaultMenus(RoleCode.MEMBER))
                 .containsExactlyInAnyOrder("menu:dashboard", "menu:assistant", "menu:courses", "menu:training", "menu:profile");
         assertThat(PermissionCatalog.isMenuAllowedForRole(RoleCode.GYM_ADMIN, "menu:operations")).isTrue();
+        assertThat(PermissionCatalog.defaultMenus(RoleCode.COACH)).doesNotContain("menu:ai-config");
+        assertThat(PermissionCatalog.defaultMenus(RoleCode.MEMBER)).doesNotContain("menu:ai-config");
         assertThat(PermissionCatalog.isMenuAllowedForRole(RoleCode.COACH, "menu:admin")).isFalse();
         assertThat(PermissionCatalog.isMenuAllowedForRole(RoleCode.MEMBER, "menu:platform")).isFalse();
     }
@@ -71,13 +73,17 @@ class SystemCatalogInitializerTest {
     @Test
     void roleMenuExpansionOnlyIncludesOperationsThatRoleCanUse() {
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.GYM_ADMIN, "menu:assistant"))
-                .contains("agent:write");
+                .doesNotContain("agent:read", "agent:write", "agent:chat");
+        assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.GYM_ADMIN, "menu:ai-config"))
+                .contains("agent:read", "agent:write", "agent:chat");
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.COACH, "menu:assistant"))
-                .contains("agent:chat")
-                .doesNotContain("agent:write");
+                .contains("ai:chat", "ai:memory")
+                .doesNotContain("agent:read", "agent:write", "agent:chat");
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.MEMBER, "menu:assistant"))
                 .contains("ai:chat", "ai:memory")
                 .doesNotContain("agent:write");
+        assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.COACH, "menu:ai-config")).isEmpty();
+        assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.MEMBER, "menu:ai-config")).isEmpty();
 
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.COACH, "menu:knowledge"))
                 .contains("knowledge:read", "knowledge:write")
@@ -150,7 +156,8 @@ class SystemCatalogInitializerTest {
         assertThat(saved.getAllValues()).filteredOn(link ->
                 link.getId().getRoleId().equals(roleByCode.get(RoleCode.GYM_ADMIN).getId()))
                 .extracting(link -> permissionCode(link))
-                .containsExactly(PermissionCatalog.MENU_CONFIGURED_MARKER);
+                .containsExactlyInAnyOrder(PermissionCatalog.MENU_CONFIGURED_MARKER,
+                        "menu:ai-config", "agent:read", "agent:write", "agent:chat");
     }
 
     @Test
@@ -167,6 +174,32 @@ class SystemCatalogInitializerTest {
 
         new SystemCatalogInitializer(roles, permissions, lock, links).run();
 
+        verify(links, never()).deleteByRoleId(anyLong());
+    }
+
+    @Test
+    void configuredGymAdminReceivesAiConfigMenuWithoutDeletingExistingPermissions() {
+        RoleRepository roles = mock(RoleRepository.class);
+        PermissionRepository permissions = mock(PermissionRepository.class);
+        RolePermissionRepository links = mock(RolePermissionRepository.class);
+        DatabaseInitializationLock lock = mock(DatabaseInitializationLock.class);
+        Map<RoleCode, Role> roleByCode = configureCatalog(roles, permissions, links, lock);
+        Set<String> configured = Set.of(PermissionCatalog.MENU_CONFIGURED_MARKER, "menu:assistant", "ai:chat", "agent:write");
+        when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.GYM_ADMIN).getId())).thenReturn(configured);
+        when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.COACH).getId()))
+                .thenReturn(Set.of(PermissionCatalog.MENU_CONFIGURED_MARKER));
+        when(links.findPermissionCodesByRoleId(roleByCode.get(RoleCode.MEMBER).getId()))
+                .thenReturn(Set.of(PermissionCatalog.MENU_CONFIGURED_MARKER));
+
+        new SystemCatalogInitializer(roles, permissions, lock, links).run();
+
+        ArgumentCaptor<RolePermission> saved = ArgumentCaptor.forClass(RolePermission.class);
+        verify(links, atLeastOnce()).save(saved.capture());
+        Set<String> savedGymAdminCodes = saved.getAllValues().stream()
+                .filter(link -> link.getId().getRoleId().equals(roleByCode.get(RoleCode.GYM_ADMIN).getId()))
+                .map(this::permissionCode)
+                .collect(java.util.stream.Collectors.toSet());
+        assertThat(savedGymAdminCodes).contains(PermissionCatalog.AI_CONFIG_MENU, "agent:read", "agent:write", "agent:chat");
         verify(links, never()).deleteByRoleId(anyLong());
     }
 

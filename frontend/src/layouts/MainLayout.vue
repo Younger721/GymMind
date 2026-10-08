@@ -67,9 +67,7 @@ const tenants = ref<Array<{ id: number; name: string; status: string }>>([])
 const tenantsLoaded = ref(false)
 const allMenuGroups = ['概览', '智能', '门店运营', '系统管理'].map(title => ({
   title,
-    items: title === '智能'
-      ? [...MENU_CATALOG.filter(item => item.group === title), { code: 'menu:assistant', label: 'AI 配置', group: '智能', path: '/agents/manage' }]
-      : MENU_CATALOG.filter(item => item.group === title)
+  items: MENU_CATALOG.filter(item => item.group === title)
 }))
 
 const menuGroups = computed(() => {

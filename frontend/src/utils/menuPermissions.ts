@@ -8,7 +8,8 @@ import { useAuthStore } from '@/stores/auth'
 export const MENU_CODES = {
   DASHBOARD: 'menu:dashboard',
   ASSISTANT: 'menu:assistant',
-  AGENTS: 'menu:assistant',
+  AI_CONFIG: 'menu:ai-config',
+  AGENTS: 'menu:ai-config',
   KNOWLEDGE: 'menu:knowledge',
   OPERATIONS: 'menu:operations',
   COURSES: 'menu:courses',
@@ -37,6 +38,7 @@ export interface MenuCatalogEntry {
 export const FULL_MENU_CATALOG: readonly MenuCatalogEntry[] = [
   { code: MENU_CODES.DASHBOARD, label: '首页', group: '概览', path: '/dashboard' },
   { code: MENU_CODES.ASSISTANT, label: 'AI 中心', group: '智能', path: '/assistant' },
+  { code: MENU_CODES.AI_CONFIG, label: 'AI 配置', group: '智能', path: '/agents/manage' },
   { code: MENU_CODES.KNOWLEDGE, label: 'AI 资料库', group: '智能', path: '/knowledge' },
   { code: MENU_CODES.COURSES, label: '课程中心', group: '门店运营', path: '/courses' },
   { code: MENU_CODES.EQUIPMENT, label: '器械管理', group: '门店运营', path: '/equipment' },
@@ -54,6 +56,7 @@ export const FULL_MENU_CATALOG: readonly MenuCatalogEntry[] = [
 const VISIBLE_MENU_CODES: ReadonlySet<MenuCode> = new Set([
   MENU_CODES.DASHBOARD,
   MENU_CODES.ASSISTANT,
+  MENU_CODES.AI_CONFIG,
   MENU_CODES.KNOWLEDGE,
   MENU_CODES.ADMIN,
   MENU_CODES.AUDIT,
@@ -104,6 +107,7 @@ const OPERATION_MENU_PREFIXES: ReadonlyArray<readonly [string, MenuCode]> = [
   ['knowledge:', MENU_CODES.KNOWLEDGE],
   ['search:', MENU_CODES.KNOWLEDGE],
   ['analytics:', MENU_CODES.ANALYTICS],
+  ['agent:', MENU_CODES.AI_CONFIG],
   ['ai:', MENU_CODES.ASSISTANT]
 ]
 

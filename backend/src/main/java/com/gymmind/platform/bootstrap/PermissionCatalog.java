@@ -20,6 +20,7 @@ public final class PermissionCatalog {
     /** Internal migration marker; never exposed as a menu or operation choice. */
     public static final String MENU_CONFIGURED_MARKER = "role:menu:configured";
     public static final String MENU_CONFIGURED_MARKER_NAME = "Role menu configuration marker";
+    public static final String AI_CONFIG_MENU = "menu:ai-config";
 
     private static final List<Entry> ENTRIES = List.of(
             new Entry("platform:tenant:read", "Read tenants"),
@@ -95,6 +96,7 @@ public final class PermissionCatalog {
     private static final List<MenuEntry> MENU_ENTRIES = List.of(
             new MenuEntry("menu:dashboard", "Dashboard"),
             new MenuEntry("menu:assistant", "AI assistant"),
+            new MenuEntry(AI_CONFIG_MENU, "AI configuration"),
             new MenuEntry("menu:knowledge", "Knowledge base"),
             new MenuEntry("menu:operations", "Gym operations"),
             new MenuEntry("menu:courses", "Courses"),
@@ -183,8 +185,8 @@ public final class PermissionCatalog {
     private static Map<String, Set<String>> menuOperations() {
         Map<String, Set<String>> mappings = new LinkedHashMap<>();
         mappings.put("menu:dashboard", Set.of());
-        mappings.put("menu:assistant", Set.of(
-                "ai:chat", "ai:memory", "agent:read", "agent:write", "agent:chat"));
+        mappings.put("menu:assistant", Set.of("ai:chat", "ai:memory"));
+        mappings.put(AI_CONFIG_MENU, Set.of("agent:read", "agent:write", "agent:chat"));
         mappings.put("menu:knowledge", Set.of(
                 "search:read", "search:write", "knowledge:read", "knowledge:write"));
             mappings.put("menu:operations", Set.of(
@@ -233,7 +235,7 @@ public final class PermissionCatalog {
         defaults.put(RoleCode.GYM_ADMIN, Set.of(
                 "menu:dashboard", "menu:assistant", "menu:knowledge", "menu:operations", "menu:courses",
                 "menu:equipment", "menu:training", "menu:analytics", "menu:admin", "menu:tenant-settings",
-                "menu:role-permissions", "menu:profile"));
+                "menu:role-permissions", AI_CONFIG_MENU, "menu:profile"));
         defaults.put(RoleCode.COACH, Set.of(
                 "menu:dashboard", "menu:assistant", "menu:knowledge", "menu:courses", "menu:training", "menu:profile"));
         defaults.put(RoleCode.MEMBER, Set.of(
@@ -245,7 +247,7 @@ public final class PermissionCatalog {
     private static Map<RoleCode, Map<String, Set<String>>> roleMenuOperations() {
         Map<RoleCode, Map<String, Set<String>>> mappings = new EnumMap<>(RoleCode.class);
         mappings.put(RoleCode.COACH, roleOperations(
-                Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory", "agent:read", "agent:chat", "ai:plan")),
+                Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory", "ai:plan")),
                 Map.entry("menu:knowledge", Set.of("knowledge:read", "knowledge:write")),
                 Map.entry("menu:courses", Set.of("course:read", "course:write", "booking:write")),
                 Map.entry("menu:training", Set.of(

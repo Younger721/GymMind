@@ -41,7 +41,7 @@ const router = createRouter({
         { path: 'role-permissions', name: 'role-permissions', component: () => import('@/views/business/RolePermissionView.vue'), meta: { menuPermission: MENU_CODES.ROLE_PERMISSIONS } },
         { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue'), meta: { menuPermission: MENU_CODES.PROFILE } },
         { path: 'plan-generator', redirect: '/assistant?mode=workout-plan', meta: { menuPermission: MENU_CODES.ASSISTANT } },
-        { path: 'agents/manage', name: 'agents-manage', component: () => import('@/views/AgentManageView.vue'), meta: { menuPermission: MENU_CODES.ASSISTANT } },
+        { path: 'agents/manage', name: 'agents-manage', component: () => import('@/views/AgentManageView.vue'), meta: { menuPermission: MENU_CODES.AI_CONFIG } },
         { path: 'ai-tools', redirect: '/assistant' },
         { path: 'search', redirect: '/knowledge' },
         { path: 'members', redirect: '/courses' },

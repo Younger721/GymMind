@@ -145,7 +145,7 @@ public class DefaultAgentManagementService implements AgentManagementService {
 
     private static boolean hasAgentMenu(CurrentActor actor) {
         return actor != null && (actor.isPlatformAdmin()
-                || actor.hasPermission("menu:assistant")
+                || actor.hasPermission("menu:ai-config")
                 || actor.hasPermission("agent:chat")
                 || actor.hasPermission("agent:write"));
     }
