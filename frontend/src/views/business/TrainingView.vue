@@ -14,7 +14,7 @@
     </div>
 
     <section class="simple-card panel">
-      <div class="heading"><h3>健身房训练计划库</h3><el-select v-model="category" clearable placeholder="全部分类" class="category-select"><el-option v-for="item in categories" :key="item" :label="item" :value="item" /></el-select></div>
+      <div class="heading"><h3>健身房训练计划库</h3><el-select v-model="category" clearable placeholder="全部分类" class="category-select"><el-option v-for="item in planCategories" :key="item" :label="item" :value="item" /></el-select></div>
       <div class="plan-grid">
         <article v-for="plan in filteredTemplates" :key="plan.id" class="plan-card" @click="viewPlan(plan.id, 'template')">
           <small>{{ plan.category }}</small><h4>{{ plan.name }}</h4><p>{{ plan.description }}</p>
@@ -71,14 +71,18 @@
       <template #footer><el-button v-if="isMember && selectedPlanKind === 'template' && selectedPlan" type="primary" @click="choosePlan(selectedPlan.id); showPlan = false">加入我的计划</el-button><el-button @click="showPlan = false">关闭</el-button></template>
     </el-dialog>
 
-    <el-dialog v-model="showCreate" :title="isMember ? '创建我的训练计划' : '新建训练计划'" width="900px" class="responsive-dialog" @open="resetCreateForm">
+    <el-dialog v-model="showCreate" :title="isMember ? '创建我的训练计划' : '新建训练计划'" width="min(900px, calc(100vw - 24px))" class="responsive-dialog" @open="resetCreateForm">
       <el-form label-position="top" class="create-form">
-        <div class="form-grid"><el-form-item label="计划名称"><el-input v-model="createForm.name" placeholder="例如：全身力量训练" /></el-form-item><el-form-item v-if="!isMember" label="分类"><el-select v-model="createForm.category" placeholder="选择分类"><el-option v-for="item in categories" :key="item" :label="item" :value="item" /></el-select></el-form-item><el-form-item label="训练目标"><el-input v-model="createForm.goal" placeholder="例如：提升基础力量" /></el-form-item><el-form-item label="计划说明"><el-input v-model="createForm.description" type="textarea" :rows="2" /></el-form-item></div>
+        <div class="form-grid"><el-form-item label="计划名称"><el-input v-model="createForm.name" placeholder="例如：全身力量训练" /></el-form-item><el-form-item v-if="!isMember" label="计划分类"><el-select v-model="createForm.category" placeholder="选择分类"><el-option v-for="item in planCategories" :key="item" :label="item" :value="item" /></el-select></el-form-item><el-form-item label="训练目标"><el-input v-model="createForm.goal" placeholder="例如：提升基础力量" /></el-form-item><el-form-item label="计划说明"><el-input v-model="createForm.description" type="textarea" :rows="2" /></el-form-item></div>
+        <div class="exercise-filter">
+          <el-input v-model="exerciseKeyword" clearable placeholder="搜索动作名称、分类、目标肌群、器械或标签" />
+          <el-select v-model="exerciseCategory" clearable placeholder="按动作分类筛选"><el-option v-for="item in exerciseCategories" :key="item" :label="categoryLabel(item)" :value="item" /></el-select>
+        </div>
         <div v-for="phase in phases" :key="phase" class="editor-phase">
           <div class="phase-heading"><h3>{{ phaseLabels[phase] }}</h3><el-button type="primary" link @click="addCreateItem(phase)">添加动作</el-button></div>
           <div v-for="(item, index) in createForm.phaseItems[phase]" :key="item.rowId" class="create-item">
-            <div class="action-field exercise-field"><label>动作名称</label><el-select v-model="item.exerciseId" filterable clearable placeholder="搜索并选择动作"><el-option v-for="exercise in exercises" :key="exercise.id" :label="exercise.name" :value="exercise.id" /></el-select></div>
-            <div class="action-field"><label>次数</label><el-input-number v-model="item.reps" :min="1" :step="1" controls-position="right" /></div>
+            <div class="action-field exercise-field"><label>动作名称</label><el-select v-model="item.exerciseId" filterable clearable placeholder="搜索并选择动作"><el-option v-for="exercise in filteredCreateExercises" :key="exercise.id" :label="`${exercise.name}（${categoryLabel(exercise.category)}）`" :value="exercise.id" /></el-select></div>
+            <div class="action-field"><label>每组次数</label><el-input-number v-model="item.reps" :min="1" :step="1" controls-position="right" /></div>
             <div class="action-field"><label>组数</label><el-input-number v-model="item.sets" :min="1" :step="1" controls-position="right" /></div>
             <div class="action-field"><label>休息（秒）</label><el-input-number v-model="item.restSeconds" :min="0" :step="5" controls-position="right" /></div>
             <div class="action-field notes-field"><label>动作说明</label><el-input v-model="item.notes" placeholder="选填" /></div>
@@ -100,6 +104,7 @@ import { useAuthStore } from '@/stores/auth'
 import { trainingApi, type TrainingOverview, type TrainingTemplate } from '@/api/training'
 import { workoutPlansApi, workoutRecordsApi, type WorkoutPlanView } from '@/api/workouts'
 import { exercisesApi, type Exercise } from '@/api/exercises'
+import { exerciseCategoryLabel as categoryLabel, exerciseCategories as deriveExerciseCategories, filterExercises } from '@/utils/exercisePresentation.mjs'
 
 type Phase = 'WARMUP' | 'MAIN' | 'STRETCH'
 type EditableItem = { rowId: number; exerciseId: number | null; sets: number; reps: number; restSeconds: number; weight: number; notes: string }
@@ -116,6 +121,8 @@ const showCreate = ref(false)
 const selectedPlan = ref<PlanDetail | null>(null)
 const selectedPlanKind = ref<'template' | 'member'>('template')
 const category = ref('')
+const exerciseKeyword = ref('')
+const exerciseCategory = ref('')
 const templates = ref<TrainingTemplate[]>([])
 const memberPlans = ref<WorkoutPlanView[]>([])
 const exercises = ref<Exercise[]>([])
@@ -126,22 +133,35 @@ const data = ref<TrainingOverview>({ role: '', since: '', until: '', summary: { 
 const form = reactive({ workoutDate: calendarDate.value, duration: 45, exerciseId: 1, notes: '完成今日训练' })
 const phases: Phase[] = ['WARMUP', 'MAIN', 'STRETCH']
 const phaseLabels: Record<Phase, string> = { WARMUP: '热身', MAIN: '正式组', STRETCH: '拉伸' }
-const categories = ['肩', '背', '胸', '手臂', '臀腿', '推日', '拉日']
+const planCategories = ['肩', '背', '胸', '手臂', '臀腿', '推日', '拉日']
 const noteTranslations: Record<string, string> = { 'Dynamic warmup': '动态热身', 'Main press': '主要推举动作', 'Incline press': '上斜推举动作', 'Cool down stretch': '放松拉伸' }
 const isMember = computed(() => auth.roles.includes('MEMBER') && !auth.isPlatformAdmin)
 const canManage = computed(() => auth.roles.includes('COACH') || auth.roles.includes('GYM_ADMIN'))
 const profile = computed(() => isMember.value ? { title: '我的训练' } : { title: '训练计划管理' })
 const stats = computed(() => [{ label: '训练次数', value: data.value.summary.workoutCount }, { label: '训练人数', value: data.value.summary.activeMembers }, { label: '总时长', value: `${data.value.summary.totalMinutes} 分钟` }, { label: '平均每次', value: `${Math.round(data.value.summary.averageMinutes)} 分钟` }, { label: '连续训练', value: `${data.value.summary.streakDays} 天` }])
 const filteredTemplates = computed(() => templates.value.filter(plan => !category.value || plan.category === category.value))
+const exerciseCategories = computed(() => deriveExerciseCategories(exercises.value))
 const createForm = reactive({ name: '', category: '', goal: '', description: '', phaseItems: { WARMUP: [] as EditableItem[], MAIN: [] as EditableItem[], STRETCH: [] as EditableItem[] } })
+const filteredCreateExercises = computed(() => {
+  const matches = filterExercises(exercises.value, { keyword: exerciseKeyword.value, category: exerciseCategory.value, activeOnly: true })
+  const selectedIds = new Set(allCreateItems().map(item => item.exerciseId).filter((id): id is number => id != null))
+  const selected = exercises.value.filter(item => item.active && selectedIds.has(item.id) && !matches.some(match => match.id === item.id))
+  return [...selected, ...matches]
+})
 
 function displayNote(note?: string) { const value = note?.trim() || ''; return noteTranslations[value] || value }
 function resetCreateForm() {
   createForm.name = ''; createForm.category = ''; createForm.goal = ''; createForm.description = ''
+  exerciseKeyword.value = ''; exerciseCategory.value = ''
   createForm.phaseItems.WARMUP = []; createForm.phaseItems.MAIN = [newItem()]; createForm.phaseItems.STRETCH = []
 }
 function newItem(): EditableItem { return { rowId: nextRowId.value++, exerciseId: null, sets: 3, reps: 10, restSeconds: 90, weight: 0, notes: '' } }
-function openCreate() { resetCreateForm(); showCreate.value = true }
+async function openCreate() {
+  try {
+    exercises.value = (await exercisesApi.list()).data?.filter((item: Exercise) => item.active) || []
+    resetCreateForm(); showCreate.value = true
+  } catch (error: any) { ElMessage.error(error?.response?.data?.message || '动作库加载失败') }
+}
 function addCreateItem(phase: Phase) { createForm.phaseItems[phase].push(newItem()) }
 function removeCreateItem(phase: Phase, rowId: number) { createForm.phaseItems[phase] = createForm.phaseItems[phase].filter(item => item.rowId !== rowId) }
 function allCreateItems() { return phases.flatMap(phase => createForm.phaseItems[phase].map((item, index) => ({ ...item, phase, sortOrder: index + 1 }))) }
@@ -177,13 +197,12 @@ async function createPlan() {
   const items = allCreateItems()
   if (!createForm.name.trim() || !createForm.goal.trim() || (!isMember.value && !createForm.category)) { ElMessage.warning('请填写计划名称、目标和分类'); return }
   if (!items.length) { ElMessage.warning('请至少添加一个训练动作'); return }
-  for (const [index, item] of items.entries()) {
+  for (const item of items) {
     const label = `${phaseLabels[item.phase]}第${createForm.phaseItems[item.phase].findIndex(row => row.rowId === item.rowId) + 1}个动作`
     if (!item.exerciseId) { ElMessage.warning(`${label}：请选择动作`); return }
     if (!Number.isInteger(item.reps) || item.reps < 1) { ElMessage.warning(`${label}：次数必须至少为1`); return }
     if (!Number.isInteger(item.sets) || item.sets < 1) { ElMessage.warning(`${label}：组数必须至少为1`); return }
     if (!Number.isInteger(item.restSeconds) || item.restSeconds < 0) { ElMessage.warning(`${label}：休息秒数不能小于0`); return }
-    item.sortOrder = index + 1
   }
   creating.value = true
   try {
@@ -214,4 +233,15 @@ onMounted(() => { resetCreateForm(); load() })
 
 <style scoped>
 .training-page{max-width:1100px;margin:0 auto}.page-heading,.toolbar,.heading,.phase-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}.toolbar{margin:18px 0;padding:14px}.stats-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}.stat-card,.panel{padding:18px}.stat-card{border:1px solid var(--border);border-radius:8px;background:#fff}.stat-card span{display:block;color:var(--text-muted);font-size:12px}.stat-card strong{display:block;color:var(--primary);font-size:24px;margin-top:8px}.panel{margin-bottom:16px}.heading{margin-bottom:14px}.heading h3,.phase-heading h3{margin:0}.category-select{width:170px}.plan-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.plan-card{min-width:0;border:1px solid var(--border);padding:14px;border-radius:8px;cursor:pointer}.plan-card h4{margin:8px 0}.plan-card p{color:var(--text-muted);min-height:40px}.create-button{margin:0 0 18px}.plan-description{white-space:pre-wrap}.plan-period{color:var(--text-muted)}.phase-block{margin-top:22px}.phase-block h4{margin:0 0 10px}.create-form{max-height:calc(100vh - 240px);overflow-y:auto;padding-right:8px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}.editor-phase{border-top:1px solid var(--border);padding:18px 0 8px}.create-item{display:grid;grid-template-columns:minmax(180px,2fr) repeat(3,minmax(95px,.8fr)) minmax(160px,1.6fr) 36px;gap:12px;align-items:end;padding:12px 0;border-bottom:1px solid var(--border)}.action-field{min-width:0}.action-field label{display:block;margin-bottom:6px;font-size:12px;color:var(--text-muted)}.action-field :deep(.el-select),.action-field :deep(.el-input),.action-field :deep(.el-input-number){width:100%}.delete-action{width:36px;height:32px}.phase-block :deep(.el-empty){padding:8px 0}.responsive-dialog :deep(.el-dialog__body){max-height:calc(100vh - 180px);overflow-y:auto}@media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.create-item{grid-template-columns:repeat(2,minmax(0,1fr))}.exercise-field,.notes-field{grid-column:span 2}.delete-action{justify-self:end}}@media(max-width:600px){.page-heading,.toolbar,.heading{align-items:flex-start;flex-wrap:wrap}.stats-grid,.plan-grid,.form-grid{grid-template-columns:1fr}.category-select{width:100%}.create-item{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.action-field{min-width:0}.responsive-dialog{width:calc(100vw - 24px)!important}.create-form{max-height:calc(100vh - 210px)}}
+</style>
+
+<style scoped>
+.exercise-filter { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; margin-bottom: 18px; }
+.create-item { grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(100px, 120px)) minmax(160px, 1.6fr) 36px; }
+@media (max-width: 600px) {
+  .exercise-filter { grid-template-columns: minmax(0, 1fr); }
+  .create-item { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .exercise-field { grid-column: 1 / -1; }
+  .delete-action { grid-column: 2; }
+}
 </style>

@@ -5,14 +5,14 @@
       <el-button v-if="canCreate" type="primary" @click="openCreate">新增动作</el-button>
     </div>
     <div class="toolbar simple-card">
-      <el-input v-model="keyword" clearable placeholder="搜索动作名称、肌群或器械" @keyup.enter="load" />
-      <el-select v-model="category" clearable placeholder="分类" @change="load"><el-option v-for="item in categories" :key="item" :label="item" :value="item" /></el-select>
+      <el-input v-model="keyword" clearable placeholder="搜索名称、分类、肌群、器械或标签" @keyup.enter="load" />
+      <el-select v-model="category" clearable placeholder="分类"><el-option v-for="item in categories" :key="item" :label="categoryLabel(item)" :value="item" /></el-select>
       <el-select v-model="difficulty" clearable placeholder="难度" @change="load"><el-option label="初级" value="BEGINNER" /><el-option label="中级" value="INTERMEDIATE" /><el-option label="高级" value="ADVANCED" /></el-select>
       <el-button @click="load">查询</el-button>
     </div>
     <el-table :data="filteredExercises" v-loading="loading" stripe>
       <el-table-column prop="name" label="动作名称" min-width="160" />
-      <el-table-column prop="category" label="分类" width="110" />
+      <el-table-column label="分类" width="110"><template #default="scope">{{ categoryLabel(scope.row.category) }}</template></el-table-column>
       <el-table-column prop="targetMuscle" label="目标肌群" min-width="130" />
       <el-table-column prop="equipment" label="器械" min-width="120" />
       <el-table-column prop="difficulty" label="难度" width="100" />
@@ -27,12 +27,12 @@
     </el-table>
     <el-empty v-if="!loading && !filteredExercises.length" description="暂无动作" />
     <el-dialog v-model="detailVisible" title="动作详情" width="620px">
-      <div v-if="selected"><h3>{{ selected.name }}</h3><p>{{ selected.description }}</p><el-descriptions :column="2" border><el-descriptions-item label="分类">{{ selected.category }}</el-descriptions-item><el-descriptions-item label="目标肌群">{{ selected.targetMuscle }}</el-descriptions-item><el-descriptions-item label="器械">{{ selected.equipment }}</el-descriptions-item><el-descriptions-item label="难度">{{ selected.difficulty }}</el-descriptions-item></el-descriptions><h4>动作步骤</h4><p class="pre">{{ selected.steps }}</p><h4>常见错误</h4><p class="pre">{{ selected.commonMistakes }}</p><h4>安全提示</h4><p class="pre">{{ selected.safetyNotes }}</p></div>
+      <div v-if="selected"><h3>{{ selected.name }}</h3><p>{{ selected.description }}</p><el-descriptions :column="2" border><el-descriptions-item label="分类">{{ categoryLabel(selected.category) }}</el-descriptions-item><el-descriptions-item label="目标肌群">{{ selected.targetMuscle }}</el-descriptions-item><el-descriptions-item label="器械">{{ selected.equipment }}</el-descriptions-item><el-descriptions-item label="难度">{{ selected.difficulty }}</el-descriptions-item></el-descriptions><h4>动作步骤</h4><p class="pre">{{ selected.steps }}</p><h4>常见错误</h4><p class="pre">{{ selected.commonMistakes }}</p><h4>安全提示</h4><p class="pre">{{ selected.safetyNotes }}</p></div>
     </el-dialog>
     <el-dialog v-model="formVisible" :title="editing ? '编辑动作' : '新增动作'" width="650px">
       <el-form :model="form" label-position="top">
         <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
-        <el-form-item label="分类" required><el-input v-model="form.category" placeholder="例如 BACK" /></el-form-item>
+        <el-form-item label="分类" required><el-input v-model="form.category" placeholder="例如：胸、背、臀腿" /></el-form-item>
         <el-form-item label="目标肌群" required><el-input v-model="form.targetMuscle" /></el-form-item>
         <el-form-item label="难度" required><el-select v-model="form.difficulty" style="width:100%"><el-option label="初级" value="BEGINNER" /><el-option label="中级" value="INTERMEDIATE" /><el-option label="高级" value="ADVANCED" /></el-select></el-form-item>
         <el-form-item label="器械" required><el-input v-model="form.equipment" /></el-form-item>
@@ -51,14 +51,15 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { exercisesApi, type Exercise } from '@/api/exercises'
 import { useAuthStore } from '@/stores/auth'
+import { exerciseCategoryLabel as categoryLabel, exerciseCategories, filterExercises } from '@/utils/exercisePresentation.mjs'
 const auth = useAuthStore()
 const loading = ref(false); const saving = ref(false); const keyword = ref(''); const category = ref(''); const difficulty = ref('')
 const exercises = ref<Exercise[]>([]); const selected = ref<Exercise | null>(null); const detailVisible = ref(false); const formVisible = ref(false); const editing = ref(false)
-const categories = ['CHEST','BACK','LEGS','SHOULDERS','ARMS','CORE','CARDIO']
 const canEdit = computed(() => auth.roles.includes('GYM_ADMIN') && auth.permissions.includes('exercise:write'))
 const canCreate = computed(() => auth.permissions.includes('exercise:write') && (auth.roles.includes('GYM_ADMIN') || auth.roles.includes('COACH')))
 const form = reactive<Record<string, string>>({ name:'', category:'', targetMuscle:'', difficulty:'BEGINNER', equipment:'', description:'', steps:'', commonMistakes:'', safetyNotes:'', tags:'' })
-const filteredExercises = computed(() => exercises.value.filter(item => (!keyword.value || [item.name,item.targetMuscle,item.equipment].some(value => value?.toLowerCase().includes(keyword.value.toLowerCase()))) && (!category.value || item.category === category.value) && (!difficulty.value || item.difficulty === difficulty.value)))
+const categories = computed(() => exerciseCategories(exercises.value))
+const filteredExercises = computed(() => filterExercises(exercises.value, { keyword: keyword.value, category: category.value }).filter(item => !difficulty.value || item.difficulty === difficulty.value))
 async function load() { loading.value = true; try { exercises.value = (await exercisesApi.list()).data?.filter((item: Exercise) => canEdit.value || item.active) || [] } catch (error: any) { ElMessage.error(error.response?.data?.message || '动作加载失败') } finally { loading.value = false } }
 function showDetail(item: Exercise) { selected.value = item; detailVisible.value = true }
 function resetForm() { Object.assign(form, { name:'', category:'', targetMuscle:'', difficulty:'BEGINNER', equipment:'', description:'', steps:'', commonMistakes:'', safetyNotes:'', tags:'' }) }
