@@ -5,7 +5,6 @@
         <h2 class="simple-page-title">AI 用量</h2>
         <p class="simple-page-desc">查看真实模型 token、调用次数、耗时和估算费用。</p>
       </div>
-      <el-button v-if="authStore.isPlatformAdmin" @click="openPricing">模型价格</el-button>
     </div>
 
     <section class="filter-card simple-card">
