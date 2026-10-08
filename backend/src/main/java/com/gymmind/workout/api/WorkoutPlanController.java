@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -57,6 +58,11 @@ public class WorkoutPlanController {
         return ApiResponse.success(service.createForCurrentMember(actors.requireCurrent(), request.toCommand()));
     }
 
+    @PutMapping({"/member/{id}", "/{id}"})
+    public ApiResponse<WorkoutPlanView> updateForCurrentMember(@PathVariable Long id, @Valid @RequestBody MemberRequest request) {
+        return ApiResponse.success(service.updateForCurrentMember(actors.requireCurrent(), id, request.toCommand()));
+    }
+
     @GetMapping
     public ApiResponse<List<WorkoutPlanView>> list() {
         return ApiResponse.success(service.list(actors.requireCurrent()));
@@ -88,7 +94,8 @@ public class WorkoutPlanController {
     }
 
     public record RequestItem(
-            @NotNull Long exerciseId,
+            Long exerciseId,
+            String exerciseName,
             @Min(1) @Max(7) int dayOfWeek,
             @Min(1) int sets,
             @Min(1) int reps,
@@ -98,10 +105,13 @@ public class WorkoutPlanController {
             @Pattern(regexp = "WARMUP|MAIN|STRETCH") String phase,
             @Min(1) Integer sortOrder) {
         public RequestItem(Long exerciseId, int dayOfWeek, int sets, int reps, int restSeconds, double weight, String notes) {
-            this(exerciseId, dayOfWeek, sets, reps, restSeconds, weight, notes, null, null);
+            this(exerciseId, null, dayOfWeek, sets, reps, restSeconds, weight, notes, null, null);
+        }
+        public RequestItem(Long exerciseId, int dayOfWeek, int sets, int reps, int restSeconds, double weight, String notes, String phase, Integer sortOrder) {
+            this(exerciseId, null, dayOfWeek, sets, reps, restSeconds, weight, notes, phase, sortOrder);
         }
         WorkoutPlanItemCommand toCommand() {
-            return new WorkoutPlanItemCommand(exerciseId, dayOfWeek, sets, reps, restSeconds, weight, notes,
+            return new WorkoutPlanItemCommand(exerciseId, exerciseName, dayOfWeek, sets, reps, restSeconds, weight, notes,
                     phase == null || phase.isBlank() ? "MAIN" : phase,
                     sortOrder == null ? 0 : sortOrder);
         }

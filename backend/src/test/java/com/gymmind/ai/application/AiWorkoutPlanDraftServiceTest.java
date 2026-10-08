@@ -26,6 +26,14 @@ import static org.mockito.Mockito.*;
 
 class AiWorkoutPlanDraftServiceTest {
     @Test
+    void acceptsGeneratedTextExerciseWithoutCatalogId() {
+        var model = mock(ChatModelGateway.class);
+        when(model.complete(any(), anyList())).thenReturn("{\"name\":\"减脂计划\",\"goal\":\"减脂\",\"startDate\":\"2026-10-08\",\"endDate\":\"2026-11-08\",\"description\":\"每周三练\",\"items\":[{\"exerciseName\":\"卧推\",\"dayOfWeek\":1,\"sets\":3,\"reps\":10,\"restSeconds\":60,\"weight\":0}]}");
+        var draft = new DefaultAiWorkoutPlanDraftService(model, new ObjectMapper()).generate(actor(), 42L, "增肌");
+        assertThat(draft.items().get(0).exerciseName()).isEqualTo("卧推");
+        assertThat(draft.items().get(0).exerciseId()).isNull();
+    }
+    @Test
     void parsesAndValidatesModelPlanBeforeReturningDraft() {
         var model = mock(ChatModelGateway.class);
         when(model.complete(any(), anyList())).thenReturn("{\"name\":\"减脂计划\",\"goal\":\"减脂\",\"startDate\":\"2026-09-15\",\"endDate\":\"2026-09-29\",\"description\":\"每周三练\",\"items\":[{\"exerciseId\":1,\"dayOfWeek\":1,\"sets\":3,\"reps\":10,\"restSeconds\":60,\"weight\":0,\"notes\":\"\"}]}");

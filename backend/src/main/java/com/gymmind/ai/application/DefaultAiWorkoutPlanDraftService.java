@@ -197,15 +197,8 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
     }
 
     private String buildPrompt(Long tenantId, String request, boolean includeHistory, WorkoutHistorySummary summary) {
-        StringBuilder prompt = new StringBuilder("请仅输出结构化训练计划JSON，不要输出解释。\n用户需求：").append(request);
-        if (exercises != null) {
-            prompt.append("\n动作目录（只能使用以下动作ID）：");
-            for (Exercise exercise : exercises.findAllByTenantIdAndActiveTrue(tenantId)) {
-                if (exercise != null && exercise.getId() != null) {
-                    prompt.append("\n").append(exercise.getId()).append("=").append(exercise.getName());
-                }
-            }
-        }
+        StringBuilder prompt = new StringBuilder("请仅输出结构化训练计划JSON，不要输出解释。"
+                + "每个动作使用 exerciseName 文本名称，不需要 exerciseId；包含 dayOfWeek、phase、sortOrder、sets、reps、restSeconds、weight、notes。\n用户需求：").append(request);
         prompt.append("\n训练历史：");
         if (!includeHistory) {
             prompt.append("未参考训练记录（用户已关闭）。");
@@ -222,9 +215,15 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
             JsonNode root = mapper.readTree(stripFences(response));
             List<WorkoutPlanItemCommand> items = new ArrayList<>();
             for (JsonNode item : root.path("items")) {
-                items.add(new WorkoutPlanItemCommand(item.path("exerciseId").asLong(), item.path("dayOfWeek").asInt(),
+                Long exerciseId = item.hasNonNull("exerciseId") ? item.path("exerciseId").asLong() : null;
+                String exerciseName = item.path("exerciseName").asText(null);
+                if ((exerciseName == null || exerciseName.isBlank()) && exerciseId != null && exercises != null) {
+                    exerciseName = exercises.findByTenantIdAndId(tenantId, exerciseId).map(Exercise::getName).orElse(null);
+                }
+                items.add(new WorkoutPlanItemCommand(exerciseId, exerciseName, item.path("dayOfWeek").asInt(),
                         item.path("sets").asInt(), item.path("reps").asInt(), item.path("restSeconds").asInt(),
-                        item.path("weight").asDouble(), item.path("notes").asText("")));
+                        item.path("weight").asDouble(), item.path("notes").asText(""),
+                        item.path("phase").asText("MAIN"), item.path("sortOrder").asInt(0)));
             }
             var command = new CreateWorkoutPlanCommand(tenantId, memberId, null,
                     root.path("name").asText(), root.path("goal").asText(),

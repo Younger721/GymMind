@@ -9,8 +9,8 @@ import jakarta.persistence.*;
 public class WorkoutPlanItem extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "plan_id", nullable = false)
     private WorkoutPlan plan;
-    @Column(name = "exercise_id", nullable = false) private Long exerciseId;
-    @Column(name = "exercise_name_snapshot", length = 200) private String exerciseNameSnapshot;
+    @Column(name = "exercise_id") private Long exerciseId;
+    @Column(name = "exercise_name_snapshot", nullable = false, length = 200) private String exerciseNameSnapshot;
     @Column(name = "day_of_week", nullable = false) private int dayOfWeek;
     @Column(nullable = false, length = 16) private String phase;
     @Column(name = "sort_order", nullable = false) private int sortOrder;
@@ -22,16 +22,17 @@ public class WorkoutPlanItem extends BaseEntity {
     protected WorkoutPlanItem() {}
     private WorkoutPlanItem(WorkoutPlan plan, Long exerciseId, String exerciseNameSnapshot, int dayOfWeek, int sets, int reps, int restSeconds,
                             double weight, String notes, String phase, int sortOrder) {
-        if (plan == null || exerciseId == null || exerciseId <= 0 || dayOfWeek < 1 || dayOfWeek > 7 || sets <= 0 || reps <= 0 || restSeconds < 0 || weight < 0
+        if (plan == null || (exerciseId != null && exerciseId <= 0) || exerciseNameSnapshot == null || exerciseNameSnapshot.isBlank()
+                || exerciseNameSnapshot.length() > 200 || dayOfWeek < 1 || dayOfWeek > 7 || sets <= 0 || reps <= 0 || restSeconds < 0 || weight < 0
                 || !java.util.Set.of("WARMUP", "MAIN", "STRETCH").contains(phase) || sortOrder <= 0)
             throw new IllegalArgumentException("Invalid workout plan item");
-        this.plan = plan; this.exerciseId = exerciseId; this.exerciseNameSnapshot = exerciseNameSnapshot == null ? "" : exerciseNameSnapshot.trim(); this.dayOfWeek = dayOfWeek; this.sets = sets; this.reps = reps;
+        this.plan = plan; this.exerciseId = exerciseId; this.exerciseNameSnapshot = exerciseNameSnapshot.trim(); this.dayOfWeek = dayOfWeek; this.sets = sets; this.reps = reps;
         this.restSeconds = restSeconds; this.weight = weight; this.notes = notes == null ? "" : notes.trim();
         this.phase = phase; this.sortOrder = sortOrder;
     }
     public static WorkoutPlanItem create(WorkoutPlan plan, Long exerciseId, int dayOfWeek, int sets, int reps,
                                          int restSeconds, double weight, String notes) {
-        return new WorkoutPlanItem(plan, exerciseId, "", dayOfWeek, sets, reps, restSeconds, weight, notes, "MAIN", 1);
+        return new WorkoutPlanItem(plan, exerciseId, "动作 #" + exerciseId, dayOfWeek, sets, reps, restSeconds, weight, notes, "MAIN", 1);
     }
     public static WorkoutPlanItem create(WorkoutPlan plan, Long exerciseId, String exerciseNameSnapshot, int dayOfWeek, int sets, int reps, int restSeconds, double weight, String notes) { return new WorkoutPlanItem(plan, exerciseId, exerciseNameSnapshot, dayOfWeek, sets, reps, restSeconds, weight, notes, "MAIN", 1); }
     public static WorkoutPlanItem create(WorkoutPlan plan, Long exerciseId, String exerciseNameSnapshot, int dayOfWeek, int sets, int reps, int restSeconds, double weight, String notes, String phase, int sortOrder) { return new WorkoutPlanItem(plan, exerciseId, exerciseNameSnapshot, dayOfWeek, sets, reps, restSeconds, weight, notes, phase, sortOrder); }

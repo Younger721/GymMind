@@ -31,6 +31,12 @@ public class WorkoutPlan extends TenantScopedEntity {
         return new WorkoutPlan(tenantId, memberId, coachId, name, goal, startDate, endDate, description);
     }
     public void publish() { if (status != WorkoutPlanStatus.DRAFT) throw new IllegalStateException("Only draft can publish"); status = WorkoutPlanStatus.PUBLISHED; }
+    public void update(String name, String goal, LocalDate startDate, LocalDate endDate, String description) {
+        if (status != WorkoutPlanStatus.DRAFT) throw new IllegalStateException("Only draft can be edited");
+        if (name == null || name.isBlank() || goal == null || goal.isBlank() || description == null || description.isBlank()
+                || startDate == null || endDate == null || endDate.isBefore(startDate)) throw new IllegalArgumentException("Invalid plan");
+        this.name = name.trim(); this.goal = goal.trim(); this.startDate = startDate; this.endDate = endDate; this.description = description.trim();
+    }
     public Long getMemberId() { return memberId; } public Long getCoachId() { return coachId; } public String getName() { return name; }
     public String getGoal() { return goal; } public LocalDate getStartDate() { return startDate; } public LocalDate getEndDate() { return endDate; }
     public WorkoutPlanStatus getStatus() { return status; } public String getDescription() { return description; }

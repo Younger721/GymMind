@@ -61,20 +61,15 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         if (!assignments.canAccess(actor, command.memberId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        for (var item : command.items()) {
-            exercises.findByTenantIdAndId(tenantId, item.exerciseId())
-                    .filter(com.gymmind.exercise.domain.model.Exercise::isActive)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        }
         WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
         int index = 0;
         for (var item : command.items()) {
             index++;
             int sortOrder = item.sortOrder() > 0 ? item.sortOrder() : index;
-            var exercise = exercises.findByTenantIdAndId(tenantId, item.exerciseId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+            String exerciseName = resolveExerciseName(tenantId, item);
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
-                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), sortOrder));
+                    exerciseName, item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), sortOrder));
         }
         plan.publish();
         audit.record(new AuditEvent("WORKOUT_PLAN_CREATED", "WORKOUT_PLAN", plan.getId(), AuditResult.SUCCESS,
@@ -100,6 +95,27 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
 
     @Override
     @Transactional
+    public WorkoutPlanView updateForCurrentMember(CurrentActor actor, Long id, CreateWorkoutPlanCommand command) {
+        if (actor == null || !actor.roles().contains(RoleCode.MEMBER) || !actor.hasPermission("workout:write")) throw new BusinessException(ErrorCode.FORBIDDEN);
+        Long tenantId = ActorAccess.tenantId(actor);
+        Long memberId = members.findByTenantIdAndUserId(tenantId, actor.userId()).map(com.gymmind.member.domain.model.Member::getId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        WorkoutPlan plan = plans.findByTenantIdAndId(tenantId, id).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!memberId.equals(plan.getMemberId()) || plan.getStatus() != WorkoutPlanStatus.DRAFT) throw new BusinessException(ErrorCode.FORBIDDEN);
+        if (command == null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        CreateWorkoutPlanCommand normalized = new CreateWorkoutPlanCommand(tenantId, memberId, null, command.name(), command.goal(), command.startDate(), command.endDate(), command.description(), command.items());
+        validator.validate(normalized);
+        plan.update(normalized.name(), normalized.goal(), normalized.startDate(), normalized.endDate(), normalized.description());
+        items.deleteAllByPlanId(plan.getId());
+        int index = 0;
+        for (var item : normalized.items()) {
+            String name = resolveExerciseName(tenantId, item);
+            items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(), name, item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), item.sortOrder() > 0 ? item.sortOrder() : ++index));
+        }
+        return view(plan);
+    }
+
+    @Override
+    @Transactional
     public WorkoutPlanView saveValidatedDraft(CurrentActor actor, CreateWorkoutPlanCommand command) {
         requireDraftSaver(actor, command);
         validator.validate(command);
@@ -112,20 +128,15 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         if (!canAccessPlanMember(actor, command.memberId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        for (var item : command.items()) {
-            exercises.findByTenantIdAndId(tenantId, item.exerciseId())
-                    .filter(com.gymmind.exercise.domain.model.Exercise::isActive)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        }
         WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
         int index = 0;
         for (var item : command.items()) {
             index++;
             int sortOrder = item.sortOrder() > 0 ? item.sortOrder() : index;
-            var exercise = exercises.findByTenantIdAndId(tenantId, item.exerciseId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+            String exerciseName = resolveExerciseName(tenantId, item);
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
-                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), sortOrder));
+                    exerciseName, item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), sortOrder));
         }
         audit.record(new AuditEvent("WORKOUT_PLAN_DRAFT_SAVED", "WORKOUT_PLAN", plan.getId(), AuditResult.SUCCESS,
                 "workout-plan-service", Map.of("resourceName", plan.getName())));
@@ -158,6 +169,7 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
     @Transactional
     public WorkoutPlanView publish(CurrentActor actor, Long id) {
         require(actor);
+        if (actor.roles().contains(RoleCode.MEMBER)) throw new BusinessException(ErrorCode.FORBIDDEN);
         WorkoutPlan plan = plans.findByTenantIdAndId(ActorAccess.tenantId(actor), id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!assignments.canAccess(actor, plan.getMemberId())) {
@@ -177,6 +189,13 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         List<com.gymmind.workout.domain.model.WorkoutPlanItem> planItems = items.findAllByPlanId(plan.getId());
         if (planItems == null) planItems = List.of();
         return WorkoutPlanView.from(plan, planItems.stream().map(WorkoutPlanItemView::from).toList());
+    }
+
+    private String resolveExerciseName(Long tenantId, WorkoutPlanItemCommand item) {
+        if (item.exerciseId() == null) return item.exerciseName().trim();
+        var exercise = exercises.findByTenantIdAndId(tenantId, item.exerciseId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        return item.exerciseName() == null || item.exerciseName().isBlank() ? exercise.getName() : item.exerciseName().trim();
     }
 
     private static void require(CurrentActor actor) {

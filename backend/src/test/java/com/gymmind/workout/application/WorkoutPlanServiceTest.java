@@ -21,6 +21,42 @@ import static org.mockito.Mockito.*;
 
 class WorkoutPlanServiceTest {
     @Test
+    void memberCanSaveTextExerciseAndEditOwnDraft() {
+        var plans = mock(WorkoutPlanRepository.class);
+        var items = mock(WorkoutPlanItemRepository.class);
+        var members = mock(MemberRepository.class);
+        var member = mock(com.gymmind.member.domain.model.Member.class);
+        when(member.getId()).thenReturn(41L);
+        when(members.findByTenantIdAndUserId(11L, 9L)).thenReturn(Optional.of(member));
+        when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(member));
+        when(plans.save(any())).thenAnswer(i -> i.getArgument(0));
+        var saved = new java.util.ArrayList<com.gymmind.workout.domain.model.WorkoutPlanItem>();
+        when(items.save(any())).thenAnswer(i -> { var item = i.<com.gymmind.workout.domain.model.WorkoutPlanItem>getArgument(0); saved.add(item); return item; });
+        when(items.findAllByPlanId(any())).thenAnswer(i -> saved);
+        var actor = new CurrentActor(9L, 11L, Set.of(RoleCode.MEMBER), Set.of("workout:read", "workout:write"), 0, "token");
+        var service = new DefaultWorkoutPlanService(plans, items, mock(ExerciseRepository.class), members, mock(CoachAssignmentService.class), mock(AuditRecorder.class));
+        var command = new CreateWorkoutPlanCommand(null, null, null, "我的计划", "力量", LocalDate.now(), LocalDate.now().plusMonths(1), "说明",
+                java.util.List.of(new WorkoutPlanItemCommand(null, "卧推", 1, 4, 10, 60, 0, "", "MAIN", 1)));
+        var created = service.createForCurrentMember(actor, command);
+        assertThat(created.items()).extracting(WorkoutPlanItemView::exerciseName).containsExactly("卧推");
+        assertThat(created.items().get(0).exerciseId()).isNull();
+        var plan = org.mockito.ArgumentCaptor.forClass(com.gymmind.workout.domain.model.WorkoutPlan.class);
+        verify(plans).save(plan.capture());
+        when(plans.findByTenantIdAndId(11L, 99L)).thenReturn(Optional.of(plan.getValue()));
+        var edited = service.updateForCurrentMember(actor, 99L, new CreateWorkoutPlanCommand(null, null, null, "修改后", "增肌", LocalDate.now(), LocalDate.now().plusMonths(1), "新说明",
+                java.util.List.of(new WorkoutPlanItemCommand(null, "飞鸟", 1, 3, 12, 45, 0, "", "MAIN", 1))));
+        assertThat(edited.name()).isEqualTo("修改后");
+        verify(items).deleteAllByPlanId(any());
+    }
+
+    @Test
+    void memberCannotPublishPersonalPlan() {
+        var service = new DefaultWorkoutPlanService(mock(WorkoutPlanRepository.class), mock(WorkoutPlanItemRepository.class),
+                mock(ExerciseRepository.class), mock(MemberRepository.class), mock(CoachAssignmentService.class), mock(AuditRecorder.class));
+        assertThatThrownBy(() -> service.publish(new CurrentActor(9L, 11L, Set.of(RoleCode.MEMBER), Set.of("workout:write"), 0, "token"), 1L))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+    }
+    @Test
     void createsValidatedPlanForAssignedCoach() {
         WorkoutPlanRepository plans = mock(WorkoutPlanRepository.class);
         WorkoutPlanItemRepository items = mock(WorkoutPlanItemRepository.class);
@@ -30,6 +66,7 @@ class WorkoutPlanServiceTest {
         when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(mock(com.gymmind.member.domain.model.Member.class)));
         var exercise = mock(com.gymmind.exercise.domain.model.Exercise.class);
         when(exercise.isActive()).thenReturn(true);
+        when(exercise.getName()).thenReturn("卧推");
         when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(exercise));
         when(assignments.canAccess(any(), eq(41L))).thenReturn(true);
         when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -73,6 +110,7 @@ class WorkoutPlanServiceTest {
         when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(member));
         var exercise = mock(com.gymmind.exercise.domain.model.Exercise.class);
         when(exercise.isActive()).thenReturn(true);
+        when(exercise.getName()).thenReturn("卧推");
         when(exercises.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(exercise));
         when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         java.util.List<com.gymmind.workout.domain.model.WorkoutPlanItem> savedItems = new java.util.ArrayList<>();
