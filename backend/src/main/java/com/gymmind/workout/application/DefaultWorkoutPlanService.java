@@ -68,10 +68,13 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         }
         WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
+        int index = 0;
         for (var item : command.items()) {
+            index++;
+            int sortOrder = item.sortOrder() > 0 ? item.sortOrder() : index;
             var exercise = exercises.findByTenantIdAndId(tenantId, item.exerciseId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
-                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes()));
+                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), sortOrder));
         }
         plan.publish();
         audit.record(new AuditEvent("WORKOUT_PLAN_CREATED", "WORKOUT_PLAN", plan.getId(), AuditResult.SUCCESS,
@@ -116,10 +119,13 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         }
         WorkoutPlan plan = plans.save(WorkoutPlan.create(tenantId, command.memberId(), command.coachId(),
                 command.name(), command.goal(), command.startDate(), command.endDate(), command.description()));
+        int index = 0;
         for (var item : command.items()) {
+            index++;
+            int sortOrder = item.sortOrder() > 0 ? item.sortOrder() : index;
             var exercise = exercises.findByTenantIdAndId(tenantId, item.exerciseId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
             items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(),
-                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes()));
+                    exercise.getName(), item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), sortOrder));
         }
         audit.record(new AuditEvent("WORKOUT_PLAN_DRAFT_SAVED", "WORKOUT_PLAN", plan.getId(), AuditResult.SUCCESS,
                 "workout-plan-service", Map.of("resourceName", plan.getName())));

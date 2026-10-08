@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -93,9 +94,16 @@ public class WorkoutPlanController {
             @Min(1) int reps,
             @Min(0) int restSeconds,
             @Min(0) double weight,
-            String notes) {
+            String notes,
+            @Pattern(regexp = "WARMUP|MAIN|STRETCH") String phase,
+            @Min(1) Integer sortOrder) {
+        public RequestItem(Long exerciseId, int dayOfWeek, int sets, int reps, int restSeconds, double weight, String notes) {
+            this(exerciseId, dayOfWeek, sets, reps, restSeconds, weight, notes, null, null);
+        }
         WorkoutPlanItemCommand toCommand() {
-            return new WorkoutPlanItemCommand(exerciseId, dayOfWeek, sets, reps, restSeconds, weight, notes);
+            return new WorkoutPlanItemCommand(exerciseId, dayOfWeek, sets, reps, restSeconds, weight, notes,
+                    phase == null || phase.isBlank() ? "MAIN" : phase,
+                    sortOrder == null ? 0 : sortOrder);
         }
     }
 

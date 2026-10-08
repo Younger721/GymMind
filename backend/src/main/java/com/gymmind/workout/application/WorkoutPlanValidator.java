@@ -7,7 +7,9 @@ public class WorkoutPlanValidator {
                 || c.endDate().isBefore(c.startDate())) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         for (WorkoutPlanItemCommand i : c.items()) {
             if (i == null || i.exerciseId() == null || i.dayOfWeek() < 1 || i.dayOfWeek() > 7 || i.sets() <= 0
-                    || i.reps() <= 0 || i.restSeconds() < 0 || i.weight() < 0) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+                    || i.reps() <= 0 || i.restSeconds() < 0 || i.weight() < 0
+                    || i.phase() == null || !java.util.Set.of("WARMUP", "MAIN", "STRETCH").contains(i.phase())
+                    || i.sortOrder() < 0) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
     }
 }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
+import org.junit.jupiter.api.Assertions;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,6 +23,9 @@ class WorkoutPlanControllerTest {
         WorkoutPlanController controller = new WorkoutPlanController(service, actors);
         controller.create(new WorkoutPlanController.Request(41L, 77L, "Plan", "strength", LocalDate.now(),
                 LocalDate.now().plusDays(7), "desc", List.of(new WorkoutPlanController.RequestItem(8L, 1, 3, 10, 60, 20, ""))));
-        verify(service).create(eq(actor), any());
+        var captor = org.mockito.ArgumentCaptor.forClass(com.gymmind.workout.application.CreateWorkoutPlanCommand.class);
+        verify(service).create(eq(actor), captor.capture());
+        Assertions.assertEquals("MAIN", captor.getValue().items().get(0).phase());
+        Assertions.assertEquals(0, captor.getValue().items().get(0).sortOrder());
     }
 }
