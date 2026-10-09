@@ -22,6 +22,7 @@ public class KnowledgeIndexingService {
     private final DeterministicChunker chunker;
     private final StructuredChunker structuredChunker;
 
+    @Autowired
     public KnowledgeIndexingService(IndexGenerationService index, EmbeddingGateway embedding) {
         this(index, embedding, DocumentParserRegistry.standard(), new DeterministicChunker(1200, 180));
     }
