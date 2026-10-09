@@ -23,6 +23,15 @@ public class KnowledgeDocumentSchemaInitializer implements ApplicationRunner {
         addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN chunk_strategy_version INT NULL");
         addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN knowledge_key VARCHAR(128) NULL");
         addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN knowledge_version INT NOT NULL DEFAULT 1");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN knowledge_type VARCHAR(32) NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN applicable_product VARCHAR(128) NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN price_amount DECIMAL(12,2) NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN discount_type VARCHAR(32) NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN discount_value DECIMAL(12,4) NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN effective_from DATETIME NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN effective_to DATETIME NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN promotion_conditions VARCHAR(1000) NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN promotion_priority INT NULL");
         jdbc.execute("CREATE TABLE IF NOT EXISTS knowledge_document_audience_role (document_id BIGINT NOT NULL, role_code VARCHAR(32) NOT NULL, PRIMARY KEY (document_id, role_code))");
         backfillAudienceRoles();
     }

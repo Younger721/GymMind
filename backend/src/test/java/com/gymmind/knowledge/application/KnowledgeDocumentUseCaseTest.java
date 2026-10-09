@@ -13,6 +13,9 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import com.gymmind.knowledge.domain.model.KnowledgeType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,6 +71,28 @@ class KnowledgeDocumentUseCaseTest {
                         DocumentVisibility.TENANT, "GENERAL", List.of(RoleCode.COACH, RoleCode.MEMBER)));
 
         assertThat(view.audienceRoles()).containsExactly(RoleCode.COACH, RoleCode.MEMBER);
+    }
+
+    @Test
+    void replacementIncrementsVersionAndKeepsKnowledgeKey() {
+        KnowledgeDocumentView first = useCase.upload(admin, new UploadKnowledgeDocumentCommand("price.txt", "text/plain",
+                "月卡100".getBytes(), DocumentVisibility.TENANT, "GENERAL", null, null, KnowledgeType.BASE_PRICE,
+                "月卡", new BigDecimal("100"), null, null, null, null, null, 0, null));
+        KnowledgeDocument old = repository.findById(first.id()).orElseThrow();
+        old.markParsing(); old.markReady(); old.publish();
+        KnowledgeDocumentView second = useCase.upload(admin, new UploadKnowledgeDocumentCommand("price2.txt", "text/plain",
+                "月卡90".getBytes(), DocumentVisibility.TENANT, "GENERAL", null, first.id(), KnowledgeType.BASE_PRICE,
+                "月卡", new BigDecimal("90"), null, null, null, null, null, 0, null));
+        assertThat(second.knowledgeKey()).isEqualTo("document-" + first.id());
+        assertThat(second.knowledgeVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void promotionRequiresValidityAndSupportsPercent() {
+        assertThatThrownBy(() -> useCase.upload(admin, new UploadKnowledgeDocumentCommand("sale.txt", "text/plain",
+                "9折".getBytes(), DocumentVisibility.TENANT, "GENERAL", null, null, KnowledgeType.PROMOTION_RULE,
+                "月卡", null, "PERCENT", new BigDecimal("1.2"), LocalDateTime.now().minusDays(1),
+                LocalDateTime.now(), null, 0, null))).isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -254,6 +279,9 @@ class KnowledgeDocumentUseCaseTest {
 
         public List<KnowledgeDocument> findByTenantId(Long tenantId) {
             return values.values().stream().filter(d -> tenantId.equals(d.tenantId())).toList();
+        }
+        public List<KnowledgeDocument> findByKnowledgeKey(Long tenantId, String key) {
+            return values.values().stream().filter(d -> java.util.Objects.equals(tenantId, d.tenantId()) && java.util.Objects.equals(key, d.knowledgeKey())).toList();
         }
 
         public List<KnowledgeDocument> findAllDocuments() {

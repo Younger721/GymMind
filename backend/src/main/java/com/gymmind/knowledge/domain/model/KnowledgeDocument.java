@@ -1,9 +1,13 @@
 package com.gymmind.knowledge.domain.model;
 
 import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import jakarta.persistence.*;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "knowledge_document")
@@ -22,6 +26,15 @@ public class KnowledgeDocument {
     @Column(nullable=false) private boolean published = false;
     @Column(name="knowledge_key", length=128) private String knowledgeKey;
     @Column(name="knowledge_version", nullable=false) private int knowledgeVersion = 1;
+    @Enumerated(EnumType.STRING) @Column(name="knowledge_type", length=32) private KnowledgeType knowledgeType = KnowledgeType.GENERAL_NOTICE;
+    @Column(name="applicable_product", length=128) private String applicableProduct;
+    @Column(name="price_amount", precision=12, scale=2) private BigDecimal priceAmount;
+    @Column(name="discount_type", length=32) private String discountType;
+    @Column(name="discount_value", precision=12, scale=4) private BigDecimal discountValue;
+    @Column(name="effective_from") private LocalDateTime effectiveFrom;
+    @Column(name="effective_to") private LocalDateTime effectiveTo;
+    @Column(name="promotion_conditions", length=1000) private String promotionConditions;
+    @Column(name="promotion_priority") private Integer promotionPriority = 0;
     /**
      * The strategy is nullable at the database level so records created before
      * structured chunking was introduced remain readable. Accessors expose the
@@ -67,6 +80,31 @@ public class KnowledgeDocument {
     }
     public void updateCategory(String newCategory) { if (newCategory == null || newCategory.isBlank()) throw new IllegalArgumentException("category required"); category = newCategory.trim().toUpperCase(); }
     public void assignVersion(String key, int version) { if (key == null || key.isBlank() || version <= 0) throw new IllegalArgumentException("invalid knowledge version"); knowledgeKey = key.trim(); knowledgeVersion = version; }
+    public void configureKnowledge(KnowledgeType type, String product, BigDecimal price, String discount, BigDecimal value,
+                                   LocalDateTime from, LocalDateTime to, String conditions, Integer priority) {
+        knowledgeType = type == null ? KnowledgeType.GENERAL_NOTICE : type;
+        applicableProduct = product == null || product.isBlank() ? null : product.trim();
+        priceAmount = price;
+        discountType = discount == null || discount.isBlank() ? null : discount.trim().toUpperCase();
+        discountValue = value;
+        effectiveFrom = from;
+        effectiveTo = to;
+        promotionConditions = conditions == null || conditions.isBlank() ? null : conditions.trim();
+        promotionPriority = priority == null ? 0 : priority;
+        if (knowledgeType == KnowledgeType.BASE_PRICE && (applicableProduct == null || priceAmount == null || priceAmount.signum() < 0))
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        if (knowledgeType == KnowledgeType.PROMOTION_RULE) {
+            if (applicableProduct == null || discountType == null || discountValue == null || effectiveFrom == null || effectiveTo == null
+                    || !effectiveTo.isAfter(effectiveFrom) || promotionPriority < 0) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            boolean valid = switch (discountType) {
+                case "PERCENT" -> discountValue.signum() > 0 && discountValue.compareTo(BigDecimal.ONE) <= 0;
+                case "FIXED_AMOUNT" -> discountValue.signum() >= 0;
+                case "FIXED_PRICE" -> discountValue.signum() >= 0;
+                default -> false;
+            };
+            if (!valid) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+    }
     public void updateChunkStrategy(String newStrategy, int newVersion) {
         if (newStrategy == null || newStrategy.isBlank()) {
             throw new IllegalArgumentException("chunk strategy required");
@@ -109,7 +147,7 @@ public class KnowledgeDocument {
         }
         return result.length() <= 255 ? result : result.substring(0, 255);
     }
-    public Long id(){return id;} public Long tenantId(){return tenantId;} public Long ownerUserId(){return ownerUserId;} public Long uploaderUserId(){return uploaderUserId;} public String fileName(){return fileName;} public String contentType(){return contentType;} public String objectKey(){return objectKey;} public DocumentVisibility visibility(){return visibility;} public DocumentStatus status(){return status;} public String category(){return category;} public boolean published(){return published;} public String knowledgeKey(){return knowledgeKey;} public int knowledgeVersion(){return knowledgeVersion;}
+    public Long id(){return id;} public Long tenantId(){return tenantId;} public Long ownerUserId(){return ownerUserId;} public Long uploaderUserId(){return uploaderUserId;} public String fileName(){return fileName;} public String contentType(){return contentType;} public String objectKey(){return objectKey;} public DocumentVisibility visibility(){return visibility;} public DocumentStatus status(){return status;} public String category(){return category;} public boolean published(){return published;} public String knowledgeKey(){return knowledgeKey;} public int knowledgeVersion(){return knowledgeVersion;} public KnowledgeType knowledgeType(){return knowledgeType == null ? KnowledgeType.GENERAL_NOTICE : knowledgeType;} public String applicableProduct(){return applicableProduct;} public BigDecimal priceAmount(){return priceAmount;} public String discountType(){return discountType;} public BigDecimal discountValue(){return discountValue;} public LocalDateTime effectiveFrom(){return effectiveFrom;} public LocalDateTime effectiveTo(){return effectiveTo;} public String promotionConditions(){return promotionConditions;} public int promotionPriority(){return promotionPriority == null ? 0 : promotionPriority;}
     public Set<RoleCode> audienceRoles(){return Set.copyOf(audienceRoles == null ? Set.of() : audienceRoles);}
     public Set<RoleCode> effectiveAudienceRoles(){
         if (audienceRoles != null && !audienceRoles.isEmpty()) return audienceRoles();

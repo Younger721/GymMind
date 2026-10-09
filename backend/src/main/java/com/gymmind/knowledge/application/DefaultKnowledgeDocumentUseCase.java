@@ -85,12 +85,19 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
                     ? repository.findForUpdateById(command.replaceDocumentId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND))
                     : repository.findForUpdateByTenantIdAndId(tenantId, command.replaceDocumentId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
+        if (replacement == null && command.knowledgeKey() != null && !command.knowledgeKey().isBlank()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
         if (replacement != null && !Objects.equals(replacement.tenantId(), tenantId)) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
         if (replacement != null && replacement.status() == DocumentStatus.DELETED) throw new BusinessException(ErrorCode.CONFLICT);
         KnowledgeDocument document = KnowledgeDocument.create(tenantId, owner, command.fileName(),
                 command.contentType(), command.visibility(), UUID.randomUUID().toString());
+        if (command.knowledgeKey() != null && !command.knowledgeKey().isBlank()) {
+            if (replacement != null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            document.assignVersion(command.knowledgeKey(), 1);
+        }
         if (replacement != null) {
             String key = replacement.knowledgeKey() == null ? "document-" + replacement.id() : replacement.knowledgeKey();
             synchronized (VERSION_LOCKS.computeIfAbsent(versionLockKey(tenantId, key), ignored -> new Object())) {
@@ -105,6 +112,12 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         }
         document.recordUploader(actor.userId());
         document.updateCategory(command.category());
+        document.configureKnowledge(command.knowledgeType(), command.applicableProduct(), command.priceAmount(), command.discountType(),
+                command.discountValue(), command.effectiveFrom(), command.effectiveTo(), command.conditions(), command.promotionPriority());
+        if (replacement != null && (replacement.knowledgeType() != document.knowledgeType()
+                || !Objects.equals(replacement.applicableProduct(), document.applicableProduct()))) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
         document.updateAudienceRoles(resolveAudienceRoles(actor, tenantId, command.visibility(), command.audienceRoles()));
         document.updateChunkStrategy(selectChunkStrategy(command), 1);
         store.put(document.objectKey(), command.content(), command.contentType());

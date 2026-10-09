@@ -20,6 +20,8 @@ export interface SourceReference {
   excerpt: string
   category: string
   sourceType: string
+  documentVersion?: number
+  knowledgeType?: string
 }
 
 export interface ChatResponse {
@@ -33,7 +35,7 @@ export interface ChatResponse {
 interface AiChatView {
   answer: string
   sources?: string[]
-  citations?: Array<{ chunkId?: string; documentId?: string; text?: string }>
+  citations?: Array<{ chunkId?: string; documentId?: string; text?: string; excerpt?: string; documentName?: string; documentVersion?: number; knowledgeType?: string }>
 }
 
 export const aiApi = {
@@ -64,11 +66,13 @@ function wrapChatResponse(response: ApiResponse<AiChatView>): ApiResponse<ChatRe
   const citations = view.citations || []
   const sources: SourceReference[] = citations.map((c, index) => ({
     documentId: index,
-    documentName: c.documentId || c.chunkId || '知识库',
+    documentName: c.documentName || c.documentId || c.chunkId || '知识库',
     chunkIndex: index,
-    excerpt: c.text || '',
+    excerpt: c.text || c.excerpt || '',
     category: 'knowledge',
-    sourceType: 'RAG'
+    sourceType: 'RAG',
+    documentVersion: c.documentVersion,
+    knowledgeType: c.knowledgeType
   }))
 
   if (sources.length === 0 && view.sources?.length) {

@@ -6,6 +6,7 @@ export interface KnowledgeDocumentView {
   id: number
   tenantId: number | null
   ownerUserId: number | null
+  uploaderName?: string | null
   fileName: string
   objectKey: string
   visibility: string
@@ -15,15 +16,27 @@ export interface KnowledgeDocumentView {
   chunkStrategy: string
   chunkStrategyVersion: number
   audienceRoles: string[]
+  knowledgeKey?: string | null
+  knowledgeVersion?: number
+  knowledgeType?: string
+  applicableProduct?: string | null
+  priceAmount?: number | null
+  discountType?: string | null
+  discountValue?: number | null
+  effectiveFrom?: string | null
+  effectiveTo?: string | null
+  promotionConditions?: string | null
+  promotionPriority?: number
 }
 
 export const knowledgeApi = {
   /** 上传文档；平台管理员由后端保存为平台公共文档，健身房管理员绑定当前租户。 */
-  uploadDocument(file: File, visibility = 'TENANT', category = 'GENERAL', audienceRoles: string[] = []) {
+  uploadDocument(file: File, visibility = 'TENANT', category = 'GENERAL', audienceRoles: string[] = [], options: Record<string, string | number | undefined> = {}) {
     const formData = new FormData()
     formData.append('file', file)
     const params = new URLSearchParams({ visibility, category })
     audienceRoles.forEach(role => params.append('audienceRoles', role))
+    Object.entries(options).forEach(([key, value]) => { if (value !== undefined && value !== '') params.append(key, String(value)) })
     return apiClient.post<any, ApiResponse<KnowledgeDocumentView>>(
       `/v1/knowledge/documents?${params.toString()}`,
       formData,

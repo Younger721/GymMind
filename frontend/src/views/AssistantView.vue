@@ -17,7 +17,14 @@
     <div v-if="mode === 'knowledge'" class="chat-layout">
       <aside class="history-panel simple-card">
         <div class="history-heading"><strong>最近对话</strong><el-button size="small" type="primary" plain @click="newConversation">新建对话</el-button></div>
-        <button v-for="item in sessions" :key="item.sessionKey" class="history-item" :class="{active:item.sessionKey===sessionId}" @click="selectSession(item.sessionKey)">{{ item.title }}</button>
+        <div v-for="item in sessions" :key="item.sessionKey" class="history-item" :class="{active:item.sessionKey===sessionId}" @click="selectSession(item.sessionKey)">
+          <span class="history-title">{{ item.title }}</span>
+          <el-tooltip content="删除对话" placement="top">
+            <el-button class="history-delete" link type="danger" aria-label="删除对话" @click.stop="deleteSession(item.sessionKey)">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </el-tooltip>
+        </div>
       </aside>
       <div class="chat-box simple-card">
       <div class="plugin-bar">
@@ -48,10 +55,33 @@
               </button>
               <div v-show="msg.processExpanded !== false" class="process-list">
                 <div v-for="step in msg.processSteps" :key="`${step.pluginId}-${step.stage}`" class="process-step" :class="`process-${step.status.toLowerCase()}`">
-                  <span class="process-step-icon">{{ processStatusIcon(step.status) }}</span>
-                  <span class="process-step-message">{{ step.message }}</span>
-                  <span v-if="step.resultCount !== null && step.resultCount !== undefined" class="process-step-count">{{ step.resultCount }} 条</span>
-                  <span class="process-step-status">{{ processStatusLabel(step.status) }}</span>
+                  <button v-if="step.details?.length" type="button" class="process-step-row process-step-expand" @click="toggleProcessStep(msg, step)">
+                    <span class="process-step-chevron">{{ isProcessStepExpanded(msg, step) ? '⌄' : '›' }}</span>
+                    <span class="process-step-icon">{{ processStatusIcon(step.status) }}</span>
+                    <span class="process-step-message">{{ step.message }}</span>
+                    <span v-if="step.resultCount !== null && step.resultCount !== undefined" class="process-step-count">{{ step.resultCount }} 条</span>
+                    <span class="process-step-status">{{ processStatusLabel(step.status) }}</span>
+                  </button>
+                  <div v-else class="process-step-row">
+                    <span class="process-step-icon">{{ processStatusIcon(step.status) }}</span>
+                    <span class="process-step-message">{{ step.message }}</span>
+                    <span v-if="step.resultCount !== null && step.resultCount !== undefined" class="process-step-count">{{ step.resultCount }} 条</span>
+                    <span class="process-step-status">{{ processStatusLabel(step.status) }}</span>
+                  </div>
+                  <div v-if="step.details?.length && isProcessStepExpanded(msg, step)" class="process-details">
+                    <div v-for="(detail, detailIndex) in step.details" :key="`${detail.kind}-${detail.chunkId || detail.documentId || detailIndex}`" class="process-detail">
+                      <div class="process-detail-heading">
+                        <span class="process-detail-kind">{{ detail.title || detailKindLabel(detail.kind) }}</span>
+                        <span v-if="detail.rank" class="process-detail-rank">#{{ detail.rank }}</span>
+                      </div>
+                      <div v-if="detail.kind === 'ACTOR' || detail.kind === 'SCOPE'" class="process-detail-excerpt">{{ detail.excerpt }}</div>
+                      <template v-else>
+                        <div class="process-detail-source">{{ detail.documentName || detail.documentId || '未命名文档' }}</div>
+                        <div v-if="detail.chunkId" class="process-detail-chunk">chunk {{ detail.chunkId }}</div>
+                        <div class="process-detail-excerpt">{{ detail.excerpt }}</div>
+                      </template>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -147,8 +177,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Collection } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 import { harnessApi, type HarnessPluginDescriptor, type HarnessProgressEvent } from '@/api/harness'
 import { aiChatHistoryApi, type ChatSession } from '@/api/aiChatHistory'
 import { marked } from 'marked'
@@ -159,7 +189,7 @@ import { canUseTenantOperation } from '@/utils/operationAccess'
 import { MENU_CODES } from '@/utils/menuPermissions'
 
 type AssistantMode = 'knowledge' | 'workout-plan'
-interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean }
+interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean; processStepExpanded?: Record<string, boolean> }
 
 const route = useRoute()
 const router = useRouter()
@@ -211,7 +241,11 @@ const samples = computed(() => roleProfile.value.samples)
 const isGymAdmin = computed(() => authStore.roles.includes('GYM_ADMIN') && !authStore.isPlatformAdmin)
 const operationsAvailable = computed(() => availablePlugins.value.some(plugin => plugin.id === 'gym_operations_metrics'))
 const scrollBottom = () => nextTick(() => { if (boxRef.value) boxRef.value.scrollTop = boxRef.value.scrollHeight })
-const sourceLabel = (s: NonNullable<UiMessage['sources']>[number]) => typeof s === 'string' ? s : s.documentName || s.excerpt || s.text || '知识库片段'
+const sourceLabel = (s: NonNullable<UiMessage['sources']>[number]) => {
+  if (typeof s === 'string') return s
+  const version = s.documentVersion ? ' v' + s.documentVersion : ''
+  return (s.documentName || '知识库片段') + version + (s.excerpt ? '：' + s.excerpt : s.text ? '：' + s.text : '')
+}
 const renderMarkdown = (content: string) => {
   const html = String(marked.parse(content, { breaks: true }))
   const doc = new DOMParser().parseFromString(html, 'text/html')
@@ -240,6 +274,23 @@ const loadSessions = async () => { try { sessions.value = (await aiChatHistoryAp
 const loadSessionMessages = async () => { try { const result = await aiChatHistoryApi.messages(sessionId.value); messages.value = (result.data || []).map(item => ({ role: item.role, content: item.content })) } catch { restoreConversation() } }
 const newConversation = async () => { messages.value = []; input.value = ''; sessionPlugins.value = ['basic_chat']; sessionId.value = `web-${Date.now()}`; persistConversation(); try { await aiChatHistoryApi.create(sessionId.value, '新建对话'); await loadSessions() } catch { /* server creates it on first message */ } }
 const selectSession = async (key: string) => { if (loading.value || key === sessionId.value) return; sessionId.value = key; localStorage.setItem(sessionStorageKey.value + ':session', key); await loadSessionMessages(); scrollBottom() }
+const deleteSession = async (key: string) => {
+  try {
+    await ElMessageBox.confirm('确定删除这条对话吗？删除后无法恢复。', '删除对话', { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' })
+    await aiChatHistoryApi.archive(key)
+    if (key === sessionId.value) {
+      messages.value = []
+      input.value = ''
+      sessionPlugins.value = ['basic_chat']
+      sessionId.value = `web-${Date.now()}`
+      persistConversation()
+    }
+    await loadSessions()
+    ElMessage.success('对话已删除')
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message || error?.message || '删除对话失败')
+  }
+}
 const clearKnowledgeSession = () => { void newConversation() }
 
 const loadHarnessConfig = async () => {
@@ -276,6 +327,14 @@ const processStatusLabel = (status: HarnessProgressEvent['status']) => ({
 const processStatusIcon = (status: HarnessProgressEvent['status']) => ({
   STARTED: '○', RUNNING: '…', COMPLETED: '✓', FAILED: '!'
 }[status] || '·')
+const processStepKey = (step: HarnessProgressEvent) => `${step.pluginId}-${step.stage}`
+const isProcessStepExpanded = (message: UiMessage, step: HarnessProgressEvent) => Boolean(message.processStepExpanded?.[processStepKey(step)])
+const toggleProcessStep = (message: UiMessage, step: HarnessProgressEvent) => {
+  if (!message.processStepExpanded) message.processStepExpanded = {}
+  const key = processStepKey(step)
+  message.processStepExpanded[key] = !message.processStepExpanded[key]
+}
+const detailKindLabel = (kind: string) => ({ ACTOR: '身份', SCOPE: '范围', CHUNK: '片段', DOCUMENT: '文档' }[kind] || '明细')
 const processSummary = (steps: HarnessProgressEvent[]) => {
   const current = [...steps].reverse().find(step => step.status === 'RUNNING')
   if (current) return current.message
@@ -289,7 +348,7 @@ const send = async () => {
   messages.value.push({ role: 'user', content: text }); input.value = ''; loading.value = true; scrollBottom()
   persistConversation()
   try {
-    const message = reactive<UiMessage>({ role: 'assistant', content: '', sources: [], processSteps: [], processExpanded: true })
+    const message = reactive<UiMessage>({ role: 'assistant', content: '', sources: [], processSteps: [], processExpanded: true, processStepExpanded: {} })
     messages.value.push(message)
     await harnessApi.stream(
       { sessionId: sessionId.value, question: text, plugins: sessionPlugins.value,
@@ -299,15 +358,19 @@ const send = async () => {
         // Some browsers/proxies may deliver the final SSE event without the
         // preceding token events. Always use the authoritative final answer.
         if (!message.content && result.answer) message.content = result.answer
-        message.sources = result.citations?.map(c => c.text || c.excerpt || c.documentId || '') ?? result.sources ?? []
+        message.sources = result.citations ?? result.sources ?? []
         persistConversation()
         scrollBottom()
       },
       progress => {
         const index = message.processSteps?.findIndex(step => step.pluginId === progress.pluginId && step.stage === progress.stage) ?? -1
         if (index >= 0 && message.processSteps) message.processSteps[index] = progress
-        else message.processSteps?.push(progress)
-        message.processExpanded = true
+        else {
+          message.processSteps?.push(progress)
+          if (progress.details?.length && message.processStepExpanded) {
+            message.processStepExpanded[processStepKey(progress)] = false
+          }
+        }
         scrollBottom()
       }
     )
@@ -376,7 +439,10 @@ onMounted(async () => {
 .chat-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:12px; align-items:stretch; }
 .history-panel { padding:12px; min-height:470px; }
 .history-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; font-size:13px; }
-.history-item { display:block; width:100%; padding:9px 10px; border:0; border-radius:6px; background:transparent; color:var(--text); text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; font-size:12px; }
+.history-item { display:flex; align-items:center; gap:5px; width:100%; min-width:0; padding:5px 6px 5px 10px; border-radius:6px; background:transparent; color:var(--text); text-align:left; cursor:pointer; font-size:12px; }
+.history-title { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.history-delete { flex:none; width:24px; height:24px; padding:0; opacity:0; transition:opacity .15s ease; }
+.history-item:hover .history-delete, .history-item.active .history-delete, .history-delete:focus-visible { opacity:1; }
 .history-item:hover, .history-item.active { background:#ecfdf5; color:var(--primary); }
 .chat-box { display: flex; flex-direction: column; height: calc(100vh - 240px); min-height: 470px; padding: 0; overflow: hidden; border:1px solid #dfe5eb; box-shadow:0 8px 28px rgba(27,43,61,.06); }
 .plugin-bar { padding: 14px 18px; border-bottom: 1px solid #edf0f3; background:#fff; display: flex; align-items: center; gap: 11px; }
@@ -428,8 +494,12 @@ onMounted(async () => {
 .process-header-state { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#74838c; }
 .process-toggle { color:#657782; white-space:nowrap; }
 .process-list { padding: 0 10px 8px 12px; border-top:1px solid #e2e7ea; }
-.process-step { display:flex; align-items:center; gap:7px; min-height:26px; border-bottom:1px dashed #e2e7ea; }
+.process-step { display:block; min-height:26px; border-bottom:1px dashed #e2e7ea; }
 .process-step:last-child { border-bottom:0; }
+.process-step-row { width:100%; min-height:26px; display:flex; align-items:center; gap:7px; border:0; background:transparent; color:inherit; text-align:left; padding:0; }
+.process-step-expand { cursor:pointer; }
+.process-step-expand:hover { color:#277a5c; }
+.process-step-chevron { width:10px; color:#73838c; font-size:15px; line-height:1; }
 .process-step-icon { display:inline-grid; place-items:center; width:16px; height:16px; border-radius:50%; background:#dce4e8; color:#71818b; font-size:11px; font-weight:700; }
 .process-step-message { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .process-step-count, .process-step-status { color:#81909a; white-space:nowrap; }
@@ -437,6 +507,15 @@ onMounted(async () => {
 .process-completed .process-step-icon { background:#dff2e8; color:#13855f; }
 .process-failed { color:#a34f4f; }
 .process-failed .process-step-icon { background:#f5dede; color:#a34f4f; }
+.process-details { margin:0 0 6px 27px; padding:6px 8px; border-left:2px solid #ccd8dc; background:#edf1f2; border-radius:4px; }
+.process-detail { padding:5px 0; border-bottom:1px solid #dce4e7; line-height:1.4; }
+.process-detail:last-child { border-bottom:0; }
+.process-detail-heading { display:flex; justify-content:space-between; gap:8px; color:#536671; font-weight:700; }
+.process-detail-kind { min-width:0; }
+.process-detail-rank { color:#81909a; font-weight:600; }
+.process-detail-source, .process-detail-chunk { color:#657782; overflow-wrap:anywhere; }
+.process-detail-chunk { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:10px; }
+.process-detail-excerpt { color:#687983; white-space:pre-wrap; overflow-wrap:anywhere; }
 .input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
 .plan-workspace { display: grid; gap: 16px; }
 .plan-form, .draft-card { padding: 20px; }

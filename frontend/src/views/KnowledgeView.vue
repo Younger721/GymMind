@@ -18,6 +18,14 @@
         <el-select v-model="uploadAudienceRoles" multiple collapse-tags collapse-tags-tooltip placeholder="面向角色" style="width: 220px; margin-right: 8px" @click.stop>
           <el-option v-for="option in audienceRoleOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
+        <el-select v-model="uploadKnowledgeType" placeholder="知识类型" style="width: 150px; margin-right: 8px" @click.stop>
+          <el-option label="普通公告" value="GENERAL_NOTICE" /><el-option label="基础价格" value="BASE_PRICE" /><el-option label="促销规则" value="PROMOTION_RULE" />
+        </el-select>
+        <el-input v-model="uploadProduct" placeholder="适用卡种" style="width: 130px; margin-right: 8px" @click.stop />
+        <el-input-number v-if="uploadKnowledgeType === 'BASE_PRICE'" v-model="uploadPrice" :min="0" :precision="2" placeholder="价格" style="width: 130px; margin-right: 8px" @click.stop />
+        <el-input-number v-if="uploadKnowledgeType === 'PROMOTION_RULE'" v-model="uploadDiscount" :min="0" :max="1" :step="0.05" :precision="2" placeholder="折扣系数" style="width: 130px; margin-right: 8px" @click.stop />
+        <el-date-picker v-if="uploadKnowledgeType === 'PROMOTION_RULE'" v-model="uploadFrom" type="datetime" placeholder="生效时间" style="width: 180px; margin-right: 8px" @click.stop />
+        <el-date-picker v-if="uploadKnowledgeType === 'PROMOTION_RULE'" v-model="uploadTo" type="datetime" placeholder="失效时间" style="width: 180px; margin-right: 8px" @click.stop />
         <el-button type="primary" :loading="uploading" :disabled="!canManage">上传文档</el-button>
       </el-upload>
     </div>
@@ -105,6 +113,12 @@ const tenantAudienceRoles = ['GYM_ADMIN', 'COACH', 'MEMBER']
 const audienceRoleLabels: Record<string, string> = { PLATFORM_ADMIN: '平台管理员', GYM_ADMIN: '健身房管理员', COACH: '教练', MEMBER: '会员' }
 const audienceRoleOptions = computed(() => (authStore.isPlatformAdmin ? allAudienceRoles : tenantAudienceRoles).map(value => ({ value, label: audienceRoleLabels[value] })))
 const uploadAudienceRoles = ref<string[]>(authStore.isPlatformAdmin ? [...allAudienceRoles] : [...tenantAudienceRoles])
+const uploadKnowledgeType = ref('GENERAL_NOTICE')
+const uploadProduct = ref('')
+const uploadPrice = ref<number | undefined>()
+const uploadDiscount = ref<number | undefined>()
+const uploadFrom = ref<Date | undefined>()
+const uploadTo = ref<Date | undefined>()
 const saving = ref(false)
 const editVisible = ref(false)
 const editForm = reactive({
@@ -134,7 +148,11 @@ const handleUpload = async (options: UploadRequestOptions) => {
   if (!uploadAudienceRoles.value.length) { ElMessage.warning('至少选择一个面向角色'); return }
   uploading.value = true
   try {
-    await knowledgeApi.uploadDocument(options.file as File, 'TENANT', uploadCategory.value, uploadAudienceRoles.value)
+    await knowledgeApi.uploadDocument(options.file as File, 'TENANT', uploadCategory.value, uploadAudienceRoles.value, {
+      knowledgeType: uploadKnowledgeType.value, applicableProduct: uploadProduct.value || undefined,
+      priceAmount: uploadPrice.value, discountType: uploadKnowledgeType.value === 'PROMOTION_RULE' ? 'PERCENT' : undefined,
+      discountValue: uploadDiscount.value, effectiveFrom: uploadFrom.value?.toISOString(), effectiveTo: uploadTo.value?.toISOString()
+    })
     ElMessage.success('上传成功，正在解析')
     await load()
     startPolling()

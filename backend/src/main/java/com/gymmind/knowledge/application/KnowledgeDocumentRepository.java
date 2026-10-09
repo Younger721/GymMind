@@ -19,6 +19,7 @@ public interface KnowledgeDocumentRepository {
         return findByTenantIdAndId(tenantId, id);
     }
     default List<KnowledgeDocument> findByKnowledgeKey(Long tenantId, String key) { return List.of(); }
+    default List<KnowledgeDocument> findPriceRules(Long tenantId, String product) { return List.of(); }
 
     default List<KnowledgeDocument> findByTenantId(Long tenantId) {
         return List.of();

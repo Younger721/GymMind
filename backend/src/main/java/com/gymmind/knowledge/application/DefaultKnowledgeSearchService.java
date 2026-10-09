@@ -161,6 +161,9 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             fused = localRerank(query, fused);
         }
 
+        // Structured price evidence is appended after lexical/reranker stages so
+        // a short promotion notice cannot be discarded for having a weak vector.
+        fused = addStructuredPriceContext(actor, query, fused, searchableDocuments);
         fused = limitPerDocument(fused);
         emit(reporter, "rerank", AiProgressEvent.Status.COMPLETED, "重排序完成", fused.size(),
                 segmentDetails(fused, result.chunksById(), searchableDocuments, "重排序结果"));
@@ -169,6 +172,86 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         emit(reporter, "citation_prepare", AiProgressEvent.Status.COMPLETED, "引用整理完成", selected.size(),
                 segmentDetails(selected, result.chunksById(), searchableDocuments, "引用片段"));
         return selected;
+    }
+
+    private List<ContextSegment> addStructuredPriceContext(CurrentActor actor, String query,
+                                                            List<ContextSegment> existing,
+                                                            Map<Long, KnowledgeDocument> searchable) {
+        if (documents == null || !isPriceQuery(query)) return existing;
+        Long tenantId = ActorAccess.tenantId(actor);
+        String product = productTerm(query);
+        if (product == null) return existing;
+        List<KnowledgeDocument> candidates = new ArrayList<>();
+        if (tenantId != null && product != null) candidates.addAll(documents.findPriceRules(tenantId, product));
+        if (tenantId != null || actor.isPlatformAdmin()) candidates.addAll(documents.findPlatformDocuments());
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        List<KnowledgeDocument> current = candidates.stream()
+                .filter(d -> d.status() == DocumentStatus.READY && d.published())
+                .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE
+                        || d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
+                .filter(d -> d.applicableProduct() != null && d.applicableProduct().contains(product))
+                .filter(d -> d.tenantId() == null || d.tenantId().equals(tenantId))
+                .filter(d -> d.visibility() != DocumentVisibility.PRIVATE_USER
+                        && (actor.isPlatformAdmin() || d.effectiveAudienceRoles().stream().anyMatch(actor.roles()::contains)))
+                .filter(d -> d.knowledgeType() != com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE
+                        || (d.effectiveFrom() != null && d.effectiveTo() != null && !now.isBefore(d.effectiveFrom()) && now.isBefore(d.effectiveTo())))
+                .collect(Collectors.collectingAndThen(Collectors.toMap(
+                        d -> (d.tenantId() == null ? "platform" : d.tenantId()) + "|" + d.knowledgeType() + "|" + (d.knowledgeKey() == null ? d.id() : d.knowledgeKey()),
+                        d -> d, (left, right) -> left.knowledgeVersion() >= right.knowledgeVersion() ? left : right),
+                        map -> map.values().stream().sorted(Comparator
+                                .comparingInt(KnowledgeDocument::promotionPriority).reversed()).toList()));
+        List<KnowledgeDocument> promotions = current.stream()
+                .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE).toList();
+        List<KnowledgeDocument> eligible = promotions.size() > 1
+                ? List.of(promotions.get(0))
+                : current;
+        LinkedHashSet<String> ids = existing.stream().map(ContextSegment::documentId).collect(Collectors.toCollection(LinkedHashSet::new));
+        List<ContextSegment> result = new ArrayList<>(existing);
+        KnowledgeDocument base = eligible.stream().filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE)
+                .max(Comparator.comparingInt(KnowledgeDocument::knowledgeVersion)).orElse(null);
+        KnowledgeDocument winningPromotion = promotions.stream()
+                .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
+                .findFirst().orElse(null);
+        for (KnowledgeDocument d : eligible) {
+            if (!ids.add(String.valueOf(d.id()))) continue;
+            String text = structuredSummary(d, base, winningPromotion);
+            result.add(new ContextSegment("structured:" + d.id(), String.valueOf(d.id()), text,
+                    d.fileName(), d.knowledgeVersion(), d.knowledgeType().name()));
+        }
+        return result;
+    }
+
+    private static boolean isPriceQuery(String query) {
+        String value = query == null ? "" : query;
+        return value.contains("价格") || value.contains("多少钱") || value.contains("办卡") || value.contains("折") || value.contains("优惠");
+    }
+
+    private static String productTerm(String query) {
+        if (query == null) return null;
+        for (String product : List.of("月卡", "季卡", "年卡", "私教")) if (query.contains(product)) return product;
+        return null;
+    }
+
+    private static String structuredSummary(KnowledgeDocument d, KnowledgeDocument base, KnowledgeDocument winningPromotion) {
+        StringBuilder text = new StringBuilder("结构化知识依据：").append(d.fileName()).append(" v").append(d.knowledgeVersion()).append("，类型=").append(d.knowledgeType());
+        if (d.applicableProduct() != null) text.append("，适用项目=").append(d.applicableProduct());
+        if (d.priceAmount() != null) text.append("，基础价格=").append(d.priceAmount()).append("元");
+        if (d.discountType() != null) text.append("，优惠=").append(d.discountType()).append(" ").append(d.discountValue());
+        if (d.effectiveFrom() != null) text.append("，生效=").append(d.effectiveFrom());
+        if (d.effectiveTo() != null) text.append("，失效=").append(d.effectiveTo());
+        if (d.promotionConditions() != null) text.append("，条件=").append(d.promotionConditions());
+        if (d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE && d.equals(winningPromotion) && base != null) {
+            java.math.BigDecimal price = base.priceAmount();
+            switch (d.discountType()) {
+                case "PERCENT" -> price = price.multiply(d.discountValue());
+                case "FIXED_AMOUNT" -> price = price.subtract(d.discountValue()).max(java.math.BigDecimal.ZERO);
+                case "FIXED_PRICE" -> price = d.discountValue();
+                default -> { }
+            }
+            text.append("；计算：原价 ").append(base.priceAmount()).append("元，按优惠规则计算应付 ")
+                    .append(price.setScale(2, java.math.RoundingMode.HALF_UP)).append("元（不与其他优惠叠加）");
+        }
+        return text.toString();
     }
 
     private static List<ContextSegment> localRerank(String query, List<ContextSegment> candidates) {

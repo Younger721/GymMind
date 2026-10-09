@@ -16,6 +16,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import com.gymmind.knowledge.domain.model.KnowledgeType;
 
 @RestController
 @RequestMapping("/api/v1/knowledge/documents")
@@ -36,10 +39,20 @@ public class KnowledgeDocumentController {
             @RequestParam DocumentVisibility visibility,
             @RequestParam(defaultValue = "GENERAL") String category,
             @RequestParam(required = false) List<RoleCode> audienceRoles,
-            @RequestParam(required = false) Long replaceDocumentId) throws IOException {
+            @RequestParam(required = false) Long replaceDocumentId,
+            @RequestParam(required = false) KnowledgeType knowledgeType,
+            @RequestParam(required = false) String applicableProduct,
+            @RequestParam(required = false) BigDecimal priceAmount,
+            @RequestParam(required = false) String discountType,
+            @RequestParam(required = false) BigDecimal discountValue,
+            @RequestParam(required = false) LocalDateTime effectiveFrom,
+            @RequestParam(required = false) LocalDateTime effectiveTo,
+            @RequestParam(required = false) String conditions,
+            @RequestParam(required = false) Integer promotionPriority) throws IOException {
         return ApiResponse.success(useCase.upload(actors.requireCurrent(),
                 new UploadKnowledgeDocumentCommand(file.getOriginalFilename(), file.getContentType(),
-                        file.getBytes(), visibility, category, audienceRoles, replaceDocumentId)));
+                        file.getBytes(), visibility, category, audienceRoles, replaceDocumentId, knowledgeType,
+                        applicableProduct, priceAmount, discountType, discountValue, effectiveFrom, effectiveTo, conditions, promotionPriority, null)));
     }
 
     @GetMapping
