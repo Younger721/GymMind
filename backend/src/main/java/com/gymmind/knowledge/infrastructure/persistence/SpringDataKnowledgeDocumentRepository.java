@@ -23,8 +23,8 @@ interface SpringDataKnowledgeDocumentRepository extends JpaRepository<KnowledgeD
     List<KnowledgeDocument> findTop50ByTenantIdOrderByIdDesc(Long tenantId);
     List<KnowledgeDocument> findByTenantIdAndIdIn(Long tenantId, java.util.Collection<Long> ids);
     List<KnowledgeDocument> findByTenantIdAndKnowledgeKey(Long tenantId, String knowledgeKey);
-    @Query("select d from KnowledgeDocument d where d.tenantId = :tenantId and d.applicableProduct = :product and d.knowledgeType in (com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE, com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)")
-    List<KnowledgeDocument> findPriceRules(@Param("tenantId") Long tenantId, @Param("product") String product);
+    @Query("select d from KnowledgeDocument d where ((:tenantId is null and d.tenantId is null) or d.tenantId = :tenantId) and d.knowledgeType in (com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE, com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)")
+    List<KnowledgeDocument> findPriceRules(@Param("tenantId") Long tenantId);
     List<KnowledgeDocument> findByTenantIdIsNullOrderByIdDesc();
 
     List<KnowledgeDocument> findAllByOrderByIdDesc();

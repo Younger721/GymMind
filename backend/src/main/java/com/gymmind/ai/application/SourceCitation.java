@@ -4,15 +4,19 @@ import com.gymmind.ai.domain.ContextSegment;
 
 import java.util.Locale;
 
-public record SourceCitation(String chunkId, String documentId, String excerpt, String documentName, Integer documentVersion, String knowledgeType) {
+public record SourceCitation(String chunkId, String documentId, String excerpt, String documentName,
+                             Integer documentVersion, String knowledgeType, String knowledgeKey,
+                             java.time.LocalDateTime effectiveFrom, java.time.LocalDateTime effectiveTo) {
     private static final int MAX_EXCERPT_LENGTH = 360;
     public SourceCitation(String chunkId, String documentId, String excerpt) {
-        this(chunkId, documentId, excerpt, null, null, null);
+        this(chunkId, documentId, excerpt, null, null, null, null, null, null);
     }
 
     public static SourceCitation from(ContextSegment segment, String query) {
-        if (segment == null) return new SourceCitation(null, null, "", null, null, null);
-        return new SourceCitation(segment.id(), segment.documentId(), compactExcerpt(segment.text(), query), segment.documentName(), segment.documentVersion(), segment.knowledgeType());
+        if (segment == null) return new SourceCitation(null, null, "", null, null, null, null, null, null);
+        return new SourceCitation(segment.id(), segment.documentId(), compactExcerpt(segment.text(), query),
+                segment.documentName(), segment.documentVersion(), segment.knowledgeType(), segment.knowledgeKey(),
+                segment.effectiveFrom(), segment.effectiveTo());
     }
 
     static String compactExcerpt(String text, String query) {

@@ -189,7 +189,7 @@ import { canUseTenantOperation } from '@/utils/operationAccess'
 import { MENU_CODES } from '@/utils/menuPermissions'
 
 type AssistantMode = 'knowledge' | 'workout-plan'
-interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean; processStepExpanded?: Record<string, boolean> }
+interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean; processStepExpanded?: Record<string, boolean> }
 
 const route = useRoute()
 const router = useRouter()
@@ -244,7 +244,8 @@ const scrollBottom = () => nextTick(() => { if (boxRef.value) boxRef.value.scrol
 const sourceLabel = (s: NonNullable<UiMessage['sources']>[number]) => {
   if (typeof s === 'string') return s
   const version = s.documentVersion ? ' v' + s.documentVersion : ''
-  return (s.documentName || '知识库片段') + version + (s.excerpt ? '：' + s.excerpt : s.text ? '：' + s.text : '')
+  const dates = s.effectiveFrom || s.effectiveTo ? '（有效期：' + (s.effectiveFrom || '未注明') + ' 至 ' + (s.effectiveTo || '未注明') + '）' : ''
+  return (s.documentName || '知识库片段') + version + dates + (s.excerpt ? '：' + s.excerpt : s.text ? '：' + s.text : '')
 }
 const renderMarkdown = (content: string) => {
   const html = String(marked.parse(content, { breaks: true }))

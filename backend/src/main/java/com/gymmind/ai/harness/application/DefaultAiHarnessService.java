@@ -249,13 +249,16 @@ public class DefaultAiHarnessService implements AiHarnessService {
         }
         Consumer<AiProgressEvent> progress = onProgress == null ? ignored -> { } : onProgress;
         List<ContextSegment> context = new ArrayList<>();
-        boolean nativeToolFlow = model.supportsToolCalling() && toolOrchestrator != null;
         boolean knowledgeRetrieved = false;
         if (enabled.contains("knowledge_search")) {
             contributeKnowledge(actor, question, context, progress);
             knowledgeRetrieved = true;
         }
-        if (!nativeToolFlow) {
+        String authoritativeAnswer = context.stream().filter(ContextSegment::authoritativeAnswer)
+                .map(ContextSegment::text).filter(Objects::nonNull).findFirst().orElse(null);
+        boolean nativeToolFlow = authoritativeAnswer == null
+                && model.supportsToolCalling() && toolOrchestrator != null;
+        if (!nativeToolFlow && authoritativeAnswer == null) {
             for (String pluginId : enabled) {
                 if ("basic_chat".equals(pluginId) || (knowledgeRetrieved && "knowledge_search".equals(pluginId))) {
                     continue;
@@ -332,7 +335,11 @@ public class DefaultAiHarnessService implements AiHarnessService {
             }
         }
         com.gymmind.ai.application.ChatModelCallResult call;
-        if (nativeToolFlow && orchestration != null && orchestration.directAnswer() != null) {
+        if (authoritativeAnswer != null) {
+            String directAnswer = emitAnswer(authoritativeAnswer, onToken);
+            call = com.gymmind.ai.application.ChatModelCallResult.unavailable(directAnswer,
+                    Math.max(0, System.currentTimeMillis() - started), "OK");
+        } else if (nativeToolFlow && orchestration != null && orchestration.directAnswer() != null) {
             String directAnswer = emitAnswer(orchestration.directAnswer(), onToken);
             call = com.gymmind.ai.application.ChatModelCallResult.unavailable(directAnswer,
                     Math.max(0, System.currentTimeMillis() - started), "OK");
@@ -376,7 +383,8 @@ public class DefaultAiHarnessService implements AiHarnessService {
 
     private static boolean isUserVisibleSource(ContextSegment segment) {
         return segment != null && !"TOOL_RESULT".equals(segment.documentId())
-                && !"TOOL_ERROR".equals(segment.documentId());
+                && !"TOOL_ERROR".equals(segment.documentId())
+                && !segment.authoritativeAnswer();
     }
 
     private static String emitAnswer(String answer, Consumer<String> onToken) {

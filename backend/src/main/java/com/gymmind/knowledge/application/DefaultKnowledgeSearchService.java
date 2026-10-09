@@ -24,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -179,60 +180,144 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                                                             Map<Long, KnowledgeDocument> searchable) {
         if (documents == null || !isPriceQuery(query)) return existing;
         Long tenantId = ActorAccess.tenantId(actor);
-        String product = productTerm(query);
-        if (product == null) return existing;
         List<KnowledgeDocument> candidates = new ArrayList<>();
-        if (tenantId != null && product != null) candidates.addAll(documents.findPriceRules(tenantId, product));
-        if (tenantId != null || actor.isPlatformAdmin()) candidates.addAll(documents.findPlatformDocuments());
+        if (tenantId != null) candidates.addAll(documents.findPriceRules(tenantId));
+        if (tenantId != null || actor.isPlatformAdmin()) candidates.addAll(documents.findPriceRules(null));
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        List<KnowledgeDocument> current = candidates.stream()
+        List<KnowledgeDocument> currentPublished = candidates.stream()
                 .filter(d -> d.status() == DocumentStatus.READY && d.published())
-                .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE
-                        || d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
-                .filter(d -> d.applicableProduct() != null && d.applicableProduct().contains(product))
+                .collect(Collectors.collectingAndThen(Collectors.toMap(
+                        d -> (d.tenantId() == null ? "platform" : d.tenantId()) + "|"
+                                + (d.knowledgeKey() == null ? "document-" + d.id() : d.knowledgeKey()),
+                        d -> d, (left, right) -> left.knowledgeVersion() >= right.knowledgeVersion() ? left : right),
+                        map -> new ArrayList<>(map.values())));
+        List<KnowledgeDocument> accessible = currentPublished.stream()
                 .filter(d -> d.tenantId() == null || d.tenantId().equals(tenantId))
                 .filter(d -> d.visibility() != DocumentVisibility.PRIVATE_USER
                         && (actor.isPlatformAdmin() || d.effectiveAudienceRoles().stream().anyMatch(actor.roles()::contains)))
-                .filter(d -> d.knowledgeType() != com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE
-                        || (d.effectiveFrom() != null && d.effectiveTo() != null && !now.isBefore(d.effectiveFrom()) && now.isBefore(d.effectiveTo())))
-                .collect(Collectors.collectingAndThen(Collectors.toMap(
-                        d -> (d.tenantId() == null ? "platform" : d.tenantId()) + "|" + d.knowledgeType() + "|" + (d.knowledgeKey() == null ? d.id() : d.knowledgeKey()),
-                        d -> d, (left, right) -> left.knowledgeVersion() >= right.knowledgeVersion() ? left : right),
-                        map -> map.values().stream().sorted(Comparator
-                                .comparingInt(KnowledgeDocument::promotionPriority).reversed()).toList()));
-        List<KnowledgeDocument> promotions = current.stream()
-                .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE).toList();
-        List<KnowledgeDocument> eligible = promotions.size() > 1
-                ? List.of(promotions.get(0))
-                : current;
-        LinkedHashSet<String> ids = existing.stream().map(ContextSegment::documentId).collect(Collectors.toCollection(LinkedHashSet::new));
-        List<ContextSegment> result = new ArrayList<>(existing);
-        KnowledgeDocument base = eligible.stream().filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE)
-                .max(Comparator.comparingInt(KnowledgeDocument::knowledgeVersion)).orElse(null);
-        KnowledgeDocument winningPromotion = promotions.stream()
-                .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
-                .findFirst().orElse(null);
-        for (KnowledgeDocument d : eligible) {
-            if (!ids.add(String.valueOf(d.id()))) continue;
-            String text = structuredSummary(d, base, winningPromotion);
-            result.add(new ContextSegment("structured:" + d.id(), String.valueOf(d.id()), text,
-                    d.fileName(), d.knowledgeVersion(), d.knowledgeType().name()));
+                .toList();
+        String normalizedQuery = normalizeProduct(query);
+        List<String> matchedProducts = accessible.stream()
+                .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE)
+                .map(KnowledgeDocument::applicableProduct).filter(Objects::nonNull).distinct()
+                .filter(product -> normalizedQuery.contains(normalizeProduct(product))).toList();
+        List<KnowledgeDocument> relevant = new ArrayList<>();
+        String answer;
+        if (matchedProducts.size() != 1) {
+            List<String> choices = accessible.stream()
+                    .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE)
+                    .map(KnowledgeDocument::applicableProduct).filter(Objects::nonNull).distinct().sorted().toList();
+            answer = choices.isEmpty()
+                    ? "当前没有已发布且可确认的结构化价目。"
+                    : "请先确认卡种" + (matchedProducts.size() > 1 ? "（问题中包含多个卡种）" : "")
+                    + "，当前可查询的卡种有：" + String.join("、", choices) + "。";
+            relevant.addAll(accessible.stream().filter(d ->
+                    d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE).toList());
+        } else {
+            String product = matchedProducts.get(0);
+            List<KnowledgeDocument> prices = accessible.stream()
+                    .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE)
+                    .filter(d -> product.equalsIgnoreCase(d.applicableProduct())).toList();
+            List<KnowledgeDocument> activePromotions = accessible.stream()
+                    .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
+                    .filter(d -> product.equalsIgnoreCase(d.applicableProduct()))
+                    .filter(d -> d.effectiveFrom() != null && d.effectiveTo() != null
+                            && !now.isBefore(d.effectiveFrom()) && now.isBefore(d.effectiveTo()))
+                    .sorted(Comparator.comparingInt(KnowledgeDocument::promotionPriority).reversed()).toList();
+            List<KnowledgeDocument> undatedPromotions = accessible.stream()
+                    .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
+                    .filter(d -> product.equalsIgnoreCase(d.applicableProduct()))
+                    .filter(d -> d.effectiveFrom() == null || d.effectiveTo() == null).toList();
+            relevant.addAll(prices);
+            relevant.addAll(activePromotions);
+            relevant.addAll(undatedPromotions);
+            if (prices.isEmpty()) {
+                answer = "未找到已发布且可确认的" + product + "基础价格；暂不能计算应付价格。";
+            } else {
+                List<KnowledgeDocument> distinctPrices = prices.stream()
+                        .collect(Collectors.collectingAndThen(Collectors.toMap(
+                                d -> d.priceAmount().stripTrailingZeros().toPlainString(), d -> d,
+                                (left, right) -> left), map -> new ArrayList<>(map.values())));
+                if (distinctPrices.size() > 1) {
+                    answer = "当前" + product + "存在多个已发布价格，需人工确认后才能报价："
+                            + sourceNames(prices) + "。";
+                } else if (!undatedPromotions.isEmpty()) {
+                    answer = "当前" + product + "基础价格为" + prices.get(0).priceAmount().toPlainString()
+                            + "元，但存在未注明完整有效期的促销规则，需人工确认优惠后再报价。";
+                } else if (!activePromotions.isEmpty() && activePromotions.get(0).promotionConditions() != null) {
+                    answer = "当前" + product + "基础价格为" + prices.get(0).priceAmount().toPlainString()
+                            + "元；促销规则含有未结构化适用条件，需人工确认后才能确定优惠价。";
+                } else if (!activePromotions.isEmpty()
+                        && activePromotions.size() > 1
+                        && activePromotions.get(0).promotionPriority() == activePromotions.get(1).promotionPriority()) {
+                    List<KnowledgeDocument> conflicts = activePromotions.stream()
+                            .filter(d -> d.promotionPriority() == activePromotions.get(0).promotionPriority()).toList();
+                    relevant.clear();
+                    relevant.addAll(prices);
+                    relevant.addAll(conflicts);
+                    answer = "当前" + product + "存在同优先级促销冲突，需人工确认：" + sourceNames(conflicts) + "。";
+                } else if (activePromotions.isEmpty()) {
+                    answer = "根据《" + prices.get(0).fileName() + "》v" + prices.get(0).knowledgeVersion()
+                            + "，" + product + "当前价格为" + prices.get(0).priceAmount().toPlainString()
+                            + "元；没有检索到当前有效的促销规则。";
+                } else {
+                    KnowledgeDocument base = prices.get(0);
+                    KnowledgeDocument promotion = activePromotions.get(0);
+                    BigDecimal finalPrice = calculatePrice(base.priceAmount(), promotion);
+                    answer = "根据《" + base.fileName() + "》v" + base.knowledgeVersion() + "，" + product
+                            + "原价为" + base.priceAmount().toPlainString() + "元；根据《" + promotion.fileName()
+                            + "》v" + promotion.knowledgeVersion() + "，活动优惠为" + promotionDescription(promotion)
+                            + "，有效期" + promotion.effectiveFrom() + "至" + promotion.effectiveTo()
+                            + "。按原价计算：" + base.priceAmount().toPlainString() + "元 → "
+                            + finalPrice.toPlainString() + "元（不与其他优惠叠加）。";
+                }
+            }
         }
+        List<ContextSegment> result = new ArrayList<>();
+        result.add(new ContextSegment("price-answer:" + (tenantId == null ? "platform" : tenantId) + ":" + System.nanoTime(),
+                "PRICE_RESULT", answer, null, null, "PRICE_RESULT", null, null, null, true));
+        relevant.stream().collect(Collectors.toMap(KnowledgeDocument::id, d -> d, (left, right) -> left,
+                        java.util.LinkedHashMap::new)).values()
+                .forEach(d -> result.add(new ContextSegment("structured:" + d.id(), String.valueOf(d.id()),
+                        structuredSummary(d), d.fileName(), d.knowledgeVersion(), d.knowledgeType().name(),
+                        d.knowledgeKey(), d.effectiveFrom(), d.effectiveTo(), false)));
         return result;
     }
 
     private static boolean isPriceQuery(String query) {
         String value = query == null ? "" : query;
-        return value.contains("价格") || value.contains("多少钱") || value.contains("办卡") || value.contains("折") || value.contains("优惠");
+        return List.of("价格", "多少钱", "收费", "费用", "原价", "优惠", "折扣", "打折", "几折", "办卡")
+                .stream().anyMatch(value::contains);
     }
 
-    private static String productTerm(String query) {
-        if (query == null) return null;
-        for (String product : List.of("月卡", "季卡", "年卡", "私教")) if (query.contains(product)) return product;
-        return null;
+    private static String normalizeProduct(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT).replaceAll("[\\s、,，。:：?？]+", "");
     }
 
-    private static String structuredSummary(KnowledgeDocument d, KnowledgeDocument base, KnowledgeDocument winningPromotion) {
+    private static String sourceNames(List<KnowledgeDocument> documents) {
+        return documents.stream().map(d -> "《" + d.fileName() + "》v" + d.knowledgeVersion())
+                .distinct().collect(Collectors.joining("、"));
+    }
+
+    private static String promotionDescription(KnowledgeDocument promotion) {
+        return switch (promotion.discountType()) {
+            case "PERCENT" -> promotion.discountValue().stripTrailingZeros().toPlainString() + "倍优惠";
+            case "FIXED_AMOUNT" -> "减免" + promotion.discountValue().stripTrailingZeros().toPlainString() + "元";
+            case "FIXED_PRICE" -> "优惠价" + promotion.discountValue().stripTrailingZeros().toPlainString() + "元";
+            default -> "未识别的优惠形式";
+        };
+    }
+
+    private static BigDecimal calculatePrice(BigDecimal base, KnowledgeDocument promotion) {
+        return (switch (promotion.discountType()) {
+            case "PERCENT" -> base.multiply(promotion.discountValue());
+            case "FIXED_AMOUNT" -> base.subtract(promotion.discountValue()).max(BigDecimal.ZERO);
+            case "FIXED_PRICE" -> promotion.discountValue();
+            default -> base;
+        }).setScale(2, java.math.RoundingMode.HALF_UP).stripTrailingZeros();
+    }
+
+    private static String structuredSummary(KnowledgeDocument d) {
         StringBuilder text = new StringBuilder("结构化知识依据：").append(d.fileName()).append(" v").append(d.knowledgeVersion()).append("，类型=").append(d.knowledgeType());
         if (d.applicableProduct() != null) text.append("，适用项目=").append(d.applicableProduct());
         if (d.priceAmount() != null) text.append("，基础价格=").append(d.priceAmount()).append("元");
@@ -240,17 +325,6 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         if (d.effectiveFrom() != null) text.append("，生效=").append(d.effectiveFrom());
         if (d.effectiveTo() != null) text.append("，失效=").append(d.effectiveTo());
         if (d.promotionConditions() != null) text.append("，条件=").append(d.promotionConditions());
-        if (d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE && d.equals(winningPromotion) && base != null) {
-            java.math.BigDecimal price = base.priceAmount();
-            switch (d.discountType()) {
-                case "PERCENT" -> price = price.multiply(d.discountValue());
-                case "FIXED_AMOUNT" -> price = price.subtract(d.discountValue()).max(java.math.BigDecimal.ZERO);
-                case "FIXED_PRICE" -> price = d.discountValue();
-                default -> { }
-            }
-            text.append("；计算：原价 ").append(base.priceAmount()).append("元，按优惠规则计算应付 ")
-                    .append(price.setScale(2, java.math.RoundingMode.HALF_UP)).append("元（不与其他优惠叠加）");
-        }
         return text.toString();
     }
 
@@ -359,6 +433,13 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         return result.segments().stream().filter(segment -> {
             IndexedChunk chunk = result.chunksById().get(segment.id());
             return chunk == null || chunk.documentId() == null || searchable.containsKey(chunk.documentId());
+        }).map(segment -> {
+            IndexedChunk chunk = result.chunksById().get(segment.id());
+            KnowledgeDocument document = chunk == null || chunk.documentId() == null
+                    ? null : searchable.get(chunk.documentId());
+            return document == null ? segment : new ContextSegment(segment.id(), segment.documentId(), segment.text(),
+                    document.fileName(), document.knowledgeVersion(), document.knowledgeType().name(),
+                    document.knowledgeKey(), document.effectiveFrom(), document.effectiveTo(), false);
         }).toList();
     }
 
@@ -376,21 +457,30 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             if (tenantId != null) documents.findByTenantIdAndIdIn(tenantId, ids).forEach(document -> searchable.put(document.id(), document));
             documents.findPlatformDocuments().forEach(document -> searchable.put(document.id(), document));
         }
+        List<KnowledgeDocument> indexedDocuments = new ArrayList<>(searchable.values());
+        for (KnowledgeDocument document : indexedDocuments) {
+            if (document.knowledgeKey() == null) continue;
+            documents.findByKnowledgeKey(document.tenantId(), document.knowledgeKey())
+                    .forEach(version -> searchable.put(version.id(), version));
+        }
         searchable.values().removeIf(document -> document.status() != DocumentStatus.READY || !document.published()
-                || (document.visibility() == DocumentVisibility.PRIVATE_USER
-                    && !Objects.equals(document.ownerUserId(), actor.userId()))
-                || (document.visibility() != DocumentVisibility.PRIVATE_USER
-                    && !ActorAccess.canManageTenant(actor)
-                    && document.tenantId() != null
-                    && document.visibility() != DocumentVisibility.TENANT)
-                || (!actor.isPlatformAdmin()
-                    && document.effectiveAudienceRoles().stream().noneMatch(actor.roles()::contains)));
+        );
         Map<String, Integer> latest = searchable.values().stream().filter(d -> d.knowledgeKey() != null)
-                .collect(Collectors.groupingBy(d -> (d.tenantId() == null ? "platform" : d.tenantId()) + "|" + d.knowledgeKey(),
+                .collect(Collectors.groupingBy(d -> (d.tenantId() == null ? "platform" : d.tenantId())
+                                + "|" + d.knowledgeKey(),
                         Collectors.collectingAndThen(Collectors.maxBy(Comparator.comparingInt(KnowledgeDocument::knowledgeVersion)),
                                 value -> value.map(KnowledgeDocument::knowledgeVersion).orElse(1))));
         searchable.values().removeIf(document -> document.knowledgeKey() != null
                 && document.knowledgeVersion() < latest.getOrDefault((document.tenantId() == null ? "platform" : document.tenantId()) + "|" + document.knowledgeKey(), document.knowledgeVersion()));
+        searchable.values().removeIf(document ->
+                (document.visibility() == DocumentVisibility.PRIVATE_USER
+                        && !Objects.equals(document.ownerUserId(), actor.userId()))
+                        || (document.visibility() != DocumentVisibility.PRIVATE_USER
+                        && !ActorAccess.canManageTenant(actor)
+                        && document.tenantId() != null
+                        && document.visibility() != DocumentVisibility.TENANT)
+                        || (!actor.isPlatformAdmin()
+                        && document.effectiveAudienceRoles().stream().noneMatch(actor.roles()::contains)));
         return searchable;
     }
 

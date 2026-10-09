@@ -102,6 +102,15 @@ public class DefaultAiChatService implements AiChatService {
             recordUsage(actor, started, "NO_CONTEXT");
             return new AiChatView("没有找到足够可靠的知识依据，暂不提供确定性建议。", List.of(), List.of());
         }
+        String authoritativeAnswer = context.stream().filter(ContextSegment::authoritativeAnswer)
+                .map(ContextSegment::text).filter(Objects::nonNull).findFirst().orElse(null);
+        if (authoritativeAnswer != null) {
+            var sources = context.stream().filter(item -> !item.authoritativeAnswer())
+                    .map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
+            var citations = context.stream().filter(item -> !item.authoritativeAnswer() && item.id() != null)
+                    .map(item -> SourceCitation.from(item, question)).distinct().toList();
+            return new AiChatView(authoritativeAnswer, sources, citations);
+        }
 
         ChatModelCallResult call = model.completeWithUsage(withProfile(question, actor, intent), context);
         if (call == null) {
