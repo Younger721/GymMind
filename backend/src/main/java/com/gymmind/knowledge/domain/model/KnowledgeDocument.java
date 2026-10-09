@@ -12,13 +12,16 @@ public class KnowledgeDocument {
     // Platform documents are shared across tenants and intentionally have no tenant id.
     @Column(name="tenant_id", nullable=true) private Long tenantId;
     @Column(name="owner_user_id") private Long ownerUserId;
+    @Column(name="uploader_user_id") private Long uploaderUserId;
     @Column(nullable=false, length=255) private String fileName;
     @Column(nullable=false, length=128) private String contentType;
     @Column(nullable=false, length=512) private String objectKey;
     @Enumerated(EnumType.STRING) @Column(nullable=false, length=20) private DocumentVisibility visibility;
     @Enumerated(EnumType.STRING) @Column(nullable=false, length=20) private DocumentStatus status;
     @Column(nullable=false, length=32) private String category = "GENERAL";
-    @Column(nullable=false) private boolean published = true;
+    @Column(nullable=false) private boolean published = false;
+    @Column(name="knowledge_key", length=128) private String knowledgeKey;
+    @Column(name="knowledge_version", nullable=false) private int knowledgeVersion = 1;
     /**
      * The strategy is nullable at the database level so records created before
      * structured chunking was introduced remain readable. Accessors expose the
@@ -44,6 +47,7 @@ public class KnowledgeDocument {
     public static KnowledgeDocument create(Long tenantId, Long ownerUserId, String fileName, String contentType, DocumentVisibility visibility, Long sequence) { return new KnowledgeDocument(tenantId,ownerUserId,fileName,contentType,visibility,sequence == null ? null : String.valueOf(sequence)); }
     public static KnowledgeDocument create(Long tenantId, Long ownerUserId, String fileName, String contentType, DocumentVisibility visibility, String keySegment) { return new KnowledgeDocument(tenantId,ownerUserId,fileName,contentType,visibility,keySegment); }
     public void assignId(Long id) { if (this.id != null || id == null || id <= 0) throw new IllegalStateException("id already assigned"); this.id=id; }
+    public void recordUploader(Long userId) { if (userId == null || userId <= 0) throw new IllegalArgumentException("uploader required"); uploaderUserId = userId; }
     public void markParsing() { if (status != DocumentStatus.UPLOADING && status != DocumentStatus.READY && status != DocumentStatus.FAILED && status != DocumentStatus.PARSING) throw new IllegalStateException("invalid status transition"); status=DocumentStatus.PARSING; }
     public void markReady() { if (status != DocumentStatus.UPLOADING && status != DocumentStatus.PARSING) throw new IllegalStateException("invalid status transition"); status=DocumentStatus.READY; }
     public void markFailed() { if (status != DocumentStatus.PARSING && status != DocumentStatus.UPLOADING) throw new IllegalStateException("invalid status transition"); status=DocumentStatus.FAILED; }
@@ -62,6 +66,7 @@ public class KnowledgeDocument {
         ownerUserId = newVisibility == DocumentVisibility.PRIVATE_USER ? actorUserId : null;
     }
     public void updateCategory(String newCategory) { if (newCategory == null || newCategory.isBlank()) throw new IllegalArgumentException("category required"); category = newCategory.trim().toUpperCase(); }
+    public void assignVersion(String key, int version) { if (key == null || key.isBlank() || version <= 0) throw new IllegalArgumentException("invalid knowledge version"); knowledgeKey = key.trim(); knowledgeVersion = version; }
     public void updateChunkStrategy(String newStrategy, int newVersion) {
         if (newStrategy == null || newStrategy.isBlank()) {
             throw new IllegalArgumentException("chunk strategy required");
@@ -104,7 +109,7 @@ public class KnowledgeDocument {
         }
         return result.length() <= 255 ? result : result.substring(0, 255);
     }
-    public Long id(){return id;} public Long tenantId(){return tenantId;} public Long ownerUserId(){return ownerUserId;} public String fileName(){return fileName;} public String contentType(){return contentType;} public String objectKey(){return objectKey;} public DocumentVisibility visibility(){return visibility;} public DocumentStatus status(){return status;} public String category(){return category;} public boolean published(){return published;}
+    public Long id(){return id;} public Long tenantId(){return tenantId;} public Long ownerUserId(){return ownerUserId;} public Long uploaderUserId(){return uploaderUserId;} public String fileName(){return fileName;} public String contentType(){return contentType;} public String objectKey(){return objectKey;} public DocumentVisibility visibility(){return visibility;} public DocumentStatus status(){return status;} public String category(){return category;} public boolean published(){return published;} public String knowledgeKey(){return knowledgeKey;} public int knowledgeVersion(){return knowledgeVersion;}
     public Set<RoleCode> audienceRoles(){return Set.copyOf(audienceRoles == null ? Set.of() : audienceRoles);}
     public Set<RoleCode> effectiveAudienceRoles(){
         if (audienceRoles != null && !audienceRoles.isEmpty()) return audienceRoles();

@@ -38,6 +38,7 @@ public class JpaKnowledgeDocumentRepository implements KnowledgeDocumentReposito
     public List<KnowledgeDocument> findByTenantIdAndIdIn(Long tenantId, java.util.Collection<Long> ids) {
         return ids == null || ids.isEmpty() ? List.of() : delegate.findByTenantIdAndIdIn(tenantId, ids);
     }
+    public List<KnowledgeDocument> findByKnowledgeKey(Long tenantId, String key) { return delegate.findByTenantIdAndKnowledgeKey(tenantId, key); }
     public List<KnowledgeDocument> findPlatformDocuments() { return delegate.findByTenantIdIsNullOrderByIdDesc(); }
 
     public List<KnowledgeDocument> findAllDocuments() {

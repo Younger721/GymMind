@@ -13,7 +13,7 @@ import java.util.Optional;
 @Component
 @ConditionalOnProperty(name = "gymmind.search.vector-backend", havingValue = "milvus")
 public class MilvusVectorIndex implements VectorIndexPort {
-    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "documentId", "ownerUserId", "text");
+    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "documentId", "ownerUserId", "knowledgeKey", "knowledgeVersion", "text");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final RestClient client;
     private final String collection;
@@ -32,6 +32,8 @@ public class MilvusVectorIndex implements VectorIndexPort {
                 field("tenantId", "Int64", false, Map.of()),
                 field("documentId", "Int64", false, Map.of()),
                 field("ownerUserId", "Int64", false, Map.of()),
+                field("knowledgeKey", "VarChar", false, Map.of("max_length", "128")),
+                field("knowledgeVersion", "Int64", false, Map.of()),
                 field("text", "VarChar", false, Map.of("max_length", "65535")),
                 field("vector", "FloatVector", false, Map.of("dim", "1024")));
         return Map.of("collectionName", name,
@@ -50,6 +52,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
                 "id", chunk.id(), "tenantId", chunk.tenantId(),
                 "documentId", chunk.documentId() == null ? 0L : chunk.documentId(),
                 "ownerUserId", chunk.ownerUserId() == null ? 0L : chunk.ownerUserId(),
+                "knowledgeKey", chunk.knowledgeKey() == null ? "" : chunk.knowledgeKey(), "knowledgeVersion", chunk.knowledgeVersion(),
                 "text", chunk.text(), "vector", chunk.vector())));
     }
 
@@ -72,7 +75,8 @@ public class MilvusVectorIndex implements VectorIndexPort {
                 long documentId = row.path("documentId").asLong();
                 chunks.add(new IndexedChunk(row.path("id").asText(), row.path("tenantId").asLong(),
                         documentId == 0 ? null : documentId,
-                        owner == 0 ? null : owner, row.path("text").asText(), null));
+                        owner == 0 ? null : owner, row.path("text").asText(), null,
+                        row.path("knowledgeKey").asText(null), row.path("knowledgeVersion").asInt(1)));
             }
             return chunks;
         } catch (Exception ignored) {

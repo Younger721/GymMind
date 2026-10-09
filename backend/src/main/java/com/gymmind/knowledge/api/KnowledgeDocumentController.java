@@ -35,10 +35,11 @@ public class KnowledgeDocumentController {
             @RequestPart("file") MultipartFile file,
             @RequestParam DocumentVisibility visibility,
             @RequestParam(defaultValue = "GENERAL") String category,
-            @RequestParam(required = false) List<RoleCode> audienceRoles) throws IOException {
+            @RequestParam(required = false) List<RoleCode> audienceRoles,
+            @RequestParam(required = false) Long replaceDocumentId) throws IOException {
         return ApiResponse.success(useCase.upload(actors.requireCurrent(),
                 new UploadKnowledgeDocumentCommand(file.getOriginalFilename(), file.getContentType(),
-                        file.getBytes(), visibility, category, audienceRoles)));
+                        file.getBytes(), visibility, category, audienceRoles, replaceDocumentId)));
     }
 
     @GetMapping

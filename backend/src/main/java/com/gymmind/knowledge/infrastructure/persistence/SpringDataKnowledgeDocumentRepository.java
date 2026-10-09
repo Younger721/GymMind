@@ -22,6 +22,7 @@ interface SpringDataKnowledgeDocumentRepository extends JpaRepository<KnowledgeD
 
     List<KnowledgeDocument> findTop50ByTenantIdOrderByIdDesc(Long tenantId);
     List<KnowledgeDocument> findByTenantIdAndIdIn(Long tenantId, java.util.Collection<Long> ids);
+    List<KnowledgeDocument> findByTenantIdAndKnowledgeKey(Long tenantId, String knowledgeKey);
     List<KnowledgeDocument> findByTenantIdIsNullOrderByIdDesc();
 
     List<KnowledgeDocument> findAllByOrderByIdDesc();

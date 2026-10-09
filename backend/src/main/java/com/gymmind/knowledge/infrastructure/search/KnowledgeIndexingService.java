@@ -48,6 +48,11 @@ public class KnowledgeIndexingService {
     public boolean publish(Long tenantId, Long documentId, Long ownerUserId,
                            String fileName, String contentType, byte[] bytes,
                            String strategyName, Integer strategyVersion) {
+        return publish(tenantId, documentId, ownerUserId, fileName, contentType, bytes, strategyName, strategyVersion, null, 1);
+    }
+    public boolean publish(Long tenantId, Long documentId, Long ownerUserId,
+                           String fileName, String contentType, byte[] bytes,
+                           String strategyName, Integer strategyVersion, String knowledgeKey, int knowledgeVersion) {
         if (documentId == null || bytes == null) return false;
         long indexTenantId = tenantId == null ? PLATFORM_INDEX_TENANT_ID : tenantId;
         ChunkStrategy strategy = parseStrategy(strategyName);
@@ -66,7 +71,7 @@ public class KnowledgeIndexingService {
         var indexed = new java.util.ArrayList<IndexedChunk>();
         for (int i = 0; i < parsedChunks.size(); i++) {
             indexed.add(new IndexedChunk(parsedChunks.get(i).id(), indexTenantId, documentId, ownerUserId,
-                    parsedChunks.get(i).text(), vectors.get(i)));
+                    parsedChunks.get(i).text(), vectors.get(i), knowledgeKey, knowledgeVersion));
         }
         long generation = System.currentTimeMillis();
         String generationKey = "document-" + documentId + "-" + strategy.name() + "-v" + version + "-" + generation;

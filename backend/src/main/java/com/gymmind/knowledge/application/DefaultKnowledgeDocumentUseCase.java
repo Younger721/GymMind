@@ -1,6 +1,7 @@
 package com.gymmind.knowledge.application;
 
 import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.iam.domain.repository.UserAccountRepository;
 import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
@@ -25,9 +26,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase {
+    private static final ConcurrentHashMap<String, Object> VERSION_LOCKS = new ConcurrentHashMap<>();
 
     private final KnowledgeDocumentRepository repository;
     private final KnowledgeObjectStore store;
@@ -36,9 +39,10 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
     private final TenantQuotaService quotas;
     private final DocumentParserRegistry parser = DocumentParserRegistry.standard();
     private final ChunkStrategySelector strategySelector;
+    private final UserAccountRepository users;
 
     public DefaultKnowledgeDocumentUseCase(KnowledgeDocumentRepository repository, KnowledgeObjectStore store) {
-        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null);
+        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null, null);
     }
 
     public DefaultKnowledgeDocumentUseCase(
@@ -47,7 +51,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             KnowledgeIndexingService indexing,
             KnowledgeIngestWorker ingestWorker,
             TenantQuotaService quotas) {
-        this(repository, store, indexing, ingestWorker, quotas, null);
+        this(repository, store, indexing, ingestWorker, quotas, null, null);
     }
 
     @Autowired
@@ -57,13 +61,15 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             KnowledgeIndexingService indexing,
             KnowledgeIngestWorker ingestWorker,
             TenantQuotaService quotas,
-            ChatModelGateway chatModel) {
+            ChatModelGateway chatModel,
+            UserAccountRepository users) {
         this.repository = repository;
         this.store = store;
         this.indexing = indexing;
         this.ingestWorker = ingestWorker;
         this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
         this.strategySelector = new ChunkStrategySelector(chatModel);
+        this.users = users;
     }
 
     @Override
@@ -73,8 +79,31 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         if (tenantId != null) quotas.ensureKnowledgeUploadAllowed(tenantId);
         KnowledgeDocumentValidator.validate(command);
         Long owner = command.visibility() == DocumentVisibility.PRIVATE_USER ? actor.userId() : null;
+        KnowledgeDocument replacement = null;
+        if (command.replaceDocumentId() != null) {
+            replacement = tenantId == null
+                    ? repository.findForUpdateById(command.replaceDocumentId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND))
+                    : repository.findForUpdateByTenantIdAndId(tenantId, command.replaceDocumentId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        }
+        if (replacement != null && !Objects.equals(replacement.tenantId(), tenantId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        if (replacement != null && replacement.status() == DocumentStatus.DELETED) throw new BusinessException(ErrorCode.CONFLICT);
         KnowledgeDocument document = KnowledgeDocument.create(tenantId, owner, command.fileName(),
                 command.contentType(), command.visibility(), UUID.randomUUID().toString());
+        if (replacement != null) {
+            String key = replacement.knowledgeKey() == null ? "document-" + replacement.id() : replacement.knowledgeKey();
+            synchronized (VERSION_LOCKS.computeIfAbsent(versionLockKey(tenantId, key), ignored -> new Object())) {
+                if (replacement.knowledgeKey() == null) {
+                    replacement.assignVersion(key, replacement.knowledgeVersion());
+                    repository.save(replacement);
+                }
+                document.assignVersion(key, repository.findByKnowledgeKey(tenantId, key).stream()
+                        .mapToInt(KnowledgeDocument::knowledgeVersion)
+                        .max().orElse(replacement.knowledgeVersion()) + 1);
+            }
+        }
+        document.recordUploader(actor.userId());
         document.updateCategory(command.category());
         document.updateAudienceRoles(resolveAudienceRoles(actor, tenantId, command.visibility(), command.audienceRoles()));
         document.updateChunkStrategy(selectChunkStrategy(command), 1);
@@ -83,7 +112,11 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         if (ingestWorker != null) {
             ingestWorker.enqueue(saved.tenantId(), saved.id());
         }
-        return KnowledgeDocumentView.from(saved);
+        return view(saved);
+    }
+
+    private static String versionLockKey(Long tenantId, String knowledgeKey) {
+        return (tenantId == null ? "platform" : tenantId.toString()) + "|" + knowledgeKey;
     }
 
     @Override
@@ -91,7 +124,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         requireRead(actor);
         KnowledgeDocument document = get(actor, id);
         ensureReadable(actor, document);
-        return KnowledgeDocumentView.from(document);
+        return view(document);
     }
 
     @Override
@@ -123,7 +156,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         if (changed && ingestWorker != null) {
             ingestWorker.enqueue(saved.tenantId(), saved.id());
         }
-        return KnowledgeDocumentView.from(saved);
+        return view(saved);
     }
 
     @Override
@@ -139,7 +172,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
                 indexing.deleteDocument(document.tenantId(), document.id());
             }
         }
-        return KnowledgeDocumentView.from(repository.save(document));
+        return view(repository.save(document));
     }
 
     @Override
@@ -152,7 +185,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         }
         document.tombstone();
         store.delete(document.objectKey());
-        return KnowledgeDocumentView.from(repository.save(document));
+        return view(repository.save(document));
     }
 
     @Override
@@ -161,7 +194,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         if (actor.isPlatformAdmin()) {
             return repository.findAllDocuments().stream()
                     .filter(document -> document.status() != DocumentStatus.DELETED)
-                    .map(KnowledgeDocumentView::from)
+                    .map(this::view)
                     .toList();
         }
         Long tenantId = ActorAccess.requireTenantId(actor);
@@ -172,7 +205,17 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
                     || (document.ownerUserId() != null && document.ownerUserId().equals(actor.userId())))
                     .filter(document -> document.effectiveAudienceRoles().stream().anyMatch(actor.roles()::contains));
         }
-        return stream.map(KnowledgeDocumentView::from).toList();
+        return stream.map(this::view).toList();
+    }
+
+    private KnowledgeDocumentView view(KnowledgeDocument document) {
+        if (users == null || document.uploaderUserId() == null) {
+            return KnowledgeDocumentView.from(document);
+        }
+        String uploader = users.findById(document.uploaderUserId())
+                .map(user -> user.getDisplayName())
+                .orElse(null);
+        return KnowledgeDocumentView.from(document, uploader);
     }
 
     @Override

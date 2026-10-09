@@ -76,7 +76,7 @@ public class KnowledgeIngestWorker {
                         document.fileName(), document.contentType(), bytes)
                         : indexing.publish(document.tenantId(), document.id(), document.ownerUserId(),
                         document.fileName(), document.contentType(), bytes,
-                        document.chunkStrategy(), document.chunkStrategyVersion());
+                        document.chunkStrategy(), document.chunkStrategyVersion(), document.knowledgeKey(), document.knowledgeVersion());
                 if (!published) {
                     throw new IllegalStateException("knowledge indexing is unavailable");
                 }

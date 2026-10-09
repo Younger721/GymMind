@@ -10,9 +10,11 @@ import com.gymmind.ai.harness.AiProgressEvent;
 import com.gymmind.knowledge.infrastructure.search.KeywordIndexPort;
 import com.gymmind.knowledge.infrastructure.search.VectorIndexPort;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
+import com.gymmind.knowledge.infrastructure.search.IndexedChunk;
 import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
+import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
@@ -22,13 +24,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 @Service
 public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
@@ -36,6 +43,9 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
     private static final int RECALL_TOP_K = 30;
     private static final int FUSION_TOP_K = 20;
     private static final int MAX_SEGMENTS_PER_DOCUMENT = 2;
+    private static final int MAX_PROGRESS_DETAILS = 20;
+    private static final int MAX_PROGRESS_EXCERPT = 300;
+    private static final Pattern QUERY_PARTS = Pattern.compile("[^\\p{IsHan}A-Za-z0-9]+");
 
     private final HybridRetriever retriever;
     private final RerankGateway rerank;
@@ -88,13 +98,43 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
 
         emit(reporter, "permission_filter", AiProgressEvent.Status.RUNNING, "权限范围筛选中", null);
         List<Long> scopes = searchScopes(actor, tenantId);
-        emit(reporter, "permission_filter", AiProgressEvent.Status.COMPLETED, "权限范围筛选完成", scopes.size());
-        HybridRetriever.Result result = retriever.retrieve(query, scopes, actor.userId(), RECALL_TOP_K, FUSION_TOP_K, reporter);
+        emit(reporter, "permission_filter", AiProgressEvent.Status.COMPLETED, "权限范围筛选完成", scopes.size(),
+                permissionDetails(actor, scopes));
+        // Retrieval itself only reports non-sensitive running/failure states.
+        // Completed recall details are emitted below, after document visibility
+        // and audience filters have been applied.
+        Set<String> failedRecallStages = new HashSet<>();
+        HybridRetriever.Result result = retriever.retrieve(query, scopes, actor.userId(), RECALL_TOP_K, FUSION_TOP_K,
+                event -> {
+                    if (event.status() == AiProgressEvent.Status.FAILED) {
+                        failedRecallStages.add(event.stage());
+                    }
+                    if (event.status() == AiProgressEvent.Status.RUNNING
+                            || event.status() == AiProgressEvent.Status.FAILED) {
+                        reporter.accept(event);
+                    }
+                });
         if (!result.available()) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         }
 
-        List<ContextSegment> fused = filterSearchable(actor, result);
+        Map<Long, KnowledgeDocument> searchableDocuments = searchableDocuments(actor, result);
+        Set<String> authorizedChunkIds = authorizedChunkIds(result, searchableDocuments);
+        if (!failedRecallStages.contains("keyword_recall")) {
+            emit(reporter, "keyword_recall", AiProgressEvent.Status.COMPLETED, "关键词检索完成",
+                    authorizedCount(result.keywordHits(), authorizedChunkIds),
+                    chunkDetails(result.keywordHits(), authorizedChunkIds, searchableDocuments, "关键词召回"));
+        }
+        if (!failedRecallStages.contains("vector_recall")) {
+            emit(reporter, "vector_recall", AiProgressEvent.Status.COMPLETED, "向量检索完成",
+                    authorizedCount(result.vectorHits(), authorizedChunkIds),
+                    chunkDetails(result.vectorHits(), authorizedChunkIds, searchableDocuments, "向量召回"));
+        }
+
+        List<ContextSegment> fused = filterSearchable(actor, result, searchableDocuments);
+        emit(reporter, "fusion", AiProgressEvent.Status.COMPLETED, "结果融合完成", fused.size(),
+                segmentDetails(fused, result.chunksById(), searchableDocuments, "融合候选"));
+        fused = filterLexicalEvidence(query, fused);
         emit(reporter, "rerank", AiProgressEvent.Status.RUNNING, "重排序中", fused.size());
         if (rerank != null && !fused.isEmpty()) {
             try {
@@ -109,27 +149,138 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                     // A tenant document always outranks the platform default,
                     // even when the external reranker scores the default higher.
                     fused = prioritizeTenant(fused, result.chunksById(), tenantId);
+                } else {
+                    fused = localRerank(query, fused);
                 }
             } catch (RuntimeException ignored) {
-                // Keep fused ranking when rerank is unavailable.
+                // Keep useful lexical evidence when the external reranker is
+                // unavailable or its endpoint/model is unsupported.
+                fused = localRerank(query, fused);
             }
+        } else {
+            fused = localRerank(query, fused);
         }
 
         fused = limitPerDocument(fused);
-        emit(reporter, "rerank", AiProgressEvent.Status.COMPLETED, "重排序完成", fused.size());
+        emit(reporter, "rerank", AiProgressEvent.Status.COMPLETED, "重排序完成", fused.size(),
+                segmentDetails(fused, result.chunksById(), searchableDocuments, "重排序结果"));
         emit(reporter, "citation_prepare", AiProgressEvent.Status.RUNNING, "引用整理中", null);
         List<ContextSegment> selected = ContextBudgeter.select(fused, 12000);
-        emit(reporter, "citation_prepare", AiProgressEvent.Status.COMPLETED, "引用整理完成", selected.size());
+        emit(reporter, "citation_prepare", AiProgressEvent.Status.COMPLETED, "引用整理完成", selected.size(),
+                segmentDetails(selected, result.chunksById(), searchableDocuments, "引用片段"));
         return selected;
     }
+
+    private static List<ContextSegment> localRerank(String query, List<ContextSegment> candidates) {
+        if (candidates == null || candidates.size() < 2) return candidates == null ? List.of() : candidates;
+        List<String> terms = queryTerms(query);
+        if (terms.isEmpty()) return candidates;
+
+        List<ScoredSegment> scored = new ArrayList<>();
+        boolean hasEvidence = false;
+        for (int i = 0; i < candidates.size(); i++) {
+            ContextSegment candidate = candidates.get(i);
+            String text = candidate.text() == null ? "" : candidate.text().toLowerCase(Locale.ROOT);
+            int score = isQuestionList(candidate.text()) ? 0 : lexicalScore(text, terms);
+            int matchedTerms = isQuestionList(candidate.text()) ? 0 : matchedTermCount(text, terms);
+            hasEvidence |= score > 0;
+            scored.add(new ScoredSegment(candidate, score, i, matchedTerms));
+        }
+        boolean evidence = hasEvidence;
+        int minimumScore = terms.size() > 2 ? 4 : 1;
+        int minimumMatches = terms.size() > 6 ? 4 : 1;
+        return scored.stream()
+                .filter(item -> !evidence || (item.score >= minimumScore && item.matchedTerms >= minimumMatches))
+                .sorted(Comparator.comparingInt(ScoredSegment::score).reversed()
+                        .thenComparingInt(ScoredSegment::originalOrder))
+                .map(ScoredSegment::segment)
+                .toList();
+    }
+
+    private static List<ContextSegment> filterLexicalEvidence(String query, List<ContextSegment> candidates) {
+        if (candidates == null || candidates.size() < 2) return candidates == null ? List.of() : candidates;
+        List<String> terms = queryTerms(query);
+        if (terms.isEmpty()) return candidates;
+        List<ScoredSegment> scored = candidates.stream()
+                .map(candidate -> new ScoredSegment(candidate,
+                        isQuestionList(candidate.text()) ? 0 : lexicalScore(candidate.text(), terms), 0,
+                        isQuestionList(candidate.text()) ? 0 : matchedTermCount(candidate.text(), terms)))
+                .toList();
+        boolean hasEvidence = scored.stream().anyMatch(item -> item.score > 0);
+        if (!hasEvidence) return candidates;
+        int minimumScore = terms.size() > 2 ? 4 : 1;
+        int minimumMatches = terms.size() > 6 ? 4 : 1;
+        List<ContextSegment> filtered = scored.stream()
+                .filter(item -> item.score >= minimumScore && item.matchedTerms >= minimumMatches)
+                .map(ScoredSegment::segment)
+                .toList();
+        // Keep semantic/vector candidates when lexical evidence cannot identify
+        // a strong match; otherwise a synonym-only query would incorrectly look
+        // like an empty knowledge base.
+        return filtered.isEmpty() ? candidates : filtered;
+    }
+
+    private static int lexicalScore(String text, List<String> terms) {
+        String value = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        return terms.stream().filter(value::contains).mapToInt(String::length).sum();
+    }
+
+    private static int matchedTermCount(String text, List<String> terms) {
+        String value = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        return (int) terms.stream().filter(value::contains).count();
+    }
+
+    private static boolean isQuestionList(String text) {
+        if (text == null || text.isBlank()) return false;
+        long questions = text.chars().filter(ch -> ch == '?' || ch == '？').count();
+        if (questions < 2) return false;
+        long declarative = text.chars().filter(ch -> ch == '。' || ch == ';' || ch == '；').count();
+        return declarative == 0;
+    }
+
+    private static List<String> queryTerms(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        Set<String> terms = new LinkedHashSet<>();
+        for (String part : QUERY_PARTS.split(query.toLowerCase(Locale.ROOT))) {
+            if (part.isBlank()) continue;
+            boolean han = part.codePoints().allMatch(value -> value >= 0x4E00 && value <= 0x9FFF);
+            if (han) {
+                for (int i = 0; i + 1 < part.length(); i++) terms.add(part.substring(i, i + 2));
+            } else if (part.length() >= 2) {
+                terms.add(part);
+            }
+        }
+        return List.copyOf(terms);
+    }
+
+    private record ScoredSegment(ContextSegment segment, int score, int originalOrder, int matchedTerms) { }
 
     private static void emit(Consumer<AiProgressEvent> progress, String stage,
                              AiProgressEvent.Status status, String message, Integer resultCount) {
         progress.accept(new AiProgressEvent("knowledge_search", stage, status, message, resultCount));
     }
 
+    private static void emit(Consumer<AiProgressEvent> progress, String stage,
+                             AiProgressEvent.Status status, String message, Integer resultCount,
+                             List<com.gymmind.ai.harness.AiProgressDetail> details) {
+        progress.accept(new AiProgressEvent("knowledge_search", stage, status, message, resultCount, details));
+    }
+
     private List<ContextSegment> filterSearchable(CurrentActor actor, HybridRetriever.Result result) {
+        return filterSearchable(actor, result, searchableDocuments(actor, result));
+    }
+
+    private List<ContextSegment> filterSearchable(CurrentActor actor, HybridRetriever.Result result,
+                                                  Map<Long, KnowledgeDocument> searchable) {
         if (documents == null) return result.segments();
+        return result.segments().stream().filter(segment -> {
+            IndexedChunk chunk = result.chunksById().get(segment.id());
+            return chunk == null || chunk.documentId() == null || searchable.containsKey(chunk.documentId());
+        }).toList();
+    }
+
+    private Map<Long, KnowledgeDocument> searchableDocuments(CurrentActor actor, HybridRetriever.Result result) {
+        if (documents == null) return null;
         Long tenantId = ActorAccess.tenantId(actor);
         var ids = result.chunksById().values().stream().map(com.gymmind.knowledge.infrastructure.search.IndexedChunk::documentId)
                 .filter(Objects::nonNull).collect(Collectors.toSet());
@@ -151,8 +302,95 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                     && document.visibility() != DocumentVisibility.TENANT)
                 || (!actor.isPlatformAdmin()
                     && document.effectiveAudienceRoles().stream().noneMatch(actor.roles()::contains)));
-        return result.segments().stream().filter(segment -> segment.documentId() == null
-                || searchable.containsKey(Long.valueOf(segment.documentId()))).toList();
+        Map<String, Integer> latest = searchable.values().stream().filter(d -> d.knowledgeKey() != null)
+                .collect(Collectors.groupingBy(d -> (d.tenantId() == null ? "platform" : d.tenantId()) + "|" + d.knowledgeKey(),
+                        Collectors.collectingAndThen(Collectors.maxBy(Comparator.comparingInt(KnowledgeDocument::knowledgeVersion)),
+                                value -> value.map(KnowledgeDocument::knowledgeVersion).orElse(1))));
+        searchable.values().removeIf(document -> document.knowledgeKey() != null
+                && document.knowledgeVersion() < latest.getOrDefault((document.tenantId() == null ? "platform" : document.tenantId()) + "|" + document.knowledgeKey(), document.knowledgeVersion()));
+        return searchable;
+    }
+
+    private static Set<String> authorizedChunkIds(HybridRetriever.Result result,
+                                                    Map<Long, KnowledgeDocument> searchable) {
+        if (searchable == null) {
+            return result.chunksById().keySet();
+        }
+        if (searchable.isEmpty() && result.chunksById().values().stream().allMatch(chunk -> chunk.documentId() == null)) {
+            return result.chunksById().keySet();
+        }
+        return result.chunksById().values().stream()
+                .filter(chunk -> chunk.documentId() == null || searchable.containsKey(chunk.documentId()))
+                .map(IndexedChunk::id)
+                .collect(Collectors.toSet());
+    }
+
+    private static int authorizedCount(List<IndexedChunk> chunks, Set<String> authorizedIds) {
+        return (int) chunks.stream().filter(chunk -> authorizedIds.contains(chunk.id())).count();
+    }
+
+    private static List<com.gymmind.ai.harness.AiProgressDetail> chunkDetails(
+            List<IndexedChunk> chunks, Set<String> authorizedIds, Map<Long, KnowledgeDocument> documents,
+            String title) {
+        List<com.gymmind.ai.harness.AiProgressDetail> details = new ArrayList<>();
+        for (int i = 0; i < chunks.size() && details.size() < MAX_PROGRESS_DETAILS; i++) {
+            IndexedChunk chunk = chunks.get(i);
+            if (!authorizedIds.contains(chunk.id())) continue;
+            details.add(detail("CHUNK", title, chunk, documents, i + 1));
+        }
+        return details;
+    }
+
+    private static List<com.gymmind.ai.harness.AiProgressDetail> segmentDetails(
+            List<ContextSegment> segments, Map<String, IndexedChunk> chunks,
+            Map<Long, KnowledgeDocument> documents, String title) {
+        List<com.gymmind.ai.harness.AiProgressDetail> details = new ArrayList<>();
+        for (int i = 0; i < segments.size() && details.size() < MAX_PROGRESS_DETAILS; i++) {
+            IndexedChunk chunk = chunks.get(segments.get(i).id());
+            if (chunk != null) details.add(detail("CHUNK", title, chunk, documents, i + 1));
+            else details.add(new com.gymmind.ai.harness.AiProgressDetail("CHUNK", title,
+                    segments.get(i).documentId(), segments.get(i).id(), null,
+                    excerpt(segments.get(i).text()), i + 1));
+        }
+        return details;
+    }
+
+    private static com.gymmind.ai.harness.AiProgressDetail detail(String kind, String title,
+                                                                    IndexedChunk chunk,
+                                                                    Map<Long, KnowledgeDocument> documents,
+                                                                    int rank) {
+        KnowledgeDocument document = chunk.documentId() == null || documents == null ? null : documents.get(chunk.documentId());
+        return new com.gymmind.ai.harness.AiProgressDetail(kind, title,
+                chunk.documentId() == null ? null : String.valueOf(chunk.documentId()), chunk.id(),
+                document == null ? null : document.fileName(), excerpt(chunk.text()), rank);
+    }
+
+    private static String excerpt(String text) {
+        if (text == null) return "";
+        return text.length() <= MAX_PROGRESS_EXCERPT ? text : text.substring(0, MAX_PROGRESS_EXCERPT);
+    }
+
+    private static List<com.gymmind.ai.harness.AiProgressDetail> permissionDetails(CurrentActor actor,
+                                                                                      List<Long> scopes) {
+        String roles = actor.roles().stream().map(DefaultKnowledgeSearchService::roleLabel).collect(Collectors.joining("、"));
+        String tenant = actor.tenantId() == null ? "平台上下文" : "健身房 " + actor.tenantId();
+        String scope = scopes.stream().map(id -> id == KnowledgeIndexingService.PLATFORM_INDEX_TENANT_ID
+                        ? "平台公共文档" : "健身房 " + id + " 文档")
+                .collect(Collectors.joining("、"));
+        return List.of(
+                new com.gymmind.ai.harness.AiProgressDetail("ACTOR", "当前身份", null, null, null,
+                        excerpt("角色：" + roles + "；租户：" + tenant), null),
+                new com.gymmind.ai.harness.AiProgressDetail("SCOPE", "检索范围", null, null, null,
+                        excerpt(scope), null));
+    }
+
+    private static String roleLabel(RoleCode role) {
+        return switch (role) {
+            case PLATFORM_ADMIN -> "平台管理员";
+            case GYM_ADMIN -> "健身房管理员";
+            case COACH -> "教练";
+            case MEMBER -> "会员";
+        };
     }
 
     private List<Long> searchScopes(CurrentActor actor, Long tenantId) {

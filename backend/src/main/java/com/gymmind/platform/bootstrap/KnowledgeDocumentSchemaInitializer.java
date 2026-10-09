@@ -21,6 +21,8 @@ public class KnowledgeDocumentSchemaInitializer implements ApplicationRunner {
         jdbc.execute("ALTER TABLE knowledge_document MODIFY COLUMN tenant_id BIGINT NULL");
         addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN chunk_strategy VARCHAR(32) NULL");
         addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN chunk_strategy_version INT NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN knowledge_key VARCHAR(128) NULL");
+        addColumnIfMissing("ALTER TABLE knowledge_document ADD COLUMN knowledge_version INT NOT NULL DEFAULT 1");
         jdbc.execute("CREATE TABLE IF NOT EXISTS knowledge_document_audience_role (document_id BIGINT NOT NULL, role_code VARCHAR(32) NOT NULL, PRIMARY KEY (document_id, role_code))");
         backfillAudienceRoles();
     }

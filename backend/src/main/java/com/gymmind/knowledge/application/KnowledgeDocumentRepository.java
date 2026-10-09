@@ -18,6 +18,7 @@ public interface KnowledgeDocumentRepository {
     default Optional<KnowledgeDocument> findForUpdateByTenantIdAndId(Long tenantId, Long id) {
         return findByTenantIdAndId(tenantId, id);
     }
+    default List<KnowledgeDocument> findByKnowledgeKey(Long tenantId, String key) { return List.of(); }
 
     default List<KnowledgeDocument> findByTenantId(Long tenantId) {
         return List.of();
