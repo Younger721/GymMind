@@ -44,6 +44,9 @@ public class KnowledgeDocument {
     private String chunkStrategy = "GENERAL";
     @Column(name = "chunk_strategy_version")
     private Integer chunkStrategyVersion = 1;
+    /** 两阶段入库：切片 JSON 在 MinIO 中的 object key */
+    @Column(name = "chunk_artifact_key", length = 512)
+    private String chunkArtifactKey;
     @ElementCollection(fetch = FetchType.EAGER, targetClass = RoleCode.class)
     @CollectionTable(name = "knowledge_document_audience_role", joinColumns = @JoinColumn(name = "document_id"))
     @Column(name = "role_code", nullable = false, length = 32)
@@ -61,9 +64,52 @@ public class KnowledgeDocument {
     public static KnowledgeDocument create(Long tenantId, Long ownerUserId, String fileName, String contentType, DocumentVisibility visibility, String keySegment) { return new KnowledgeDocument(tenantId,ownerUserId,fileName,contentType,visibility,keySegment); }
     public void assignId(Long id) { if (this.id != null || id == null || id <= 0) throw new IllegalStateException("id already assigned"); this.id=id; }
     public void recordUploader(Long userId) { if (userId == null || userId <= 0) throw new IllegalArgumentException("uploader required"); uploaderUserId = userId; }
-    public void markParsing() { if (status != DocumentStatus.UPLOADING && status != DocumentStatus.READY && status != DocumentStatus.FAILED && status != DocumentStatus.PARSING) throw new IllegalStateException("invalid status transition"); status=DocumentStatus.PARSING; }
-    public void markReady() { if (status != DocumentStatus.UPLOADING && status != DocumentStatus.PARSING) throw new IllegalStateException("invalid status transition"); status=DocumentStatus.READY; }
-    public void markFailed() { if (status != DocumentStatus.PARSING && status != DocumentStatus.UPLOADING) throw new IllegalStateException("invalid status transition"); status=DocumentStatus.FAILED; }
+    public void markParsing() {
+        if (status != DocumentStatus.UPLOADING && status != DocumentStatus.READY && status != DocumentStatus.FAILED
+                && status != DocumentStatus.PARSING && status != DocumentStatus.CHUNKED) {
+            throw new IllegalStateException("invalid status transition");
+        }
+        status = DocumentStatus.PARSING;
+    }
+
+    /** 切片产物已写入对象存储，等待向量化与索引 */
+    public void markChunked() {
+        if (status != DocumentStatus.PARSING) {
+            throw new IllegalStateException("invalid status transition");
+        }
+        status = DocumentStatus.CHUNKED;
+    }
+
+    /** 正在从 chunk artifact 建索引 */
+    public void markIndexing() {
+        if (status != DocumentStatus.CHUNKED && status != DocumentStatus.INDEXING) {
+            throw new IllegalStateException("invalid status transition");
+        }
+        status = DocumentStatus.INDEXING;
+    }
+
+    public void markReady() {
+        if (status != DocumentStatus.UPLOADING && status != DocumentStatus.PARSING
+                && status != DocumentStatus.CHUNKED && status != DocumentStatus.INDEXING) {
+            throw new IllegalStateException("invalid status transition");
+        }
+        status = DocumentStatus.READY;
+    }
+
+    public void markFailed() {
+        if (status != DocumentStatus.PARSING && status != DocumentStatus.UPLOADING
+                && status != DocumentStatus.CHUNKED && status != DocumentStatus.INDEXING) {
+            throw new IllegalStateException("invalid status transition");
+        }
+        status = DocumentStatus.FAILED;
+    }
+
+    public void assignChunkArtifactKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("chunk artifact key required");
+        }
+        chunkArtifactKey = key.trim();
+    }
     public void tombstone() { if (status == DocumentStatus.DELETED) return; status=DocumentStatus.DELETED; }
 
     /** 更新可见范围（租户隔离内的元数据修改） */
@@ -157,4 +203,5 @@ public class KnowledgeDocument {
     }
     public String chunkStrategy(){return chunkStrategy == null || chunkStrategy.isBlank() ? "GENERAL" : chunkStrategy;}
     public int chunkStrategyVersion(){return chunkStrategyVersion == null || chunkStrategyVersion <= 0 ? 1 : chunkStrategyVersion;}
+    public String chunkArtifactKey(){return chunkArtifactKey;}
 }

@@ -84,3 +84,9 @@ docker/volumes/
 
 # Generated document/test output
 output/
+
+# RAG eval 本地状态与报告
+docs/rag-eval/state/
+docs/rag-eval/reports/*.json
+docs/rag-eval/reports/*.md
+!docs/rag-eval/reports/.gitkeep

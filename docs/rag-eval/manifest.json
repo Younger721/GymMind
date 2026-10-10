@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "password": "EvalPass123!",
+  "tenants": [
+    {
+      "code": "rag-eval-a",
+      "name": "RAG Eval Gym A",
+      "admin": {
+        "email": "rag-eval-a-admin@eval.local",
+        "displayName": "RAG Eval A Admin"
+      },
+      "invites": [
+        {
+          "email": "rag-eval-a-coach@eval.local",
+          "role": "COACH",
+          "displayName": "RAG Eval A Coach"
+        },
+        {
+          "email": "rag-eval-a-member@eval.local",
+          "role": "MEMBER",
+          "displayName": "RAG Eval A Member"
+        }
+      ]
+    },
+    {
+      "code": "rag-eval-b",
+      "name": "RAG Eval Gym B",
+      "admin": {
+        "email": "rag-eval-b-admin@eval.local",
+        "displayName": "RAG Eval B Admin"
+      },
+      "invites": [
+        {
+          "email": "rag-eval-b-member@eval.local",
+          "role": "MEMBER",
+          "displayName": "RAG Eval B Member"
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "file": "eval-platform-equipment.md",
+      "scope": "platform",
+      "category": "RAG_EVAL",
+      "audienceRoles": ["GYM_ADMIN"]
+    },
+    {
+      "file": "eval-platform-safety-all.md",
+      "scope": "platform",
+      "category": "RAG_EVAL"
+    },
+    {
+      "file": "eval-gym-a-coach-playbook.md",
+      "scope": "tenant",
+      "tenantCode": "rag-eval-a",
+      "category": "RAG_EVAL",
+      "audienceRoles": ["COACH"]
+    },
+    {
+      "file": "eval-gym-a-admin-secret.md",
+      "scope": "tenant",
+      "tenantCode": "rag-eval-a",
+      "category": "RAG_EVAL",
+      "audienceRoles": ["GYM_ADMIN"]
+    },
+    {
+      "file": "eval-gym-b-member-promo.md",
+      "scope": "tenant",
+      "tenantCode": "rag-eval-b",
+      "category": "RAG_EVAL",
+      "audienceRoles": ["MEMBER"]
+    }
+  ]
+}

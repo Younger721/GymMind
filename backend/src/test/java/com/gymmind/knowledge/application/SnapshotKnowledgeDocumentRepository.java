@@ -59,6 +59,15 @@ final class SnapshotKnowledgeDocumentRepository implements KnowledgeDocumentRepo
         if (!source.audienceRoles().isEmpty()) copy.updateAudienceRoles(source.audienceRoles());
         switch (source.status()) {
             case PARSING -> copy.markParsing();
+            case CHUNKED -> {
+                copy.markParsing();
+                copy.markChunked();
+            }
+            case INDEXING -> {
+                copy.markParsing();
+                copy.markChunked();
+                copy.markIndexing();
+            }
             case READY -> {
                 copy.markParsing();
                 copy.markReady();

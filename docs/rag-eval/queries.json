@@ -1,0 +1,160 @@
+{
+  "k": 10,
+  "description": "RAG 权限与召回评测问句；expectedAnchors 为语料中唯一锚点，forbidden* 用于权限泄漏检测。",
+  "users": {
+    "platform_admin": {
+      "username": "admin",
+      "password": "123456",
+      "note": "与 application-dev.yml platform-admin 默认一致"
+    },
+    "gym_a_admin": {
+      "username": "rag-eval-a-admin",
+      "password": "EvalPass123!",
+      "note": "注册默认用户名为邮箱 @ 前本地段"
+    },
+    "gym_a_coach": {
+      "username": "rag-eval-a-coach",
+      "password": "EvalPass123!"
+    },
+    "gym_a_member": {
+      "username": "rag-eval-a-member",
+      "password": "EvalPass123!"
+    },
+    "gym_b_admin": {
+      "username": "rag-eval-b-admin",
+      "password": "EvalPass123!"
+    },
+    "gym_b_member": {
+      "username": "rag-eval-b-member",
+      "password": "EvalPass123!"
+    }
+  },
+  "queries": [
+    {
+      "id": "q01_platform_admin_equipment",
+      "user": "platform_admin",
+      "question": "平台要求店管理员如何记录跑步机季度点检？",
+      "expectedAnchors": ["EVAL-PLAT-EQUIP-001"],
+      "expectedDocuments": ["eval-platform-equipment.md"]
+    },
+    {
+      "id": "q02_gym_a_admin_equipment",
+      "user": "gym_a_admin",
+      "question": "史密斯架安全销每日点检要求是什么？",
+      "expectedAnchors": ["EVAL-PLAT-EQUIP-002"],
+      "expectedDocuments": ["eval-platform-equipment.md"]
+    },
+    {
+      "id": "q03_gym_a_coach_no_equipment",
+      "user": "gym_a_coach",
+      "question": "平台采购器械年检签字存档规定是什么？",
+      "expectedAnchors": [],
+      "forbiddenAnchors": ["EVAL-PLAT-EQUIP-001", "EVAL-PLAT-EQUIP-002"],
+      "forbiddenDocuments": ["eval-platform-equipment.md"]
+    },
+    {
+      "id": "q04_gym_a_member_safety",
+      "user": "gym_a_member",
+      "question": "训练区对运动鞋有什么要求？",
+      "expectedAnchors": ["EVAL-PLAT-SAFE-001"],
+      "expectedDocuments": ["eval-platform-safety-all.md"]
+    },
+    {
+      "id": "q05_gym_a_coach_safety",
+      "user": "gym_a_coach",
+      "question": "自由重量区卸杠铃片时要注意什么？",
+      "expectedAnchors": ["EVAL-PLAT-SAFE-002"],
+      "expectedDocuments": ["eval-platform-safety-all.md"]
+    },
+    {
+      "id": "q06_gym_a_coach_playbook",
+      "user": "gym_a_coach",
+      "question": "门店 A 新会员体测前要确认什么？",
+      "expectedAnchors": ["EVAL-GYM-A-COACH-001"],
+      "expectedDocuments": ["eval-gym-a-coach-playbook.md"]
+    },
+    {
+      "id": "q07_gym_a_admin_coach_playbook",
+      "user": "gym_a_admin",
+      "question": "私教续费窗口是到期前多少天？",
+      "expectedAnchors": ["EVAL-GYM-A-COACH-002"],
+      "expectedDocuments": ["eval-gym-a-coach-playbook.md"]
+    },
+    {
+      "id": "q08_gym_a_member_no_coach_playbook",
+      "user": "gym_a_member",
+      "question": "教练续费三问法具体指什么？",
+      "expectedAnchors": [],
+      "forbiddenAnchors": ["EVAL-GYM-A-COACH-001", "EVAL-GYM-A-COACH-002"],
+      "forbiddenDocuments": ["eval-gym-a-coach-playbook.md"]
+    },
+    {
+      "id": "q09_gym_a_admin_secret",
+      "user": "gym_a_admin",
+      "question": "门店 A 与总部对账的虚拟子账户尾号是多少？",
+      "expectedAnchors": ["EVAL-GYM-A-SECRET-001"],
+      "expectedDocuments": ["eval-gym-a-admin-secret.md"]
+    },
+    {
+      "id": "q10_gym_a_coach_no_secret",
+      "user": "gym_a_coach",
+      "question": "门店 A 2026 Q1 教练编制上限是多少？",
+      "expectedAnchors": [],
+      "forbiddenAnchors": ["EVAL-GYM-A-SECRET-002", "EVAL-GYM-A-SECRET-HC6"],
+      "forbiddenDocuments": ["eval-gym-a-admin-secret.md"]
+    },
+    {
+      "id": "q11_gym_b_member_promo",
+      "user": "gym_b_member",
+      "question": "门店 B 春季年卡续费立减多少？",
+      "expectedAnchors": ["EVAL-GYM-B-MEMBER-001"],
+      "expectedDocuments": ["eval-gym-b-member-promo.md"]
+    },
+    {
+      "id": "q12_gym_a_member_no_b_promo",
+      "user": "gym_a_member",
+      "question": "门店 B 续费赠品毛巾活动怎么参加？",
+      "expectedAnchors": [],
+      "forbiddenAnchors": ["EVAL-GYM-B-MEMBER-002", "EVAL-GYM-B-MEMBER-TOWEL"],
+      "forbiddenDocuments": ["eval-gym-b-member-promo.md"]
+    },
+    {
+      "id": "q13_gym_b_admin_no_a_secret",
+      "user": "gym_b_admin",
+      "question": "门店 A 管理员夜间应急手机尾号是多少？",
+      "expectedAnchors": [],
+      "forbiddenAnchors": ["EVAL-GYM-A-SECRET-NIGHT-5566"],
+      "forbiddenDocuments": ["eval-gym-a-admin-secret.md"]
+    },
+    {
+      "id": "q14_gym_a_admin_emergency",
+      "user": "gym_a_admin",
+      "question": "训练区会员眩晕时应按哪个平台流程报警？",
+      "expectedAnchors": ["EVAL-PLAT-SAFE-003"],
+      "expectedDocuments": ["eval-platform-safety-all.md"]
+    },
+    {
+      "id": "q15_gym_b_member_no_a_coach",
+      "user": "gym_b_member",
+      "question": "门店 A 教练提成系数 0.18 在哪里查看？",
+      "expectedAnchors": [],
+      "forbiddenAnchors": ["EVAL-GYM-A-COACH-COMMISSION-0.18"],
+      "forbiddenDocuments": ["eval-gym-a-coach-playbook.md"]
+    },
+    {
+      "id": "q16_platform_admin_safety",
+      "user": "platform_admin",
+      "question": "平台标准消毒液配比是多少？",
+      "expectedAnchors": ["EVAL-PLAT-SAFE-CLEAN"],
+      "expectedDocuments": ["eval-platform-safety-all.md"]
+    },
+    {
+      "id": "q17_gym_a_coach_no_secret_commission",
+      "user": "gym_a_coach",
+      "question": "门店 A 对账虚拟账户尾号 8842 是什么用途？",
+      "expectedAnchors": [],
+      "forbiddenAnchors": ["EVAL-GYM-A-SECRET-001", "8842"],
+      "forbiddenDocuments": ["eval-gym-a-admin-secret.md"]
+    }
+  ]
+}

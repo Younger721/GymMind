@@ -40,9 +40,10 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
     private final DocumentParserRegistry parser = DocumentParserRegistry.standard();
     private final ChunkStrategySelector strategySelector;
     private final UserAccountRepository users;
+    private final KnowledgeChunkArtifactService chunkArtifacts;
 
     public DefaultKnowledgeDocumentUseCase(KnowledgeDocumentRepository repository, KnowledgeObjectStore store) {
-        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null, null);
+        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null);
     }
 
     public DefaultKnowledgeDocumentUseCase(
@@ -51,7 +52,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             KnowledgeIndexingService indexing,
             KnowledgeIngestWorker ingestWorker,
             TenantQuotaService quotas) {
-        this(repository, store, indexing, ingestWorker, quotas, null, null);
+        this(repository, store, indexing, ingestWorker, quotas, null, null, null);
     }
 
     @Autowired
@@ -62,7 +63,9 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             KnowledgeIngestWorker ingestWorker,
             TenantQuotaService quotas,
             ChatModelGateway chatModel,
-            UserAccountRepository users) {
+            UserAccountRepository users,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            KnowledgeChunkArtifactService chunkArtifacts) {
         this.repository = repository;
         this.store = store;
         this.indexing = indexing;
@@ -70,6 +73,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
         this.strategySelector = new ChunkStrategySelector(chatModel);
         this.users = users;
+        this.chunkArtifacts = chunkArtifacts;
     }
 
     @Override
@@ -197,6 +201,9 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             indexing.deleteDocument(document.tenantId(), document.id());
         }
         document.tombstone();
+        if (chunkArtifacts != null && document.chunkArtifactKey() != null) {
+            chunkArtifacts.deleteArtifact(document.chunkArtifactKey());
+        }
         store.delete(document.objectKey());
         return view(repository.save(document));
     }
