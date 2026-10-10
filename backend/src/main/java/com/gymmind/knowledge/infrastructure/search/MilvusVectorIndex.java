@@ -16,7 +16,7 @@ import java.util.stream.StreamSupport;
 @Component
 @ConditionalOnProperty(name = "gymmind.search.vector-backend", havingValue = "milvus")
 public class MilvusVectorIndex implements VectorIndexPort {
-    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "documentId", "ownerUserId", "knowledgeKey", "knowledgeVersion", "text");
+    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "documentId", "ownerUserId", "knowledgeKey", "knowledgeVersion", "indexGeneration", "text");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final RestClient client;
     private final String collection;
@@ -37,6 +37,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
                 field("ownerUserId", "Int64", false, Map.of()),
                 field("knowledgeKey", "VarChar", false, Map.of("max_length", "128")),
                 field("knowledgeVersion", "Int64", false, Map.of()),
+                field("indexGeneration", "VarChar", false, Map.of("max_length", "128")),
                 field("text", "VarChar", false, Map.of("max_length", "65535")),
                 field("vector", "FloatVector", false, Map.of("dim", "1024")));
         return Map.of("collectionName", name,
@@ -56,6 +57,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
                 "documentId", chunk.documentId() == null ? 0L : chunk.documentId(),
                 "ownerUserId", chunk.ownerUserId() == null ? 0L : chunk.ownerUserId(),
                 "knowledgeKey", chunk.knowledgeKey() == null ? "" : chunk.knowledgeKey(), "knowledgeVersion", chunk.knowledgeVersion(),
+                "indexGeneration", chunk.indexGeneration() == null ? "" : chunk.indexGeneration(),
                 "text", chunk.text(), "vector", chunk.vector())));
     }
 
@@ -79,7 +81,8 @@ public class MilvusVectorIndex implements VectorIndexPort {
                 chunks.add(new IndexedChunk(row.path("id").asText(), row.path("tenantId").asLong(),
                         documentId == 0 ? null : documentId,
                         owner == 0 ? null : owner, row.path("text").asText(), null,
-                        row.path("knowledgeKey").asText(null), row.path("knowledgeVersion").asInt(1)));
+                        row.path("knowledgeKey").asText(null), row.path("knowledgeVersion").asInt(1),
+                        emptyToNull(row.path("indexGeneration").asText(null))));
             }
             return chunks;
         } catch (Exception ignored) {
@@ -140,7 +143,7 @@ public class MilvusVectorIndex implements VectorIndexPort {
                     .map(node -> node.path("name").asText(""))
                     .filter(name -> !name.isBlank())
                     .collect(java.util.stream.Collectors.toSet());
-            return names.containsAll(List.of("knowledgeKey", "knowledgeVersion", "documentId", "vector"));
+            return names.containsAll(List.of("knowledgeKey", "knowledgeVersion", "documentId", "indexGeneration", "vector"));
         } catch (Exception ex) {
             return false;
         }
@@ -198,6 +201,20 @@ public class MilvusVectorIndex implements VectorIndexPort {
         client.post().uri("/v2/vectordb/entities/delete").body(Map.of("collectionName", collection,
                         "filter", "tenantId == " + tenantId + " && documentId == " + documentId))
                 .retrieve().toBodilessEntity();
+    }
+
+    @Override
+    public void deleteStaleIndexGenerations(Long tenantId, Long documentId, String keepGeneration) {
+        ensureCollection();
+        String escaped = keepGeneration.replace("'", "''");
+        String filter = "tenantId == " + tenantId + " && documentId == " + documentId
+                + " && indexGeneration != '" + escaped + "'";
+        client.post().uri("/v2/vectordb/entities/delete").body(Map.of("collectionName", collection, "filter", filter))
+                .retrieve().toBodilessEntity();
+    }
+
+    private static String emptyToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private static void requireVector(float[] vector) {

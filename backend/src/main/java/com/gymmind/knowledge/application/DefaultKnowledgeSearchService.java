@@ -492,6 +492,13 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         }
         return result.chunksById().values().stream()
                 .filter(chunk -> chunk.documentId() == null || searchable.containsKey(chunk.documentId()))
+                .filter(chunk -> {
+                    if (chunk.documentId() == null || searchable == null) {
+                        return true;
+                    }
+                    KnowledgeDocument document = searchable.get(chunk.documentId());
+                    return document == null || chunk.matchesIndexGeneration(document.indexGeneration());
+                })
                 .map(IndexedChunk::id)
                 .collect(Collectors.toSet());
     }

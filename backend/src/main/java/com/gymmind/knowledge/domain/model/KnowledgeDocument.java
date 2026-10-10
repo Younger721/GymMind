@@ -47,6 +47,9 @@ public class KnowledgeDocument {
     /** 两阶段入库：切片 JSON 在 MinIO 中的 object key */
     @Column(name = "chunk_artifact_key", length = 512)
     private String chunkArtifactKey;
+    /** 当前可读索引 generation 指针，与 ES/Milvus chunk.indexGeneration 对齐 */
+    @Column(name = "index_generation", length = 128)
+    private String indexGeneration;
     @ElementCollection(fetch = FetchType.EAGER, targetClass = RoleCode.class)
     @CollectionTable(name = "knowledge_document_audience_role", joinColumns = @JoinColumn(name = "document_id"))
     @Column(name = "role_code", nullable = false, length = 32)
@@ -109,6 +112,13 @@ public class KnowledgeDocument {
             throw new IllegalArgumentException("chunk artifact key required");
         }
         chunkArtifactKey = key.trim();
+    }
+
+    public void assignIndexGeneration(String generation) {
+        if (generation == null || generation.isBlank()) {
+            throw new IllegalArgumentException("index generation required");
+        }
+        indexGeneration = generation.trim();
     }
     public void tombstone() { if (status == DocumentStatus.DELETED) return; status=DocumentStatus.DELETED; }
 
@@ -204,4 +214,5 @@ public class KnowledgeDocument {
     public String chunkStrategy(){return chunkStrategy == null || chunkStrategy.isBlank() ? "GENERAL" : chunkStrategy;}
     public int chunkStrategyVersion(){return chunkStrategyVersion == null || chunkStrategyVersion <= 0 ? 1 : chunkStrategyVersion;}
     public String chunkArtifactKey(){return chunkArtifactKey;}
+    public String indexGeneration(){return indexGeneration;}
 }

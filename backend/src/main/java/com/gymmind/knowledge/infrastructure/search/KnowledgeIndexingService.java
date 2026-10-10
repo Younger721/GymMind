@@ -39,30 +39,50 @@ public class KnowledgeIndexingService {
 
     public boolean publish(Long tenantId, Long documentId, Long ownerUserId,
                            String fileName, String contentType, byte[] bytes) {
-        return publish(tenantId, documentId, ownerUserId, fileName, contentType, bytes, ChunkStrategy.GENERAL.name(), 1);
+        return publishIndex(tenantId, documentId, ownerUserId, fileName, contentType, bytes).success();
     }
 
-    /**
-     * Parse and publish one stable generation using the document's saved chunking strategy.
-     * The legacy overload above intentionally remains for callers and historical jobs that
-     * have not yet loaded document metadata.
-     */
     public boolean publish(Long tenantId, Long documentId, Long ownerUserId,
                            String fileName, String contentType, byte[] bytes,
                            String strategyName, Integer strategyVersion) {
-        return publish(tenantId, documentId, ownerUserId, fileName, contentType, bytes, strategyName, strategyVersion, null, 1);
+        return publishIndex(tenantId, documentId, ownerUserId, fileName, contentType, bytes, strategyName, strategyVersion)
+                .success();
     }
+
     public boolean publish(Long tenantId, Long documentId, Long ownerUserId,
                            String fileName, String contentType, byte[] bytes,
                            String strategyName, Integer strategyVersion, String knowledgeKey, int knowledgeVersion) {
-        if (documentId == null || bytes == null) return false;
+        return publishIndex(tenantId, documentId, ownerUserId, fileName, contentType, bytes, strategyName,
+                strategyVersion, knowledgeKey, knowledgeVersion).success();
+    }
+
+    public IndexPublishResult publishIndex(Long tenantId, Long documentId, Long ownerUserId,
+                                           String fileName, String contentType, byte[] bytes) {
+        return publishIndex(tenantId, documentId, ownerUserId, fileName, contentType, bytes,
+                ChunkStrategy.GENERAL.name(), 1);
+    }
+
+    public IndexPublishResult publishIndex(Long tenantId, Long documentId, Long ownerUserId,
+                                           String fileName, String contentType, byte[] bytes,
+                                           String strategyName, Integer strategyVersion) {
+        return publishIndex(tenantId, documentId, ownerUserId, fileName, contentType, bytes, strategyName,
+                strategyVersion, null, 1);
+    }
+
+    public IndexPublishResult publishIndex(Long tenantId, Long documentId, Long ownerUserId,
+                                           String fileName, String contentType, byte[] bytes,
+                                           String strategyName, Integer strategyVersion, String knowledgeKey,
+                                           int knowledgeVersion) {
+        if (documentId == null || bytes == null) {
+            return IndexPublishResult.failed();
+        }
         ChunkStrategy strategy = parseStrategy(strategyName);
         int version = strategyVersion == null || strategyVersion <= 0 ? 1 : strategyVersion;
         List<Chunk> parsedChunks = chunkFromBytes(documentId, fileName, contentType, bytes, strategy, version);
-        return publishChunks(tenantId, documentId, ownerUserId, parsedChunks, strategy, version, knowledgeKey, knowledgeVersion);
+        return publishChunks(tenantId, documentId, ownerUserId, parsedChunks, strategy, version, knowledgeKey,
+                knowledgeVersion);
     }
 
-    /** 解析并切片，不写索引（供两阶段入库的 PARSE 阶段使用） */
     public List<Chunk> chunkFromBytes(Long documentId, String fileName, String contentType, byte[] bytes,
                                       String strategyName, Integer strategyVersion) {
         if (documentId == null || bytes == null) {
@@ -73,11 +93,10 @@ public class KnowledgeIndexingService {
         return chunkFromBytes(documentId, fileName, contentType, bytes, strategy, version);
     }
 
-    /** 从 MinIO chunk artifact 向量化并发布索引 */
-    public boolean publishFromArtifact(Long tenantId, Long documentId, Long ownerUserId,
-                                       KnowledgeChunkArtifact artifact) {
+    public IndexPublishResult publishFromArtifact(Long tenantId, Long documentId, Long ownerUserId,
+                                                  KnowledgeChunkArtifact artifact) {
         if (artifact == null || documentId == null || !documentId.equals(artifact.documentId())) {
-            return false;
+            return IndexPublishResult.failed();
         }
         ChunkStrategy strategy = parseStrategy(artifact.chunkStrategy());
         List<Chunk> chunks = artifact.chunks().stream()
@@ -97,26 +116,32 @@ public class KnowledgeIndexingService {
         }
     }
 
-    private boolean publishChunks(Long tenantId, Long documentId, Long ownerUserId, List<Chunk> parsedChunks,
-                                  ChunkStrategy strategy, int version, String knowledgeKey, int knowledgeVersion) {
+    private IndexPublishResult publishChunks(Long tenantId, Long documentId, Long ownerUserId, List<Chunk> parsedChunks,
+                                             ChunkStrategy strategy, int version, String knowledgeKey,
+                                             int knowledgeVersion) {
         long indexTenantId = tenantId == null ? PLATFORM_INDEX_TENANT_ID : tenantId;
         List<float[]> vectors = embedding.embed(parsedChunks.stream().map(Chunk::text).toList());
         if (vectors.size() != parsedChunks.size()) {
-            return false;
+            return IndexPublishResult.failed();
         }
+        String generationKey = "document-" + documentId + "-" + strategy.name() + "-v" + version + "-"
+                + System.currentTimeMillis();
         var indexed = new java.util.ArrayList<IndexedChunk>();
         for (int i = 0; i < parsedChunks.size(); i++) {
             indexed.add(new IndexedChunk(parsedChunks.get(i).id(), indexTenantId, documentId, ownerUserId,
-                    parsedChunks.get(i).text(), vectors.get(i), knowledgeKey, knowledgeVersion));
+                    parsedChunks.get(i).text(), vectors.get(i), knowledgeKey, knowledgeVersion, generationKey));
         }
-        long generation = System.currentTimeMillis();
-        String generationKey = "document-" + documentId + "-" + strategy.name() + "-v" + version + "-" + generation;
-        index.deleteDocument(indexTenantId, documentId);
-        return index.publish(indexTenantId, generationKey, indexed);
+        if (!index.publishWithRollback(indexTenantId, indexed)) {
+            return IndexPublishResult.failed();
+        }
+        index.gcStaleIndexGenerations(indexTenantId, documentId, generationKey);
+        return IndexPublishResult.ok(generationKey);
     }
 
     private static ChunkStrategy parseStrategy(String value) {
-        if (value == null || value.isBlank()) return ChunkStrategy.GENERAL;
+        if (value == null || value.isBlank()) {
+            return ChunkStrategy.GENERAL;
+        }
         try {
             return ChunkStrategy.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException ignored) {

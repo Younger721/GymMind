@@ -1,1 +1,27 @@
-package com.gymmind.knowledge.infrastructure.search; import java.util.List; public interface VectorIndexPort { void upsert(IndexedChunk chunk); List<IndexedChunk> search(float[] vector,Long tenantId); default List<IndexedChunk> search(float[] vector,List<Long> tenantIds,Long userId){return tenantIds.stream().flatMap(t->search(vector,t).stream()).filter(c->c.visibleTo(userId)).toList();} default List<IndexedChunk> search(float[] vector,Long tenantId,Long userId){return search(vector,tenantId).stream().filter(c->c.visibleTo(userId)).toList();} void delete(String id,Long tenantId); default void deleteDocument(Long tenantId,Long documentId){throw new UnsupportedOperationException("document deletion is not supported");} }
+package com.gymmind.knowledge.infrastructure.search;
+
+import java.util.List;
+
+public interface VectorIndexPort {
+    void upsert(IndexedChunk chunk);
+
+    List<IndexedChunk> search(float[] vector, Long tenantId);
+
+    default List<IndexedChunk> search(float[] vector, List<Long> tenantIds, Long userId) {
+        return tenantIds.stream().flatMap(t -> search(vector, t).stream()).filter(c -> c.visibleTo(userId)).toList();
+    }
+
+    default List<IndexedChunk> search(float[] vector, Long tenantId, Long userId) {
+        return search(vector, tenantId).stream().filter(c -> c.visibleTo(userId)).toList();
+    }
+
+    void delete(String id, Long tenantId);
+
+    default void deleteDocument(Long tenantId, Long documentId) {
+        throw new UnsupportedOperationException("document deletion is not supported");
+    }
+
+    default void deleteStaleIndexGenerations(Long tenantId, Long documentId, String keepGeneration) {
+        throw new UnsupportedOperationException("stale generation gc is not supported");
+    }
+}

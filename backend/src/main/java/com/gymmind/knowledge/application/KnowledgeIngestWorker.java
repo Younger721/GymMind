@@ -125,16 +125,16 @@ public class KnowledgeIngestWorker {
         documents.save(document);
         byte[] bytes = requireSourceBytes(document);
         document.updateChunkStrategy(document.chunkStrategy(), document.chunkStrategyVersion());
-        boolean published = isLegacyGeneral(document)
-                ? indexing.publish(document.tenantId(), document.id(), document.ownerUserId(),
+        var published = isLegacyGeneral(document)
+                ? indexing.publishIndex(document.tenantId(), document.id(), document.ownerUserId(),
                 document.fileName(), document.contentType(), bytes)
-                : indexing.publish(document.tenantId(), document.id(), document.ownerUserId(),
+                : indexing.publishIndex(document.tenantId(), document.id(), document.ownerUserId(),
                 document.fileName(), document.contentType(), bytes,
                 document.chunkStrategy(), document.chunkStrategyVersion(), document.knowledgeKey(), document.knowledgeVersion());
-        if (!published) {
+        if (!published.success()) {
             throw new IllegalStateException("knowledge indexing is unavailable");
         }
-        finalizeReady(document);
+        finalizeReady(document, published.indexGeneration());
         jobs.complete(job.id());
     }
 
@@ -190,16 +190,16 @@ public class KnowledgeIngestWorker {
         document.markIndexing();
         documents.save(document);
         KnowledgeChunkArtifact artifact = artifacts.readArtifact(document.chunkArtifactKey());
-        boolean published = indexing.publishFromArtifact(document.tenantId(), document.id(),
+        var published = indexing.publishFromArtifact(document.tenantId(), document.id(),
                 document.ownerUserId(), artifact);
-        if (!published) {
+        if (!published.success()) {
             throw new IllegalStateException("knowledge indexing is unavailable");
         }
-        finalizeReady(document);
+        finalizeReady(document, published.indexGeneration());
         jobs.complete(job.id());
     }
 
-    private void finalizeReady(KnowledgeDocument document) {
+    private void finalizeReady(KnowledgeDocument document, String indexGeneration) {
         KnowledgeDocument current = document.tenantId() == null
                 ? documents.findForUpdateById(document.id()).orElse(null)
                 : documents.findForUpdateByTenantIdAndId(document.tenantId(), document.id()).orElse(null);
@@ -207,6 +207,7 @@ public class KnowledgeIngestWorker {
             indexing.deleteDocument(document.tenantId(), document.id());
             return;
         }
+        current.assignIndexGeneration(indexGeneration);
         current.markReady();
         documents.save(current);
     }

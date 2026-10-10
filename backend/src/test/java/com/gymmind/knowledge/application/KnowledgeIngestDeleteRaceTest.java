@@ -4,6 +4,7 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
+import com.gymmind.knowledge.infrastructure.search.IndexPublishResult;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
 import com.gymmind.shared.async.JobStatus;
 import com.gymmind.shared.async.PersistentJob;
@@ -47,10 +48,10 @@ class KnowledgeIngestDeleteRaceTest {
 
         DefaultKnowledgeDocumentUseCase useCase = new DefaultKnowledgeDocumentUseCase(
                 documents, store, indexing, null, null);
-        when(indexing.publish(eq(7L), eq(3L), isNull(), eq("guide.txt"), eq("text/plain"), any(byte[].class)))
+        when(indexing.publishIndex(eq(7L), eq(3L), isNull(), eq("guide.txt"), eq("text/plain"), any(byte[].class)))
                 .thenAnswer(invocation -> {
                     useCase.delete(ADMIN, 3L);
-                    return true;
+                    return IndexPublishResult.ok("race-gen");
                 });
 
         new KnowledgeIngestWorker(jobs, documents, store, indexing, Clock.fixed(NOW, ZoneOffset.UTC))

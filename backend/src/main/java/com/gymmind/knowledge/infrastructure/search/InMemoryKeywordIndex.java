@@ -47,6 +47,17 @@ public class InMemoryKeywordIndex implements KeywordIndexPort {
         data.entrySet().removeIf(e -> tenantId.equals(e.getValue().tenantId()) && documentId.equals(e.getValue().documentId()));
     }
 
+    @Override
+    public void deleteStaleIndexGenerations(Long tenantId, Long documentId, String keepGeneration) {
+        data.entrySet().removeIf(e -> {
+            IndexedChunk chunk = e.getValue();
+            if (!tenantId.equals(chunk.tenantId()) || !documentId.equals(chunk.documentId())) {
+                return false;
+            }
+            return !keepGeneration.equals(chunk.indexGeneration());
+        });
+    }
+
     private static int score(String text, List<String> terms) {
         if (terms.isEmpty()) return 1;
         String value = text == null ? "" : text.toLowerCase(Locale.ROOT);

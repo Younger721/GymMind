@@ -59,8 +59,8 @@ class KnowledgeAudienceSearchServiceTest {
         });
         when(vector.search(any(), any(Long.class), eq(1L))).thenReturn(List.of());
         when(embedding.embed(any())).thenReturn(List.of(new float[1024]));
+        when(repository.findByIdIn(any())).thenReturn(List.of(first, second));
         when(repository.findTenantIds()).thenReturn(List.of(7L, 8L));
-        when(repository.findAllDocuments()).thenReturn(List.of(first, second));
 
         var service = new DefaultKnowledgeSearchService(keyword, vector, embedding, null, null, repository);
         List<ContextSegment> result = service.search(new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform"), "q");
@@ -74,6 +74,7 @@ class KnowledgeAudienceSearchServiceTest {
         document.updateAudienceRoles(roles);
         document.markParsing();
         document.markReady();
+        document.publish();
         return document;
     }
 

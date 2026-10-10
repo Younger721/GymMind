@@ -62,6 +62,7 @@ class KnowledgeSearchProgressTest {
         document.assignId(id);
         document.markParsing();
         document.markReady();
+        document.publish();
         return document;
     }
 

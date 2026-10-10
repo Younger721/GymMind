@@ -71,6 +71,9 @@ final class SnapshotKnowledgeDocumentRepository implements KnowledgeDocumentRepo
             case READY -> {
                 copy.markParsing();
                 copy.markReady();
+                if (source.indexGeneration() != null) {
+                    copy.assignIndexGeneration(source.indexGeneration());
+                }
             }
             case FAILED -> {
                 copy.markParsing();
