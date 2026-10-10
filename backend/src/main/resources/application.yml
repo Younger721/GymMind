@@ -17,6 +17,10 @@ platform-admin:
   password: ${PLATFORM_ADMIN_PASSWORD:}
 
 gymmind:
+  search:
+    recover-published: false
+    recover-incomplete-ingest: true
+    recover-index-on-start: false
   ai:
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:}

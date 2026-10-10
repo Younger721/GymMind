@@ -7,22 +7,33 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** Rebuilds volatile search indexes after a development restart. */
+/** 启动时恢复中断中的入库；可选是否重灌已发布 READY 文档（默认关闭）。 */
 @Component
 public class KnowledgeIndexRecoveryRunner implements ApplicationRunner {
     private final KnowledgeDocumentRepository documents;
     private final KnowledgeIngestWorker worker;
     private final KnowledgeIngestSettings ingestSettings;
-    private final boolean recoverPublished;
+    private final boolean recoverIncompleteIngest;
+    private final boolean recoverPublishedReady;
 
     @org.springframework.beans.factory.annotation.Autowired
     public KnowledgeIndexRecoveryRunner(KnowledgeDocumentRepository documents, KnowledgeIngestWorker worker,
                                         KnowledgeIngestSettings ingestSettings,
-                                        @Value("${gymmind.search.recover-published:false}") boolean recoverPublished) {
+                                        @Value("${gymmind.search.recover-incomplete-ingest:true}") boolean recoverIncompleteIngest,
+                                        @Value("${gymmind.search.recover-published:false}") boolean recoverPublished,
+                                        @Value("${gymmind.search.recover-index-on-start:false}") boolean recoverIndexOnStart) {
+        this(documents, worker, ingestSettings, recoverIncompleteIngest,
+                recoverPublished || recoverIndexOnStart);
+    }
+
+    KnowledgeIndexRecoveryRunner(KnowledgeDocumentRepository documents, KnowledgeIngestWorker worker,
+                                 KnowledgeIngestSettings ingestSettings,
+                                 boolean recoverIncompleteIngest, boolean recoverPublishedReady) {
         this.documents = documents;
         this.worker = worker;
         this.ingestSettings = ingestSettings;
-        this.recoverPublished = recoverPublished;
+        this.recoverIncompleteIngest = recoverIncompleteIngest;
+        this.recoverPublishedReady = recoverPublishedReady;
     }
 
     @Override
@@ -42,10 +53,14 @@ public class KnowledgeIndexRecoveryRunner implements ApplicationRunner {
     }
 
     private boolean shouldRecover(KnowledgeDocument document) {
-        return document.status() == DocumentStatus.UPLOADING
+        if (document.status() == DocumentStatus.UPLOADING
                 || document.status() == DocumentStatus.PARSING
                 || document.status() == DocumentStatus.CHUNKED
-                || document.status() == DocumentStatus.INDEXING
-                || recoverPublished && document.status() == DocumentStatus.READY && document.published();
+                || document.status() == DocumentStatus.INDEXING) {
+            return recoverIncompleteIngest;
+        }
+        return recoverPublishedReady
+                && document.status() == DocumentStatus.READY
+                && document.published();
     }
 }

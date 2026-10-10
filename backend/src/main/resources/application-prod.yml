@@ -12,6 +12,10 @@ spring:
       ddl-auto: validate
     open-in-view: false
 gymmind:
+  search:
+    recover-published: false
+    recover-incomplete-ingest: true
+    recover-index-on-start: false
   security:
     jwt:
       secret: ${JWT_SECRET}

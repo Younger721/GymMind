@@ -39,7 +39,9 @@ gymmind:
     vector-backend: milvus
     elasticsearch-url: ${GYMMIND_ES_URL:http://localhost:9202}
     milvus-url: ${GYMMIND_MILVUS_URL:http://localhost:19530}
-    recover-published: ${GYMMIND_SEARCH_RECOVER_PUBLISHED:true}
+    recover-published: ${GYMMIND_SEARCH_RECOVER_PUBLISHED:false}
+    recover-incomplete-ingest: ${GYMMIND_SEARCH_RECOVER_INCOMPLETE_INGEST:true}
+    recover-index-on-start: ${GYMMIND_SEARCH_RECOVER_INDEX_ON_START:false}
   knowledge:
     ingest:
       two-phase: ${GYMMIND_KNOWLEDGE_INGEST_TWO_PHASE:true}

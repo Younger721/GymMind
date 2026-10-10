@@ -19,7 +19,7 @@ class KnowledgeIndexRecoveryRunnerTest {
         document.markParsing();
         when(documents.findAllDocuments()).thenReturn(List.of(document));
 
-        new KnowledgeIndexRecoveryRunner(documents, worker, KnowledgeIngestSettings.disabled(), false)
+        new KnowledgeIndexRecoveryRunner(documents, worker, KnowledgeIngestSettings.disabled(), true, false)
                 .run(mock(ApplicationArguments.class));
 
         verify(worker).enqueue(null, 7L);
@@ -35,7 +35,7 @@ class KnowledgeIndexRecoveryRunnerTest {
         document.publish();
         when(documents.findAllDocuments()).thenReturn(List.of(document));
 
-        new KnowledgeIndexRecoveryRunner(documents, worker, KnowledgeIngestSettings.disabled(), false)
+        new KnowledgeIndexRecoveryRunner(documents, worker, KnowledgeIngestSettings.disabled(), true, false)
                 .run(mock(ApplicationArguments.class));
 
         verify(worker, never()).enqueue(any(), eq(8L));
@@ -51,7 +51,7 @@ class KnowledgeIndexRecoveryRunnerTest {
         document.publish();
         when(documents.findAllDocuments()).thenReturn(List.of(document));
 
-        new KnowledgeIndexRecoveryRunner(documents, worker, KnowledgeIngestSettings.disabled(), true)
+        new KnowledgeIndexRecoveryRunner(documents, worker, KnowledgeIngestSettings.disabled(), true, true)
                 .run(mock(ApplicationArguments.class));
 
         verify(worker).enqueue(null, 9L);
@@ -67,11 +67,25 @@ class KnowledgeIndexRecoveryRunnerTest {
         document.markChunked();
         when(documents.findAllDocuments()).thenReturn(List.of(document));
 
-        new KnowledgeIndexRecoveryRunner(documents, worker, new KnowledgeIngestSettings(true), false)
+        new KnowledgeIndexRecoveryRunner(documents, worker, new KnowledgeIngestSettings(true), true, false)
                 .run(mock(ApplicationArguments.class));
 
         verify(worker).enqueueIndex(7L, 10L);
         verify(worker, never()).enqueue(any(), eq(10L));
+    }
+
+    @Test
+    void skipsIncompleteDocumentsWhenIncompleteRecoveryDisabled() {
+        KnowledgeDocumentRepository documents = mock(KnowledgeDocumentRepository.class);
+        KnowledgeIngestWorker worker = mock(KnowledgeIngestWorker.class);
+        KnowledgeDocument document = platformDocument(11L);
+        document.markParsing();
+        when(documents.findAllDocuments()).thenReturn(List.of(document));
+
+        new KnowledgeIndexRecoveryRunner(documents, worker, KnowledgeIngestSettings.disabled(), false, false)
+                .run(mock(ApplicationArguments.class));
+
+        verify(worker, never()).enqueue(any(), any());
     }
 
     private static KnowledgeDocument platformDocument(long id) {

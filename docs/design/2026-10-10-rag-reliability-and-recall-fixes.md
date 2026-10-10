@@ -1,6 +1,6 @@
 # RAG 可靠性与召回优化修复方案
 
-> 状态：**S1 已实现**（generation 指针 + 双写补偿 + GC；S2 起待做）  
+> 状态：**S2 已实现**（S1 generation 指针 + S2 recover 配置拆分；S3 起待做）  
 > 范围：索引发布、双写一致、入库恢复、检索权限与降级、评测/CI  
 > 非目标：HyDE、多模态、按 chunk 独立 Redis job（二期）
 
