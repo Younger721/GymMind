@@ -10,11 +10,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Comparator;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /** Parallel keyword + vector recall with RRF fusion. */
 public final class HybridRetriever {
+
+    private static final Logger LOG = Logger.getLogger(HybridRetriever.class.getName());
 
     private final KeywordIndexPort keyword;
     private final VectorIndexPort vector;
@@ -55,9 +58,14 @@ public final class HybridRetriever {
         } catch (RuntimeException ex) {
             keywordHits = List.of();
             keywordAvailable = false;
+            LOG.log(Level.WARNING, "Keyword retrieval failed and was skipped", ex);
+            reporter.accept(new AiProgressEvent("knowledge_search", "keyword_recall",
+                    AiProgressEvent.Status.FAILED, "关键词检索不可用，已跳过", 0));
         }
-        reporter.accept(new AiProgressEvent("knowledge_search", "keyword_recall",
-                AiProgressEvent.Status.COMPLETED, "关键词检索完成", keywordHits.size()));
+        if (keywordAvailable) {
+            reporter.accept(new AiProgressEvent("knowledge_search", "keyword_recall",
+                    AiProgressEvent.Status.COMPLETED, "关键词检索完成", keywordHits.size()));
+        }
         reporter.accept(new AiProgressEvent("knowledge_search", "vector_recall",
                 AiProgressEvent.Status.RUNNING, "向量检索中", null));
         try {
@@ -66,9 +74,14 @@ public final class HybridRetriever {
         } catch (RuntimeException ex) {
             vectorHits = List.of();
             vectorAvailable = false;
+            LOG.log(Level.WARNING, "Vector retrieval failed and was skipped", ex);
+            reporter.accept(new AiProgressEvent("knowledge_search", "vector_recall",
+                    AiProgressEvent.Status.FAILED, "向量检索不可用，已跳过", 0));
         }
-        reporter.accept(new AiProgressEvent("knowledge_search", "vector_recall",
-                AiProgressEvent.Status.COMPLETED, "向量检索完成", vectorHits.size()));
+        if (vectorAvailable) {
+            reporter.accept(new AiProgressEvent("knowledge_search", "vector_recall",
+                    AiProgressEvent.Status.COMPLETED, "向量检索完成", vectorHits.size()));
+        }
 
         if (!keywordAvailable && !vectorAvailable) {
             return Result.unavailable();
@@ -82,17 +95,17 @@ public final class HybridRetriever {
 
         reporter.accept(new AiProgressEvent("knowledge_search", "fusion",
                 AiProgressEvent.Status.RUNNING, "结果融合中", null));
-        List<ContextSegment> fused = RrfFusion.merge(keywordRanked, vectorRanked, fusionTopK).stream()
+        List<IndexedChunk> fusedChunks = RrfFusion.merge(keywordRanked, vectorRanked, fusionTopK).stream()
                 .map(entry -> all.get(entry.id()))
                 .filter(Objects::nonNull)
-                .sorted(Comparator.comparing((IndexedChunk chunk) -> tenantIds.indexOf(chunk.tenantId()) < 0 ? Integer.MAX_VALUE : tenantIds.indexOf(chunk.tenantId()))
-                        .thenComparing(IndexedChunk::id))
+                .toList();
+        List<ContextSegment> fused = fusedChunks.stream()
                 .map(chunk -> new ContextSegment(chunk.id(),
                         chunk.documentId() == null ? chunk.id() : chunk.documentId().toString(), chunk.text()))
                 .toList();
         reporter.accept(new AiProgressEvent("knowledge_search", "fusion",
                 AiProgressEvent.Status.COMPLETED, "结果融合完成", fused.size()));
-        return new Result(true, fused, all);
+        return new Result(true, fused, all, keywordHits, vectorHits, fusedChunks);
     }
 
     private static List<RankedChunk> toRanked(List<IndexedChunk> chunks, int limit) {
@@ -104,9 +117,23 @@ public final class HybridRetriever {
         return ranked;
     }
 
-    public record Result(boolean available, List<ContextSegment> segments, Map<String, IndexedChunk> chunksById) {
+    public record Result(boolean available,
+                         List<ContextSegment> segments,
+                         Map<String, IndexedChunk> chunksById,
+                         List<IndexedChunk> keywordHits,
+                         List<IndexedChunk> vectorHits,
+                         List<IndexedChunk> fusedHits) {
+        public Result(boolean available, List<ContextSegment> segments, Map<String, IndexedChunk> chunksById) {
+            this(available, segments, chunksById, List.of(), List.of(), List.of());
+        }
+
+        /** Compatibility alias for callers that name the merged recall list fusion hits. */
+        public List<IndexedChunk> fusionHits() {
+            return fusedHits;
+        }
+
         public static Result unavailable() {
-            return new Result(false, List.of(), Map.of());
+            return new Result(false, List.of(), Map.of(), List.of(), List.of(), List.of());
         }
     }
 }

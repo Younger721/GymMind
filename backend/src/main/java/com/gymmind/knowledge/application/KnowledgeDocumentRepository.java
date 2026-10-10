@@ -27,6 +27,11 @@ public interface KnowledgeDocumentRepository {
     default List<KnowledgeDocument> findByTenantIdAndIdIn(Long tenantId, java.util.Collection<Long> ids) {
         return List.of();
     }
+
+    /** 按主键批量加载（平台检索权限过滤用，避免扫全表）。 */
+    default List<KnowledgeDocument> findByIdIn(java.util.Collection<Long> ids) {
+        return List.of();
+    }
     default List<KnowledgeDocument> findPlatformDocuments() { return List.of(); }
 
     /** Compatibility alias for callers that need the platform-wide document list. */

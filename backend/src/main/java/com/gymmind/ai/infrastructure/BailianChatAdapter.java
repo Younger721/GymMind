@@ -9,6 +9,7 @@ import com.gymmind.ai.application.ChatModelResponse;
 import com.gymmind.ai.application.ChatToolCall;
 import com.gymmind.ai.application.ChatToolDefinition;
 import com.gymmind.ai.domain.ContextSegment;
+import com.gymmind.ai.infrastructure.bailian.DashScopeProperties;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import org.springframework.stereotype.Component;
@@ -35,11 +36,8 @@ public class BailianChatAdapter implements ChatModelGateway {
     private final String model;
 
     @Autowired
-    public BailianChatAdapter(RestClient.Builder builder) {
-        this(builder,
-                firstEnv("DASHSCOPE_BASE_URL", "AI_API_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
-                firstEnv("DASHSCOPE_API_KEY", "AI_API_KEY", ""),
-                env("DASHSCOPE_CHAT_MODEL", "qwen3.7-plus"));
+    public BailianChatAdapter(RestClient.Builder builder, DashScopeProperties dashScope) {
+        this(builder, dashScope.baseUrlForChat(), dashScope.apiKeyForChat(), dashScope.getChatModel());
     }
 
     BailianChatAdapter(RestClient.Builder builder, String apiKey, String model) {
@@ -224,17 +222,8 @@ public class BailianChatAdapter implements ChatModelGateway {
     }
 
     private static BusinessException providerUnavailable() {
-        return new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "未配置或无法访问阿里百炼 AI 服务");
-    }
-
-    private static String env(String name, String fallback) {
-        String value = System.getenv(name);
-        return value == null || value.isBlank() ? fallback : value;
-    }
-
-    private static String firstEnv(String primary, String secondary, String fallback) {
-        String value = env(primary, "");
-        return value.isBlank() ? env(secondary, fallback) : value;
+        return new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE,
+                "未配置或无法访问阿里百炼 AI 服务（请在 IDEA 环境变量或根目录 .env 设置 DASHSCOPE_API_KEY，见 docs/CONFIGURATION.md）");
     }
 
     static String quickSystemPrompt() {

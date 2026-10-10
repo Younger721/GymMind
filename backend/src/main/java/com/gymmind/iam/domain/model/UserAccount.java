@@ -30,7 +30,7 @@ public class UserAccount extends AuditableEntity {
             foreignKey = @jakarta.persistence.ForeignKey(name = "fk_sys_user_tenant"))
     private Tenant tenant;
 
-    @Column(name = "normalized_email", nullable = false, length = 320)
+    @Column(name = "normalized_email", length = 320)
     private String normalizedEmail;
 
     /** 登录用户名（全局唯一，小写规范化存储） */
@@ -42,6 +42,9 @@ public class UserAccount extends AuditableEntity {
 
     @Column(name = "display_name", nullable = false, length = 128)
     private String displayName;
+
+    @Column(length = 32)
+    private String phone;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
@@ -61,7 +64,7 @@ public class UserAccount extends AuditableEntity {
     }
 
     private UserAccount(Long tenantId, String email, String username, String passwordHash, String displayName,
-                        RoleCode roleCode) {
+                        String phone, RoleCode roleCode) {
         if (roleCode == null) {
             throw new IllegalArgumentException("Role code must not be null");
         }
@@ -76,6 +79,7 @@ public class UserAccount extends AuditableEntity {
         this.normalizedUsername = resolveUsername(email, username);
         this.passwordHash = require(passwordHash, "Password hash");
         this.displayName = require(displayName, "Display name");
+        this.phone = normalizePhone(phone);
         this.roleCode = roleCode;
         this.status = UserStatus.ACTIVE;
         this.tokenVersion = 0L;
@@ -86,7 +90,7 @@ public class UserAccount extends AuditableEntity {
     }
 
     public static UserAccount platformAdmin(String email, String username, String passwordHash, String displayName) {
-        return new UserAccount(null, email, username, passwordHash, displayName, RoleCode.PLATFORM_ADMIN);
+        return new UserAccount(null, email, username, passwordHash, displayName, null, RoleCode.PLATFORM_ADMIN);
     }
 
     public static UserAccount tenantUser(Long tenantId, String email, String passwordHash, String displayName) {
@@ -95,15 +99,20 @@ public class UserAccount extends AuditableEntity {
 
     public static UserAccount tenantUser(Long tenantId, String email, String passwordHash, String displayName,
                                          RoleCode roleCode) {
-        return tenantUser(tenantId, email, null, passwordHash, displayName, roleCode);
+        return tenantUser(tenantId, email, null, passwordHash, displayName, null, roleCode);
     }
 
     public static UserAccount tenantUser(Long tenantId, String email, String username, String passwordHash,
                                          String displayName, RoleCode roleCode) {
+        return tenantUser(tenantId, email, username, passwordHash, displayName, null, roleCode);
+    }
+
+    public static UserAccount tenantUser(Long tenantId, String email, String username, String passwordHash,
+                                         String displayName, String phone, RoleCode roleCode) {
         if (roleCode == RoleCode.PLATFORM_ADMIN) {
             throw new IllegalArgumentException("Platform admin is not a tenant user");
         }
-        return new UserAccount(tenantId, email, username, passwordHash, displayName, roleCode);
+        return new UserAccount(tenantId, email, username, passwordHash, displayName, phone, roleCode);
     }
 
     /** 为历史数据补全用户名（仅当尚未设置时写入） */
@@ -158,12 +167,13 @@ public class UserAccount extends AuditableEntity {
     public String getNormalizedUsername() { return normalizedUsername; }
     public String getPasswordHash() { return passwordHash; }
     public String getDisplayName() { return displayName; }
+    public String getPhone() { return phone; }
     public UserStatus getStatus() { return status; }
     public RoleCode getRoleCode() { return roleCode; }
     public long getTokenVersion() { return tokenVersion; }
 
     public static String normalizeEmail(String value) {
-        return require(value, "Email").trim().toLowerCase(Locale.ROOT);
+        return value == null || value.trim().isEmpty() ? null : value.trim().toLowerCase(Locale.ROOT);
     }
 
     public static String normalizeUsername(String value) {
@@ -182,6 +192,10 @@ public class UserAccount extends AuditableEntity {
             return defaultUsernameFromEmail(email);
         }
         return normalizeUsername(username);
+    }
+
+    private static String normalizePhone(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private static String require(String value, String label) {

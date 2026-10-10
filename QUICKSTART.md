@@ -20,11 +20,8 @@
 # 修改为你的 MySQL 密码
 MYSQL_PASSWORD=你的MySQL密码
 
-# 修改为强密钥（生产环境必须更换）
-JWT_SECRET=gymmind_jwt_secret_key_change_this_in_production_12345678
-
-# 配置 AI API 密钥（DeepSeek 或 OpenAI）
-AI_API_KEY=your_ai_api_key_here
+# 阿里百炼 API 密钥（详见 docs/CONFIGURATION.md）
+DASHSCOPE_API_KEY=your_dashscope_api_key_here
 ```
 
 ### 2️⃣ 创建数据库
@@ -50,13 +47,13 @@ chmod +x start-infrastructure.sh
 
 等待约 10 秒，确保以下服务启动成功：
 - ✅ Redis: localhost:6379
-- ✅ Elasticsearch: http://localhost:9200
+- ✅ Elasticsearch: http://localhost:9202
 - ✅ Milvus: localhost:19530
 - ✅ MinIO: http://localhost:9001
 
 验证 Elasticsearch：
 ```bash
-curl http://localhost:9200
+curl http://localhost:9202
 ```
 
 ### 4️⃣ 启动后端
@@ -66,6 +63,7 @@ curl http://localhost:9200
 ```bash
 cd backend
 mvn clean install
+# 默认 profile=dev（application-dev.yml：Redis + ES + Milvus + MinIO + 百炼）
 mvn spring-boot:run
 ```
 
@@ -147,14 +145,14 @@ Local: http://localhost:5173/
 
 **解决方案**：
 1. 确认 Docker Desktop 正在运行
-2. 检查端口是否被占用：`netstat -ano | findstr "9200"`
+2. 检查端口是否被占用：`netstat -ano | findstr "9202"`
 3. 查看日志：`docker-compose logs`
 
 ### Q4: Elasticsearch 连接失败
 
 **解决方案**：
 1. 等待 30 秒让 ES 完全启动
-2. 验证 ES 状态：`curl http://localhost:9200`
+2. 验证 ES 状态：`curl http://localhost:9202`
 3. 查看 ES 日志：`docker logs gymmind-es`
 
 ### Q5: Milvus 连接失败

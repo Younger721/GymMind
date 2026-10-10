@@ -54,4 +54,20 @@ class StructuredDocumentParserTest {
                 .containsExactly("标题", "第一段", "第二段");
         assertThat(parsed.blocks()).allMatch(block -> block.type() == DocumentBlockType.PARAGRAPH);
     }
+
+    @Test
+    void recognizesShortUnstyledDocxSectionNamesAsTitles() throws Exception {
+        byte[] bytes;
+        try (var document = new XWPFDocument(); var output = new ByteArrayOutputStream()) {
+            document.createParagraph().createRun().setText("训练安全");
+            document.createParagraph().createRun().setText("先热身并使用稳定重量。");
+            document.write(output);
+            bytes = output.toByteArray();
+        }
+
+        ParsedDocument parsed = DocumentParserRegistry.standard()
+                .parseStructured("guide.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", bytes);
+
+        assertThat(parsed.blocks().get(0).type()).isEqualTo(DocumentBlockType.TITLE);
+    }
 }

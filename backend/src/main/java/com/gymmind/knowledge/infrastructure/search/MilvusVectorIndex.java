@@ -1,5 +1,6 @@
 package com.gymmind.knowledge.infrastructure.search;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -9,6 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.StreamSupport;
 
 @Component
 @ConditionalOnProperty(name = "gymmind.search.vector-backend", havingValue = "milvus")
@@ -93,21 +96,73 @@ public class MilvusVectorIndex implements VectorIndexPort {
     public void upsert(IndexedChunk chunk) {
         requireVector(chunk.vector());
         ensureCollection();
-        client.post().uri("/v2/vectordb/entities/upsert").body(insertBody(collection, chunk))
-                .retrieve().toBodilessEntity();
+        writeEntities("/v2/vectordb/entities/upsert", insertBody(collection, chunk));
     }
 
     private void ensureCollection() {
         if (collectionReady) return;
         synchronized (this) {
             if (collectionReady) return;
-            String raw = client.post().uri("/v2/vectordb/collections/has")
-                    .body(Map.of("collectionName", collection)).retrieve().body(String.class);
-            if (!collectionExists(raw)) {
-                client.post().uri("/v2/vectordb/collections/create").body(collectionBody(collection))
-                        .retrieve().toBodilessEntity();
+            boolean exists = collectionExists(client.post().uri("/v2/vectordb/collections/has")
+                    .body(Map.of("collectionName", collection)).retrieve().body(String.class));
+            if (exists && !schemaCompatible()) {
+                dropCollection();
+                exists = false;
+            }
+            if (!exists) {
+                createCollection();
             }
             collectionReady = true;
+        }
+    }
+
+    private void createCollection() {
+        requireSuccess(client.post().uri("/v2/vectordb/collections/create").body(collectionBody(collection))
+                .retrieve().body(String.class), "create collection");
+    }
+
+    private void dropCollection() {
+        requireSuccess(client.post().uri("/v2/vectordb/collections/drop")
+                        .body(Map.of("collectionName", collection)).retrieve().body(String.class),
+                "drop collection");
+    }
+
+    /** 旧集合缺少 knowledgeKey 等字段时 upsert 会静默失败，需重建 schema。 */
+    private boolean schemaCompatible() {
+        String raw = client.post().uri("/v2/vectordb/collections/describe")
+                .body(Map.of("collectionName", collection)).retrieve().body(String.class);
+        try {
+            JsonNode fields = MAPPER.readTree(raw).path("data").path("fields");
+            if (!fields.isArray()) {
+                return false;
+            }
+            Set<String> names = StreamSupport.stream(fields.spliterator(), false)
+                    .map(node -> node.path("name").asText(""))
+                    .filter(name -> !name.isBlank())
+                    .collect(java.util.stream.Collectors.toSet());
+            return names.containsAll(List.of("knowledgeKey", "knowledgeVersion", "documentId", "vector"));
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private void writeEntities(String path, Map<String, Object> body) {
+        requireSuccess(client.post().uri(path).body(body).retrieve().body(String.class), "write entities");
+    }
+
+    private void requireSuccess(String raw, String action) {
+        if (raw == null || raw.isBlank()) {
+            throw new IllegalStateException("Milvus " + action + " returned empty body");
+        }
+        try {
+            JsonNode root = MAPPER.readTree(raw);
+            if (root.path("code").asInt(-1) != 0) {
+                throw new IllegalStateException("Milvus " + action + " failed: " + root.path("message").asText(raw));
+            }
+        } catch (IllegalStateException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("Milvus " + action + " returned invalid JSON", ex);
         }
     }
 

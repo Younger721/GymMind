@@ -20,9 +20,9 @@ public interface UserAdministrationService {
     void replaceRolePermissions(CurrentActor actor, RoleCode roleCode, Set<String> permissions);
     void changeRoleStatus(CurrentActor actor, RoleCode roleCode, boolean active);
 
-    record UserView(Long id, Long tenantId, String username, String email, String displayName,
+    record UserView(Long id, Long tenantId, String username, String email, String displayName, String phone,
                     UserStatus status, Set<RoleCode> roles) {}
-    record UserSummary(Long id, Long tenantId, String username, String email, String displayName,
+    record UserSummary(Long id, Long tenantId, String tenantName, String username, String email, String displayName, String phone,
                        UserStatus status, Set<RoleCode> roles, String membershipType,
                        Integer membershipDaysRemaining) {}
     record RoleView(Long id, RoleCode code, String name, String status, int permissionCount) {

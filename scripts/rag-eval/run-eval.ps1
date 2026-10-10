@@ -34,6 +34,38 @@ function Test-SegmentHit {
     }
 }
 
+function Test-ItemRelevant {
+    param([string]$Text, [string[]]$Anchors, [string[]]$DocNames, [string]$DocumentName)
+    if ($Anchors) {
+        foreach ($anchor in $Anchors) {
+            if ($anchor -and $Text -and ($Text -match [regex]::Escape($anchor))) {
+                return $true
+            }
+        }
+    }
+    if ($DocNames -and $DocumentName -and ($DocNames -contains $DocumentName)) {
+        return $true
+    }
+    return $false
+}
+
+function Count-RelevantTopItems {
+    param($TopItems, [string[]]$Anchors, [string[]]$DocNames, [string]$Channel)
+    $count = 0
+    foreach ($item in $TopItems) {
+        if ($Channel -eq 'search') {
+            if (Test-ItemRelevant -Text "$($item.text) $($item.documentName)" -Anchors $Anchors -DocNames $DocNames -DocumentName $item.documentName) {
+                $count++
+            }
+        } else {
+            if (Test-ItemRelevant -Text "$($item.excerpt) $($item.documentName)" -Anchors $Anchors -DocNames $DocNames -DocumentName $item.documentName) {
+                $count++
+            }
+        }
+    }
+    return $count
+}
+
 function Test-CitationHit {
     param($Citations, [string[]]$Anchors, [string[]]$DocNames)
     $textBlob = ($Citations | ForEach-Object { "$($_.excerpt) $($_.documentName) $($_.knowledgeKey)" }) -join "`n"
@@ -75,11 +107,17 @@ function Measure-Query {
     }
 
     $recallDenom = [Math]::Max(1, $expectedAnchors.Count)
-    $recall = if ($expectedAnchors.Count -eq 0) { $null } else { $hit.anchorHits.Count / $recallDenom }
+    $anchorRecallAtK = if ($expectedAnchors.Count -eq 0) { $null } else { $hit.anchorHits.Count / $recallDenom }
 
-    $precisionDenom = [Math]::Max(1, $top.Count)
-    $precision = if ($expectedAnchors.Count -eq 0) { $null } else {
-        if ($top.Count -eq 0) { 0 } else { $hit.anchorHits.Count / $precisionDenom }
+    $relevantInTop = if ($expectedAnchors.Count -eq 0) { 0 } else {
+        Count-RelevantTopItems -TopItems $top -Anchors $expectedAnchors -DocNames $expectedDocs -Channel $Channel
+    }
+    $chunkPrecisionAtK = if ($expectedAnchors.Count -eq 0) { $null } else {
+        if ($top.Count -eq 0) { 0 } else { $relevantInTop / $top.Count }
+    }
+    # 与经典 IR 一致：相关 chunk 召回率（标注为期望锚点/文档，Top-K 中命中条数 / 期望锚点数）
+    $chunkRecallAtK = if ($expectedAnchors.Count -eq 0) { $null } else {
+        [Math]::Min(1.0, $relevantInTop / $recallDenom)
     }
 
     $leakAnchors = @()
@@ -110,8 +148,11 @@ function Measure-Query {
         channel         = $Channel
         question        = $QueryRow.question
         pass            = $pass
-        recallAtK       = $recall
-        precisionAtK    = $precision
+        anchorRecallAtK = $anchorRecallAtK
+        chunkRecallAtK  = $chunkRecallAtK
+        chunkPrecisionAtK = $chunkPrecisionAtK
+        recallAtK       = $anchorRecallAtK
+        precisionAtK    = $chunkPrecisionAtK
         expectedAnchors = $expectedAnchors
         hitAnchors      = $hit.anchorHits
         permissionLeak  = $permissionLeak
@@ -171,9 +212,13 @@ function Summarize-Channel {
     param([string]$Name)
     $subset = @($rows | Where-Object { $_.channel -eq $Name })
     $withExpected = @($subset | Where-Object { $_.expectedAnchors.Count -gt 0 })
-    $recallValues = @($withExpected | Where-Object { $null -ne $_.recallAtK } | ForEach-Object { [double]$_.recallAtK })
-    $avgRecall = if ($recallValues.Count -gt 0) {
+    $recallValues = @($withExpected | Where-Object { $null -ne $_.anchorRecallAtK } | ForEach-Object { [double]$_.anchorRecallAtK })
+    $avgAnchorRecall = if ($recallValues.Count -gt 0) {
         ($recallValues | Measure-Object -Average).Average
+    } else { $null }
+    $precValues = @($withExpected | Where-Object { $null -ne $_.chunkPrecisionAtK } | ForEach-Object { [double]$_.chunkPrecisionAtK })
+    $avgChunkPrecision = if ($precValues.Count -gt 0) {
+        ($precValues | Measure-Object -Average).Average
     } else { $null }
     $leaks = @($subset | Where-Object { $_.permissionLeak })
     $passed = @($subset | Where-Object { $_.pass })
@@ -182,7 +227,9 @@ function Summarize-Channel {
         queries           = $subset.Count
         passCount         = $passed.Count
         passRate          = if ($subset.Count -gt 0) { $passed.Count / $subset.Count } else { 0 }
-        avgRecallAtK      = $avgRecall
+        avgAnchorRecallAtK = $avgAnchorRecall
+        avgChunkPrecisionAtK = $avgChunkPrecision
+        avgRecallAtK      = $avgAnchorRecall
         permissionLeaks   = $leaks.Count
         failedIds         = @($subset | Where-Object { -not $_.pass } | ForEach-Object { $_.id })
     }
@@ -213,7 +260,8 @@ $md = @"
 | metric | value |
 |--------|-------|
 | pass | $($summary.search.passCount) / $($summary.search.queries) |
-| avg Recall@K | $($summary.search.avgRecallAtK) |
+| avg AnchorRecall@K | $($summary.search.avgAnchorRecallAtK) |
+| avg ChunkPrecision@K | $($summary.search.avgChunkPrecisionAtK) |
 | PermissionLeak | $($summary.search.permissionLeaks) |
 
 "@
@@ -225,7 +273,8 @@ if ($summary.harness) {
 | metric | value |
 |--------|-------|
 | pass | $($summary.harness.passCount) / $($summary.harness.queries) |
-| avg Recall@K | $($summary.harness.avgRecallAtK) |
+| avg AnchorRecall@K | $($summary.harness.avgAnchorRecallAtK) |
+| avg ChunkPrecision@K | $($summary.harness.avgChunkPrecisionAtK) |
 | PermissionLeak | $($summary.harness.permissionLeaks) |
 
 "@

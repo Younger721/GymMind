@@ -19,14 +19,13 @@ public class KnowledgeIngestWorker {
     public static final String JOB_TYPE = "KNOWLEDGE_INGEST";
     public static final String JOB_TYPE_PARSE = "KNOWLEDGE_INGEST_PARSE";
     public static final String JOB_TYPE_INDEX = "KNOWLEDGE_INGEST_INDEX";
-    private static final int MAX_ATTEMPTS = 5;
-
     private final PersistentJobQueue jobs;
     private final KnowledgeDocumentRepository documents;
     private final KnowledgeObjectStore store;
     private final KnowledgeIndexingService indexing;
     private final KnowledgeChunkArtifactService artifacts;
     private final KnowledgeIngestSettings settings;
+    private final KnowledgeIngestJobProperties jobProperties;
     private final Clock clock;
 
     public KnowledgeIngestWorker(
@@ -35,7 +34,7 @@ public class KnowledgeIngestWorker {
             KnowledgeObjectStore store,
             KnowledgeIndexingService indexing,
             Clock clock) {
-        this(jobs, documents, store, indexing, null, KnowledgeIngestSettings.disabled(), clock);
+        this(jobs, documents, store, indexing, null, KnowledgeIngestSettings.disabled(), defaultJobProperties(), clock);
     }
 
     public KnowledgeIngestWorker(
@@ -46,13 +45,30 @@ public class KnowledgeIngestWorker {
             KnowledgeChunkArtifactService artifacts,
             KnowledgeIngestSettings settings,
             Clock clock) {
+        this(jobs, documents, store, indexing, artifacts, settings, defaultJobProperties(), clock);
+    }
+
+    public KnowledgeIngestWorker(
+            PersistentJobQueue jobs,
+            KnowledgeDocumentRepository documents,
+            KnowledgeObjectStore store,
+            KnowledgeIndexingService indexing,
+            KnowledgeChunkArtifactService artifacts,
+            KnowledgeIngestSettings settings,
+            KnowledgeIngestJobProperties jobProperties,
+            Clock clock) {
         this.jobs = jobs;
         this.documents = documents;
         this.store = store;
         this.indexing = indexing;
         this.artifacts = artifacts;
         this.settings = settings == null ? KnowledgeIngestSettings.disabled() : settings;
+        this.jobProperties = jobProperties == null ? defaultJobProperties() : jobProperties;
         this.clock = clock;
+    }
+
+    private static KnowledgeIngestJobProperties defaultJobProperties() {
+        return new KnowledgeIngestJobProperties(5, 30, 5);
     }
 
     public void enqueue(Long tenantId, Long documentId) {
@@ -78,7 +94,7 @@ public class KnowledgeIngestWorker {
     public void processNext() {
         Instant now = clock.instant();
         jobs.recoverExpired(now);
-        jobs.claimNext(now, Duration.ofMinutes(5)).ifPresent(job -> {
+        jobs.claimNext(now, jobProperties.leaseDuration()).ifPresent(job -> {
             if (job.type() == null || !isIngestJob(job.type())) {
                 jobs.complete(job.id());
                 return;
@@ -214,7 +230,7 @@ public class KnowledgeIngestWorker {
         KnowledgeDocument document = loadDocument(job);
         if (document != null && document.status() != DocumentStatus.DELETED) {
             try {
-                if (job.attempts() + 1 >= MAX_ATTEMPTS) {
+                if (job.attempts() + 1 >= jobProperties.maxAttempts()) {
                     document.markFailed();
                 } else if (job.type().startsWith(JOB_TYPE_INDEX + ":")) {
                     if (document.status() == DocumentStatus.INDEXING) {

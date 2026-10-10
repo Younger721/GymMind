@@ -3,18 +3,15 @@ package com.gymmind.ai.infrastructure.bailian;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gymmind.ai.domain.EmbeddingGateway;
+import com.gymmind.ai.infrastructure.BailianCallRetrier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.net.http.HttpClient;
-import java.time.Duration;
 
 @Component
 public class BailianEmbeddingAdapter implements EmbeddingGateway {
@@ -25,19 +22,24 @@ public class BailianEmbeddingAdapter implements EmbeddingGateway {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String model;
     private final boolean localFallback;
+    private final BailianCallRetrier retrier;
 
-    public BailianEmbeddingAdapter(RestClient.Builder builder) {
-        String key = System.getenv("DASHSCOPE_API_KEY");
-        this.localFallback = key == null || key.isBlank();
-        this.model = Optional.ofNullable(System.getenv("DASHSCOPE_EMBEDDING_MODEL")).orElse("qwen3.7-text-embedding");
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(3)).build());
-        requestFactory.setReadTimeout(Duration.ofSeconds(10));
-        this.client = builder.baseUrl(Optional.ofNullable(System.getenv("DASHSCOPE_BASE_URL"))
-                        .orElse("https://dashscope.aliyuncs.com/compatible-mode/v1"))
-                .requestFactory(requestFactory)
-                .defaultHeader("Authorization", "Bearer " + Optional.ofNullable(key).orElse(""))
+    public BailianEmbeddingAdapter(RestClient.Builder builder, DashScopeProperties dashScope) {
+        String key = dashScope.apiKeyForDashScopeOnly();
+        this.localFallback = key.isBlank();
+        this.model = dashScope.getEmbeddingModel();
+        // 不在此处覆盖 RequestFactory，便于单测 MockRestServiceServer 拦截，超时由 RestClient.Builder Bean 统一配置
+        this.client = builder.baseUrl(dashScope.baseUrlForDashScope())
+                .defaultHeader("Authorization", "Bearer " + key)
                 .build();
+        this.retrier = new BailianCallRetrier(3, delayMs -> {
+            try {
+                Thread.sleep(delayMs);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("embedding retry interrupted", interrupted);
+            }
+        });
     }
 
     @Override
@@ -57,13 +59,19 @@ public class BailianEmbeddingAdapter implements EmbeddingGateway {
     }
 
     private List<float[]> embedBatch(List<String> texts) {
-        // DashScope's OpenAI-compatible endpoint expects input to be a JSON array.
+        return retrier.execute(() -> parseEmbeddingResponse(texts, invokeEmbedding(texts)));
+    }
+
+    private String invokeEmbedding(List<String> texts) {
         Map<String, Object> body = Map.of("model", model, "input", texts);
-        String raw = client.post().uri("/embeddings")
+        return client.post().uri("/embeddings")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(body)
                 .retrieve()
                 .body(String.class);
+    }
+
+    private List<float[]> parseEmbeddingResponse(List<String> texts, String raw) {
         try {
             JsonNode data = mapper.readTree(raw).path("data");
             List<float[]> out = new ArrayList<>();

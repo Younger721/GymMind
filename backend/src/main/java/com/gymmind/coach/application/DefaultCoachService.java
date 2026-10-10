@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.Map;
 import java.util.Objects;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class DefaultCoachService implements CoachService {
@@ -33,6 +35,26 @@ public class DefaultCoachService implements CoachService {
         if (actor.roles().contains(RoleCode.COACH) && !Objects.equals(actor.userId(), coach.getUserId())) throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         if (ActorAccess.canManageTenant(actor) && !actor.hasPermission("coach:read")) throw new BusinessException(ErrorCode.FORBIDDEN);
         return view(coach);
+    }
+    @Override @Transactional(readOnly = true) public List<CoachView> list(CurrentActor actor, Long requestedTenantId) {
+        if (actor == null || actor.roles().stream().noneMatch(role -> role == RoleCode.PLATFORM_ADMIN
+                || role == RoleCode.GYM_ADMIN || role == RoleCode.COACH || role == RoleCode.MEMBER)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        Long currentTenantId = ActorAccess.tenantId(actor);
+        Long targetTenantId;
+        if (ActorAccess.isSuperAdmin(actor)) {
+            if (requestedTenantId == null || requestedTenantId <= 0) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+            }
+            targetTenantId = requestedTenantId;
+        } else {
+            if (currentTenantId == null || (requestedTenantId != null && !currentTenantId.equals(requestedTenantId))) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            targetTenantId = currentTenantId;
+        }
+        return coaches.findAllByTenantId(targetTenantId).stream().map(DefaultCoachService::view).collect(Collectors.toList());
     }
     @Override @Transactional public void update(CurrentActor actor, Long coachId, String fullName, String phone) { requireAdmin(actor, "coach:write"); Coach coach = findTenant(actor, coachId); coach.update(fullName, phone); coaches.save(coach); audit.record(new AuditEvent("COACH_UPDATED", "COACH", coachId, AuditResult.SUCCESS, "coach-service", Map.of())); }
     @Override @Transactional public void suspend(CurrentActor actor, Long coachId) { requireAdmin(actor, "coach:write"); Coach coach = findTenant(actor, coachId); coach.suspend(); coaches.save(coach); audit.record(new AuditEvent("COACH_SUSPENDED", "COACH", coachId, AuditResult.SUCCESS, "coach-service", Map.of())); }

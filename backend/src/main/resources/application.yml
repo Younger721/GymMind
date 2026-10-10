@@ -10,10 +10,12 @@ management:
     web:
       exposure:
         include: health,info
+
 platform-admin:
   email: ${PLATFORM_ADMIN_EMAIL:}
   username: ${PLATFORM_ADMIN_USERNAME:}
   password: ${PLATFORM_ADMIN_PASSWORD:}
+
 gymmind:
   ai:
     dashscope:
@@ -22,20 +24,9 @@ gymmind:
       chat-model: ${DASHSCOPE_CHAT_MODEL:qwen3.7-plus}
       embedding-model: ${DASHSCOPE_EMBEDDING_MODEL:qwen3.7-text-embedding}
       rerank-model: ${DASHSCOPE_RERANK_MODEL:qwen3.7-text-rerank}
-  search:
-    keyword-backend: ${GYMMIND_SEARCH_KEYWORD_BACKEND:elasticsearch}
-    vector-backend: ${GYMMIND_SEARCH_VECTOR_BACKEND:milvus}
-    milvus-url: ${GYMMIND_MILVUS_URL:http://localhost:19530}
-    elasticsearch-url: ${GYMMIND_ES_URL:http://localhost:9202}
-  job-queue: ${GYMMIND_JOB_QUEUE:memory}
-  knowledge:
-    ingest:
-      two-phase: ${GYMMIND_KNOWLEDGE_INGEST_TWO_PHASE:false}
-  object-store: ${GYMMIND_OBJECT_STORE:local}
   security:
     jwt:
       issuer: GymMind
-      # Development fallback only; production deployments must override JWT_SECRET.
       secret: ${JWT_SECRET:GymMind-local-dev-secret-change-me-please-32bytes}
       access-ttl: PT2H
       refresh-ttl: P7D

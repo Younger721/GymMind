@@ -6,17 +6,17 @@ import org.springframework.web.client.ResourceAccessException;
 
 import java.util.function.Consumer;
 
-final class BailianCallRetrier {
+public final class BailianCallRetrier {
     private final int maxAttempts;
     private final Consumer<Long> sleeper;
 
-    BailianCallRetrier(int maxAttempts, Consumer<Long> sleeper) {
+    public BailianCallRetrier(int maxAttempts, Consumer<Long> sleeper) {
         if (maxAttempts < 1) throw new IllegalArgumentException("maxAttempts must be positive");
         this.maxAttempts = maxAttempts;
         this.sleeper = sleeper;
     }
 
-    <T> T execute(java.util.function.Supplier<T> call) {
+    public <T> T execute(java.util.function.Supplier<T> call) {
         RuntimeException last = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {

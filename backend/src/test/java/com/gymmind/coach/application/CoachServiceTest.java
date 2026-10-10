@@ -32,5 +32,35 @@ class CoachServiceTest {
                 .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
         verify(repository).findByTenantIdAndId(11L, 3L);
     }
+
+    @Test
+    void platformAdminListsCoachesForRequestedTenant() {
+        CoachRepository repository = mock(CoachRepository.class);
+        Coach coach = mock(Coach.class);
+        when(repository.findAllByTenantId(22L)).thenReturn(java.util.List.of(coach));
+        when(coach.getId()).thenReturn(8L);
+        when(coach.getTenantId()).thenReturn(22L);
+        when(coach.getUserId()).thenReturn(31L);
+        when(coach.getCoachNumber()).thenReturn("C-8");
+        when(coach.getFullName()).thenReturn("Alice");
+        when(coach.getPhone()).thenReturn("13900000000");
+        when(coach.getStatus()).thenReturn(com.gymmind.coach.domain.model.CoachStatus.ACTIVE);
+        DefaultCoachService service = new DefaultCoachService(repository, mock(AuditRecorder.class));
+
+        assertThat(service.list(platformAdmin(), 22L)).extracting(CoachView::id).containsExactly(8L);
+        verify(repository).findAllByTenantId(22L);
+    }
+
+    @Test
+    void gymAdminCannotListAnotherTenantCoaches() {
+        CoachRepository repository = mock(CoachRepository.class);
+        DefaultCoachService service = new DefaultCoachService(repository, mock(AuditRecorder.class));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.list(admin(11L), 22L))
+                .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+        verifyNoInteractions(repository);
+    }
+
     private static CurrentActor admin(long tenantId) { return new CurrentActor(1L, tenantId, Set.of(RoleCode.GYM_ADMIN), Set.of("coach:read", "coach:write"), 0L, "token"); }
+    private static CurrentActor platformAdmin() { return new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token"); }
 }

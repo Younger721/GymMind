@@ -13,6 +13,7 @@ public class CoachController {
     private final CoachService coaches; private final CoachAssignmentService assignments; private final CurrentActorProvider actors;
     public CoachController(CoachService coaches, CoachAssignmentService assignments, CurrentActorProvider actors) { this.coaches = coaches; this.assignments = assignments; this.actors = actors; }
     @PostMapping @ResponseStatus(HttpStatus.CREATED) public ApiResponse<CoachView> create(@Valid @RequestBody CreateRequest request) { return ApiResponse.success(coaches.create(actors.requireCurrent(), new CreateCoachCommand(null, request.coachNumber(), request.fullName(), request.phone(), request.userId()))); }
+    @GetMapping public ApiResponse<java.util.List<CoachView>> list(@RequestParam(required = false) Long tenantId) { return ApiResponse.success(coaches.list(actors.requireCurrent(), tenantId)); }
     @GetMapping("/{coachId}") public ApiResponse<CoachView> find(@PathVariable Long coachId) { return ApiResponse.success(coaches.find(actors.requireCurrent(), coachId)); }
     @PatchMapping("/{coachId}") public ApiResponse<Void> update(@PathVariable Long coachId, @Valid @RequestBody UpdateRequest request) { coaches.update(actors.requireCurrent(), coachId, request.fullName(), request.phone()); return ApiResponse.success(null); }
     @PostMapping("/{coachId}/members/{memberId}") public ApiResponse<Void> assign(@PathVariable Long coachId, @PathVariable Long memberId) { assignments.assign(actors.requireCurrent(), new AssignCoachCommand(null, coachId, memberId)); return ApiResponse.success(null); }

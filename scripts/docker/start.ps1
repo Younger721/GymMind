@@ -243,7 +243,7 @@ if ($useDockerMysql) {
     Write-Host "  MySQL (local):   ${mysqlHost}:${mysqlPortLocal}/${mysqlDb}"
 }
 Write-Host ""
-Write-Host "Backend profile: SPRING_PROFILES_ACTIVE=dev,docker"
+Write-Host "Backend profile: SPRING_PROFILES_ACTIVE=dev"
 Write-Host "One-click full stack: start-all.bat"
 Write-Host ""
 

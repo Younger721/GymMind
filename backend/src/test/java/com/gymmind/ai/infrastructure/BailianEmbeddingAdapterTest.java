@@ -1,6 +1,7 @@
 package com.gymmind.ai.infrastructure;
 
 import com.gymmind.ai.infrastructure.bailian.BailianEmbeddingAdapter;
+import com.gymmind.ai.infrastructure.bailian.DashScopeProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -17,6 +18,12 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class BailianEmbeddingAdapterTest {
+
+    private static DashScopeProperties dashScopeWithKey() {
+        DashScopeProperties properties = new DashScopeProperties();
+        properties.setApiKey("sk-test");
+        return properties;
+    }
     @Test
     void sendsEmbeddingTextsAsOpenAiCompatibleInputArray() {
         RestClient.Builder builder = RestClient.builder();
@@ -31,7 +38,7 @@ class BailianEmbeddingAdapterTest {
                 .andExpect(content().json("{\"model\":\"qwen3.7-text-embedding\",\"input\":[\"hello\"]}"))
                 .andRespond(withSuccess("{\"data\":[{\"embedding\":" + vector + "}]}", MediaType.APPLICATION_JSON));
 
-        var result = new BailianEmbeddingAdapter(builder).embed(java.util.List.of("hello"));
+        var result = new BailianEmbeddingAdapter(builder, dashScopeWithKey()).embed(java.util.List.of("hello"));
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0)).hasSize(1024);
@@ -59,7 +66,7 @@ class BailianEmbeddingAdapterTest {
                 .andExpect(content().json(secondRequest))
                 .andRespond(withSuccess("{\"data\":[{\"embedding\":" + vector + "}]}", MediaType.APPLICATION_JSON));
 
-        var result = new BailianEmbeddingAdapter(builder).embed(
+        var result = new BailianEmbeddingAdapter(builder, dashScopeWithKey()).embed(
                 IntStream.range(0, 21).mapToObj(i -> "doc-" + i).toList());
 
         assertThat(result).hasSize(21);

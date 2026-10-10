@@ -7,7 +7,7 @@
 
 ## 前置条件
 
-1. 中间件与后端：`dev,docker` 配置，见 [CONFIGURATION.md](../CONFIGURATION.md)
+1. 中间件与后端：`dev` profile，见 [CONFIGURATION.md](../CONFIGURATION.md)
 2. 根目录 `.env` 含有效 `DASHSCOPE_API_KEY`（Harness 与入库 Embedding 需要）
 3. Windows **PowerShell 5.1+**（仓库脚本已兼容；若已安装 PowerShell 7 也可用 `pwsh`）
 4. 平台管理员默认账号：`admin` / `123456`（与 `application-dev.yml` 一致）
@@ -42,8 +42,10 @@ powershell -File ./scripts/rag-eval/run-eval.ps1 -SearchOnly
 
 ## 指标定义
 
-- **Recall@K**：`expectedAnchors` 中出现在 Top-K 片段/citation 里的比例
-- **Precision@K**：Top-K 中命中期望锚点的条数 / K（仅对有期望锚点的问句计算）
+- **AnchorRecall@K**：`expectedAnchors` 中至少出现在 Top-K 文本里的比例（pass 判定仍用它）
+- **ChunkPrecision@K**：Top-K **每条**片段/citation 若含期望锚点或期望文档名则计为相关，相关条数 / K（经典精确率）
+- **ChunkRecall@K**（报告明细字段）：Top-K 中相关条数与期望锚点数的比值（上限 1；多锚点题可 &lt; 1）
+- 报告中的 `recallAtK` / `precisionAtK` 为兼容别名，分别等于 AnchorRecall、ChunkPrecision
 - **PermissionLeak**：Top 结果中出现 `forbiddenAnchors` 或 `forbiddenDocuments` 即为泄漏，**必须为 0**
 
 ## 与生产样例隔离

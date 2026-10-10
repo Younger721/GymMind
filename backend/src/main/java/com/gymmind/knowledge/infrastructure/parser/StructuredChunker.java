@@ -33,7 +33,7 @@ public final class StructuredChunker {
             case FAQ_RULE -> faq(document.blocks());
             case RECORD -> records(document.blocks());
             case KNOWLEDGE -> knowledge(document.blocks());
-            case GENERAL -> general(document.plainText());
+            case GENERAL -> general(document.blocks());
         };
         List<Chunk> result = new ArrayList<>();
         for (int i = 0; i < pieces.size(); i++) {
@@ -104,15 +104,11 @@ public final class StructuredChunker {
         return result;
     }
 
-    private List<String> general(String text) {
-        List<String> result = new ArrayList<>();
-        int size = MAX_CHARS, overlap = 180, step = size - overlap;
-        for (int start = 0; start < text.length(); start += step) {
-            int end = Math.min(text.length(), start + size);
-            result.add(text.substring(start, end));
-            if (end == text.length()) break;
-        }
-        return result;
+    private List<String> general(List<DocumentBlock> blocks) {
+        // Even the fallback strategy keeps parser boundaries. A fixed character
+        // window can combine unrelated sections and makes every citation look
+        // like a copy of the whole document.
+        return grouped(blocks, true, false);
     }
 
     private List<String> grouped(List<DocumentBlock> blocks, boolean splitOnTitle, boolean keepListGroup) {

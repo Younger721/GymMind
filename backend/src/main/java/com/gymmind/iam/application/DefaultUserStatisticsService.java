@@ -16,6 +16,7 @@ import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.tenancy.domain.repository.TenantRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -38,17 +39,25 @@ public class DefaultUserStatisticsService implements UserStatisticsService {
     private final MemberMembershipRepository memberships;
     private final MembershipPackageRepository packages;
     private final Clock clock;
+    private final TenantRepository tenants;
 
     @Autowired
     public DefaultUserStatisticsService(UserAccountRepository users, UserRoleRepository userRoles,
                                         MemberRepository members, MemberMembershipRepository memberships,
-                                        MembershipPackageRepository packages) {
+                                        MembershipPackageRepository packages, TenantRepository tenants) {
         this.users = Objects.requireNonNull(users, "users");
         this.userRoles = Objects.requireNonNull(userRoles, "userRoles");
         this.members = Objects.requireNonNull(members, "members");
         this.memberships = Objects.requireNonNull(memberships, "memberships");
         this.packages = Objects.requireNonNull(packages, "packages");
         this.clock = Clock.systemUTC();
+        this.tenants = tenants;
+    }
+
+    public DefaultUserStatisticsService(UserAccountRepository users, UserRoleRepository userRoles,
+                                        MemberRepository members, MemberMembershipRepository memberships,
+                                        MembershipPackageRepository packages) {
+        this(users, userRoles, members, memberships, packages, null);
     }
 
     /** Backward-compatible constructor for focused service tests. */
@@ -59,12 +68,30 @@ public class DefaultUserStatisticsService implements UserStatisticsService {
         this.memberships = null;
         this.packages = null;
         this.clock = Clock.systemUTC();
+        this.tenants = null;
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResponse<UserAdministrationService.UserSummary> list(CurrentActor actor, Pageable pageable) {
+        return list(actor, pageable, null, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<UserAdministrationService.UserSummary> list(CurrentActor actor, Pageable pageable, Long requestedTenantId, String displayName) {
         List<UserAdministrationService.UserSummary> visible = visibleUsers(actor);
+        if (requestedTenantId != null) {
+            if (!ActorAccess.isSuperAdmin(actor) && !requestedTenantId.equals(ActorAccess.tenantId(actor))) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            visible = visible.stream().filter(user -> requestedTenantId.equals(user.tenantId())).toList();
+        }
+        if (displayName != null && !displayName.isBlank()) {
+            String keyword = displayName.trim().toLowerCase(java.util.Locale.ROOT);
+            visible = visible.stream().filter(user -> user.displayName() != null
+                    && user.displayName().toLowerCase(java.util.Locale.ROOT).contains(keyword)).toList();
+        }
         Pageable effective = pageable == null ? Pageable.ofSize(20) : pageable;
         int from = Math.min((int) effective.getOffset(), visible.size());
         int to = Math.min(from + effective.getPageSize(), visible.size());
@@ -155,8 +182,10 @@ public class DefaultUserStatisticsService implements UserStatisticsService {
                 }
             }
         }
-        return new UserAdministrationService.UserSummary(user.getId(), user.getTenantId(),
-                user.getNormalizedUsername(), user.getNormalizedEmail(), user.getDisplayName(),
+        String tenantName = tenants == null || user.getTenantId() == null ? null
+                : tenants.findById(user.getTenantId()).map(t -> t.getName()).orElse(null);
+        return new UserAdministrationService.UserSummary(user.getId(), user.getTenantId(), tenantName,
+                user.getNormalizedUsername(), user.getNormalizedEmail(), user.getDisplayName(), user.getPhone(),
                 user.getStatus(), Set.copyOf(roles), membershipType, membershipDaysRemaining);
     }
 }

@@ -24,15 +24,17 @@ if not exist "%~dp0.env" (
     exit /b 1
 )
 
+rem 空值不覆盖：避免 .env 里占位空行冲掉系统已配置的 DASHSCOPE_API_KEY 等
 for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%~dp0.env") do (
-    set "%%A=%%B"
+    if not "%%~B"=="" set "%%A=%%~B"
 )
 
 if not defined JAVA_HOME set "JAVA_HOME=D:\java\jdk-17.0.14"
-if not defined SPRING_PROFILES_ACTIVE set "SPRING_PROFILES_ACTIVE=dev,docker"
+if not defined SPRING_PROFILES_ACTIVE set "SPRING_PROFILES_ACTIVE=dev"
 
 cd /d "%~dp0backend"
-start "GymMind Backend" cmd /k "cd /d %~dp0backend && set JAVA_HOME=%JAVA_HOME% && set SPRING_PROFILES_ACTIVE=%SPRING_PROFILES_ACTIVE% && set MYSQL_HOST=%MYSQL_HOST% && set MYSQL_PORT=%MYSQL_PORT% && set MYSQL_USER=%MYSQL_USER% && set MYSQL_PASSWORD=%MYSQL_PASSWORD% && set JWT_SECRET=%JWT_SECRET% && set PLATFORM_ADMIN_EMAIL=%PLATFORM_ADMIN_EMAIL% && set PLATFORM_ADMIN_PASSWORD=%PLATFORM_ADMIN_PASSWORD% && set SPRING_DATA_REDIS_HOST=%SPRING_DATA_REDIS_HOST% && set SPRING_DATA_REDIS_PORT=%SPRING_DATA_REDIS_PORT% && set GYMMIND_SEARCH_KEYWORD_BACKEND=%GYMMIND_SEARCH_KEYWORD_BACKEND% && set GYMMIND_SEARCH_VECTOR_BACKEND=%GYMMIND_SEARCH_VECTOR_BACKEND% && set GYMMIND_ES_URL=%GYMMIND_ES_URL% && set GYMMIND_MILVUS_URL=%GYMMIND_MILVUS_URL% && set GYMMIND_OBJECT_STORE=%GYMMIND_OBJECT_STORE% && set GYMMIND_OBJECT_STORE_MINIO_ENDPOINT=%GYMMIND_OBJECT_STORE_MINIO_ENDPOINT% && set GYMMIND_OBJECT_STORE_MINIO_ACCESS_KEY=%GYMMIND_OBJECT_STORE_MINIO_ACCESS_KEY% && set GYMMIND_OBJECT_STORE_MINIO_SECRET_KEY=%GYMMIND_OBJECT_STORE_MINIO_SECRET_KEY% && mvnw.cmd spring-boot:run"
+rem 子进程继承当前窗口已从 .env 加载的环境变量；百炼等其余项由 Spring DotEnv 后处理器合并根 .env
+start "GymMind Backend" cmd /k "cd /d %~dp0backend && set JAVA_HOME=%JAVA_HOME% && set SPRING_PROFILES_ACTIVE=%SPRING_PROFILES_ACTIVE% && mvnw.cmd spring-boot:run"
 
 echo   Window: GymMind Backend
 

@@ -35,6 +35,9 @@ try {
     $log = Join-Path (Get-Location) "target\verify-backend.log"
     $errorLog = Join-Path (Get-Location) "target\verify-backend-error.log"
     Remove-Item $log,$errorLog -Force -ErrorAction SilentlyContinue
+    if (-not $env:SPRING_PROFILES_ACTIVE) {
+        $env:SPRING_PROFILES_ACTIVE = "dev"
+    }
     $appProcess = Start-Process -FilePath (Join-Path $javaHome "bin\java.exe") `
         -ArgumentList @("-jar", $jar) -WorkingDirectory (Get-Location) `
         -RedirectStandardOutput $log -RedirectStandardError $errorLog -PassThru

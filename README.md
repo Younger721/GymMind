@@ -58,7 +58,7 @@ cp .env.example .env
 修改 `.env` 文件中的配置：
 - `MYSQL_PASSWORD`: 你的本地 MySQL 密码
 - `JWT_SECRET`: JWT 密钥（生产环境必须修改）
-- `AI_API_KEY`: AI API 密钥（DeepSeek/OpenAI）
+- `DASHSCOPE_API_KEY`: 阿里百炼 API 密钥（见 `docs/CONFIGURATION.md`）
 - `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`: MinIO 访问凭证
 
 ### 3. 启动基础设施
@@ -66,8 +66,11 @@ cp .env.example .env
 使用 Docker Compose 启动 Redis、Elasticsearch、Milvus、etcd 和 MinIO：
 
 ```bash
+# Windows: start-infrastructure.bat  /  Linux: ./start-infrastructure.sh
 docker-compose up -d
 ```
+
+本地后端使用 **单一 profile `dev`**，详见 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)。
 
 验证服务状态：
 ```bash
@@ -75,7 +78,7 @@ docker-compose ps
 ```
 
 访问服务：
-- Elasticsearch: http://localhost:9200
+- Elasticsearch: http://localhost:9202
 - MinIO Console: http://localhost:9001
 - Milvus: localhost:19530
 

@@ -1,3 +1,5 @@
+# 本地全栈开发（唯一推荐 profile：dev）
+# 前置：本机 MySQL + start-infrastructure 拉起 Redis/ES/Milvus/MinIO
 spring:
   config:
     activate:
@@ -7,24 +9,43 @@ spring:
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_HOST_PORT:6379}
   jpa:
     hibernate:
       ddl-auto: update
     open-in-view: false
+
 platform-admin:
   email: ${PLATFORM_ADMIN_EMAIL:admin@gymmind.local}
   username: ${PLATFORM_ADMIN_USERNAME:admin}
   password: ${PLATFORM_ADMIN_PASSWORD:123456}
   force-password-sync: ${PLATFORM_ADMIN_FORCE_PASSWORD_SYNC:false}
+
 gymmind:
+  environment: dev
   dev:
     reset-demo-password: ${GYMMIND_RESET_DEMO_PASSWORD:false}
-  job-queue: ${GYMMIND_JOB_QUEUE:memory}
+  job-queue: redis
+  object-store: minio
+  object-store.minio-endpoint: ${GYMMIND_OBJECT_STORE_MINIO_ENDPOINT:http://localhost:9000}
+  object-store.minio-access-key: ${GYMMIND_OBJECT_STORE_MINIO_ACCESS_KEY:minioadmin}
+  object-store.minio-secret-key: ${GYMMIND_OBJECT_STORE_MINIO_SECRET_KEY:minioadmin123}
+  object-store.minio-bucket: ${GYMMIND_OBJECT_STORE_MINIO_BUCKET:gymmind}
   search:
-    keyword-backend: memory
-    vector-backend: memory
-    recover-published: true
-  object-store: local
+    keyword-backend: elasticsearch
+    vector-backend: milvus
+    elasticsearch-url: ${GYMMIND_ES_URL:http://localhost:9202}
+    milvus-url: ${GYMMIND_MILVUS_URL:http://localhost:19530}
+    recover-published: ${GYMMIND_SEARCH_RECOVER_PUBLISHED:true}
+  knowledge:
+    ingest:
+      two-phase: ${GYMMIND_KNOWLEDGE_INGEST_TWO_PHASE:true}
+      max-attempts: ${GYMMIND_KNOWLEDGE_INGEST_MAX_ATTEMPTS:5}
+      retry-base-seconds: ${GYMMIND_KNOWLEDGE_INGEST_RETRY_BASE_SECONDS:30}
+      lease-minutes: ${GYMMIND_KNOWLEDGE_INGEST_LEASE_MINUTES:5}
   ai:
     harness:
       platform-default-plugins: basic_chat,knowledge_search

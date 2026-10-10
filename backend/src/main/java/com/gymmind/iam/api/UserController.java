@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.Objects;
 
@@ -61,11 +62,13 @@ public class UserController {
     }
 
     @GetMapping
-    public ApiResponse<PageResponse<UserAdministrationService.UserSummary>> list(Pageable pageable) {
+    public ApiResponse<PageResponse<UserAdministrationService.UserSummary>> list(Pageable pageable,
+                                                                                  @RequestParam(required = false) Long tenantId,
+                                                                                  @RequestParam(required = false) String displayName) {
         CurrentActor actor = requireUserListAccess();
         PageResponse<UserAdministrationService.UserSummary> result = statisticsService == null
                 ? service.list(actor, pageable)
-                : statisticsService.list(actor, pageable);
+                : statisticsService.list(actor, pageable, tenantId, displayName);
         return ApiResponse.success(result);
     }
 

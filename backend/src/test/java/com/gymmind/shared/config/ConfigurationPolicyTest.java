@@ -26,7 +26,7 @@ class ConfigurationPolicyTest {
         Map<String, Object> prod = yaml("application-prod.yml");
 
         assertThat(schema(dev)).isEqualTo("gymmind");
-        assertThat(schema(test)).isEqualTo("gymmind");
+        assertThat(text("application-test.yml")).contains("MYSQL_TEST_DATABASE:gymmind_test");
         assertThat(schema(prod)).isEqualTo("gymmind");
         assertThat(value(dev, "spring", "jpa", "hibernate", "ddl-auto")).isEqualTo("update");
         assertThat(value(test, "spring", "jpa", "hibernate", "ddl-auto")).isEqualTo("create-drop");
@@ -37,7 +37,7 @@ class ConfigurationPolicyTest {
     @Test
     void developmentAndTestDatabaseNamesCannotBeOverridden() throws IOException {
         assertThat(text("application-dev.yml")).contains("/gymmind?").doesNotContain("MYSQL_DATABASE");
-        assertThat(text("application-test.yml")).contains("/gymmind?").doesNotContain("MYSQL_DATABASE");
+        assertThat(text("application-test.yml")).contains("gymmind_test").doesNotContain("MYSQL_DATABASE:");
     }
 
     @Test

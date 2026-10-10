@@ -82,6 +82,8 @@ public final class DocumentParserRegistry {
                     } else if (paragraph.getNumID() != null) {
                         int level = paragraph.getNumIlvl() == null ? 0 : paragraph.getNumIlvl().intValue();
                         blocks.add(DocumentBlock.listItem(value, level));
+                    } else if (isLikelySectionTitle(value)) {
+                        blocks.add(DocumentBlock.title(value, 1));
                     } else {
                         blocks.add(DocumentBlock.paragraph(value));
                     }
@@ -109,10 +111,19 @@ public final class DocumentParserRegistry {
     }
 
     private static int headingLevel(String style) {
+        if (style == null || style.isBlank()) return 1;
         String digits = style.replaceAll("[^0-9]", "");
         if (digits.isBlank()) return 1;
         try { return Math.max(1, Math.min(6, Integer.parseInt(digits))); }
         catch (NumberFormatException ignored) { return 1; }
+    }
+
+    private static boolean isLikelySectionTitle(String value) {
+        String text = value == null ? "" : value.trim();
+        if (text.length() < 2 || text.length() > 48) return false;
+        return !text.matches(".*[。！？!?；;：:,，].*")
+                && !text.endsWith(".")
+                && !text.endsWith("．");
     }
 
     private static List<String> cells(org.apache.poi.xwpf.usermodel.XWPFTableRow row) {

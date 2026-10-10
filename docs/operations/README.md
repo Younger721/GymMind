@@ -41,7 +41,7 @@ $env:JAVA_HOME='D:\java\jdk-17.0.14'
 | ES | `GYMMIND_ES_URL` | 全文索引 |
 | Milvus | `GYMMIND_MILVUS_URL` | 向量索引 |
 | MinIO | `gymmind.object-store=minio` | 知识文档对象存储 |
-| 百炼 | `DASHSCOPE_API_KEY` | AI 能力（未配置时使用本地降级） |
+| 百炼 | `DASHSCOPE_API_KEY`（IDEA 环境变量或根目录 `.env`） | 见 [CONFIGURATION.md](../CONFIGURATION.md) |
 
 ## 集成测试
 

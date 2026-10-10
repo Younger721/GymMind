@@ -43,4 +43,19 @@ class StructuredChunkerTest {
         assertThat(first).extracting(Chunk::id).containsExactlyElementsOf(second.stream().map(Chunk::id).toList());
         assertThat(first.get(0).id()).isNotEqualTo(chunker.chunk(document, "doc-3", ChunkStrategy.GENERAL).get(0).id());
     }
+
+    @Test
+    void generalStrategyKeepsSectionsOutOfOneLargeWindow() {
+        ParsedDocument document = new ParsedDocument(List.of(
+                DocumentBlock.title("训练安全"),
+                DocumentBlock.paragraph("先热身，使用稳定重量。"),
+                DocumentBlock.title("营养边界"),
+                DocumentBlock.paragraph("疾病相关问题应咨询专业人士。")));
+
+        List<Chunk> chunks = chunker.chunk(document, "doc-4", ChunkStrategy.GENERAL);
+
+        assertThat(chunks).hasSize(2);
+        assertThat(chunks.get(0).text()).contains("训练安全").doesNotContain("营养边界");
+        assertThat(chunks.get(1).text()).contains("营养边界").doesNotContain("训练安全");
+    }
 }

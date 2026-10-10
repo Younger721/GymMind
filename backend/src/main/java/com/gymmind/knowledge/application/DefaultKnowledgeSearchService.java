@@ -43,7 +43,7 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
 
     private static final int RECALL_TOP_K = 30;
     private static final int FUSION_TOP_K = 20;
-    private static final int MAX_SEGMENTS_PER_DOCUMENT = 2;
+    private static final int MAX_SEGMENTS_PER_DOCUMENT = 3;
     private static final int MAX_PROGRESS_DETAILS = 20;
     private static final int MAX_PROGRESS_EXCERPT = 300;
     private static final Pattern QUERY_PARTS = Pattern.compile("[^\\p{IsHan}A-Za-z0-9]+");
@@ -450,9 +450,7 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                 .filter(Objects::nonNull).collect(Collectors.toSet());
         Map<Long, KnowledgeDocument> searchable = new HashMap<>();
         if (actor.isPlatformAdmin()) {
-            documents.findAllDocuments().stream()
-                    .filter(document -> ids.contains(document.id()))
-                    .forEach(document -> searchable.put(document.id(), document));
+            documents.findByIdIn(ids).forEach(document -> searchable.put(document.id(), document));
         } else {
             if (tenantId != null) documents.findByTenantIdAndIdIn(tenantId, ids).forEach(document -> searchable.put(document.id(), document));
             documents.findPlatformDocuments().forEach(document -> searchable.put(document.id(), document));

@@ -13,11 +13,15 @@ class JobQueueSelectionTest {
                 .getAnnotation(ConditionalOnProperty.class);
         ConditionalOnProperty mysql = MySqlPersistentJobQueue.class
                 .getAnnotation(ConditionalOnProperty.class);
+        ConditionalOnProperty redis = RedisStreamPersistentJobQueue.class
+                .getAnnotation(ConditionalOnProperty.class);
 
         assertThat(memory.name()).containsExactly("gymmind.job-queue");
         assertThat(memory.havingValue()).isEqualTo("memory");
         assertThat(memory.matchIfMissing()).isTrue();
         assertThat(mysql.name()).containsExactly("gymmind.job-queue");
         assertThat(mysql.havingValue()).isEqualTo("mysql");
+        assertThat(redis.name()).containsExactly("gymmind.job-queue");
+        assertThat(redis.havingValue()).isEqualTo("redis");
     }
 }
