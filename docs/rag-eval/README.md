@@ -40,6 +40,8 @@ powershell -File ./scripts/rag-eval/run-eval.ps1 -SearchOnly
 
 重复导入可加 `-SkipIfStateExists`；若需强制重传，删除 `docs/rag-eval/state/ingested.json` 后重跑 seed（可能产生重复文档，建议专用库或重置 DB）。
 
+索引升级（含 `audienceRoles` / `visibility` 字段）后需 **重新入库** 或开启 `GYMMIND_SEARCH_RECOVER_PUBLISHED=true` 做一次全量重灌；Milvus schema 不兼容时会自动重建 collection。
+
 ## 指标定义
 
 - **AnchorRecall@K**：`expectedAnchors` 中至少出现在 Top-K 文本里的比例（pass 判定仍用它）
