@@ -8,9 +8,9 @@ import com.gymmind.ai.application.AiMemoryService;
 import com.gymmind.ai.application.AiUsageCommand;
 import com.gymmind.ai.application.ChatModelGateway;
 import com.gymmind.ai.application.DefaultAiUsageService;
-import com.gymmind.ai.application.SourceCitation;
 import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.ai.domain.PromptInjectionGuard;
+import com.gymmind.knowledge.application.KnowledgeSearchCitations;
 import com.gymmind.knowledge.application.KnowledgeSearchService;
 import com.gymmind.mcp.application.McpToolService;
 import com.gymmind.shared.error.BusinessException;
@@ -84,16 +84,17 @@ public class DefaultAgentChatService implements AgentChatService {
         }
 
         long started = System.currentTimeMillis();
-        List<ContextSegment> context = new ArrayList<>();
+        List<ContextSegment> knowledgeSegments = List.of();
         if (agent.isKnowledgeEnabled()) {
             try {
-                context.addAll(knowledgeSearch.search(actor, question));
+                knowledgeSegments = knowledgeSearch.search(actor, question);
             } catch (BusinessException ex) {
                 if (ex.errorCode() != ErrorCode.DEPENDENCY_UNAVAILABLE) {
                     throw ex;
                 }
             }
         }
+        List<ContextSegment> context = new ArrayList<>(knowledgeSegments);
         appendToolContext(actor, agent, question, context);
 
         if (context.isEmpty()) {
@@ -113,12 +114,8 @@ public class DefaultAgentChatService implements AgentChatService {
         }
         recordUsage(actor, call, "agent");
 
-        var sources = context.stream().map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
-        var citations = context.stream()
-                .filter(item -> item.id() != null)
-                .map(item -> SourceCitation.from(item, question))
-                .distinct()
-                .toList();
+        var sources = KnowledgeSearchCitations.chunkIdsInOrder(knowledgeSegments);
+        var citations = KnowledgeSearchCitations.toCitations(knowledgeSegments, question);
         return new AiChatView(answer, sources, citations);
     }
 

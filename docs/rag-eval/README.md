@@ -3,7 +3,7 @@
 本目录提供**固定语料、问句集与 PowerShell 脚本**，在本地 ES + Milvus + 后端已启动的前提下，评测：
 
 - **Search 通道**：`GET /api/v1/knowledge/search` 的 Recall@K、Precision@K、PermissionLeak
-- **Harness 通道**（可选）：`POST /api/v1/ai/harness/chat`（仅 `knowledge_search` 插件）引用 **citations**，不评价 LLM 文案
+- **Harness 通道**（可选）：`POST /api/v1/ai/harness/chat`（仅 `knowledge_search` 插件）引用 **citations**，不评价 LLM 文案；与 Search 共用 `KnowledgeSearchService`，报告会对比两通道 Top 结果的 **chunkId 顺序**
 
 ## 前置条件
 

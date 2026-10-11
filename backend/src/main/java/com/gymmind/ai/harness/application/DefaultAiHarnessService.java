@@ -7,8 +7,8 @@ import com.gymmind.ai.application.AiChatView;
 import com.gymmind.ai.application.AiUsageCommand;
 import com.gymmind.ai.application.ChatModelGateway;
 import com.gymmind.ai.application.DefaultAiUsageService;
-import com.gymmind.ai.application.SourceCitation;
 import com.gymmind.ai.domain.ContextSegment;
+import com.gymmind.knowledge.application.KnowledgeSearchCitations;
 import com.gymmind.ai.domain.PromptInjectionGuard;
 import com.gymmind.ai.harness.AiHarnessPlugin;
 import com.gymmind.ai.harness.AiHarnessPluginDescriptor;
@@ -249,9 +249,10 @@ public class DefaultAiHarnessService implements AiHarnessService {
         }
         Consumer<AiProgressEvent> progress = onProgress == null ? ignored -> { } : onProgress;
         List<ContextSegment> context = new ArrayList<>();
+        List<ContextSegment> retrievedKnowledge = List.of();
         boolean knowledgeRetrieved = false;
         if (enabled.contains("knowledge_search")) {
-            contributeKnowledge(actor, question, context, progress);
+            retrievedKnowledge = contributeKnowledge(actor, question, context, progress);
             knowledgeRetrieved = true;
         }
         String authoritativeAnswer = context.stream().filter(ContextSegment::authoritativeAnswer)
@@ -370,21 +371,9 @@ public class DefaultAiHarnessService implements AiHarnessService {
             recordUsage(actor, call, "harness");
         }
 
-        var sources = context.stream().filter(DefaultAiHarnessService::isUserVisibleSource)
-                .map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
-        var citations = context.stream()
-                .filter(DefaultAiHarnessService::isUserVisibleSource)
-                .filter(item -> item.id() != null)
-                .map(item -> SourceCitation.from(item, question))
-                .distinct()
-                .toList();
+        var sources = KnowledgeSearchCitations.chunkIdsInOrder(retrievedKnowledge);
+        var citations = KnowledgeSearchCitations.toCitations(retrievedKnowledge, question);
         return new AiChatView(answer, sources, citations);
-    }
-
-    private static boolean isUserVisibleSource(ContextSegment segment) {
-        return segment != null && !"TOOL_RESULT".equals(segment.documentId())
-                && !"TOOL_ERROR".equals(segment.documentId())
-                && !segment.authoritativeAnswer();
     }
 
     private static String emitAnswer(String answer, Consumer<String> onToken) {
@@ -412,23 +401,26 @@ public class DefaultAiHarnessService implements AiHarnessService {
         return result;
     }
 
-    private void contributeKnowledge(CurrentActor actor, String question, List<ContextSegment> context,
-                                    Consumer<AiProgressEvent> progress) {
+    private List<ContextSegment> contributeKnowledge(CurrentActor actor, String question, List<ContextSegment> context,
+                                                     Consumer<AiProgressEvent> progress) {
+        List<ContextSegment> retrieved = new ArrayList<>();
         registry.find("knowledge_search").ifPresent(plugin -> {
             int contextBefore = context.size();
             progress.accept(new AiProgressEvent("knowledge_search", "plugin_start", AiProgressEvent.Status.STARTED,
                     "自动检索知识库", null));
             try {
                 plugin.contribute(actor, question, context, progress);
+                retrieved.addAll(context.subList(contextBefore, context.size()));
                 progress.accept(new AiProgressEvent("knowledge_search", "plugin_complete", AiProgressEvent.Status.COMPLETED,
-                        "知识库检索完成", context.size() - contextBefore,
-                        documentDetails(context.subList(contextBefore, context.size()))));
+                        "知识库检索完成", retrieved.size(),
+                        documentDetails(retrieved)));
             } catch (RuntimeException exception) {
                 progress.accept(new AiProgressEvent("knowledge_search", "plugin_error", AiProgressEvent.Status.FAILED,
                         "知识库检索失败", null));
                 throw exception;
             }
         });
+        return List.copyOf(retrieved);
     }
 
     private static List<AiProgressDetail> documentDetails(List<ContextSegment> segments) {

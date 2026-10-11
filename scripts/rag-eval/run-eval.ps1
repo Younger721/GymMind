@@ -175,6 +175,7 @@ function Get-UserToken {
 }
 
 $rows = @()
+$alignmentRows = @()
 foreach ($q in $cfg.queries) {
     Write-Host "[$($q.id)] $($q.user) :: $($q.question)"
     $token = Get-UserToken -UserKey $q.user
@@ -187,6 +188,7 @@ foreach ($q in $cfg.queries) {
         $searchErr = $_.Exception.Message
     }
     $rows += Measure-Query -QueryRow $q -Channel 'search' -Segments $segments -ErrorMsg $searchErr
+    $searchChunkIds = @($segments | ForEach-Object { $_.id })
 
     if (-not $SearchOnly -and -not $SkipHarness) {
         $chat = $null
@@ -205,6 +207,16 @@ foreach ($q in $cfg.queries) {
         $citations = @()
         if ($chat -and $chat.citations) { $citations = @($chat.citations) }
         $rows += Measure-Query -QueryRow $q -Channel 'harness' -Citations $citations -ErrorMsg $hErr
+        $harnessChunkIds = @($citations | ForEach-Object { $_.chunkId })
+        $aligned = (-not $searchErr) -and (-not $hErr) -and (
+            (($searchChunkIds -join '|') -eq ($harnessChunkIds -join '|'))
+        )
+        $alignmentRows += [ordered]@{
+            id               = $q.id
+            channelAligned   = $aligned
+            searchChunkIds   = $searchChunkIds
+            harnessChunkIds  = $harnessChunkIds
+        }
     }
 }
 
@@ -235,12 +247,22 @@ function Summarize-Channel {
     }
 }
 
+$misaligned = @($alignmentRows | Where-Object { -not $_.channelAligned })
 $summary = [ordered]@{
     generatedAt = (Get-Date).ToString('o')
     baseUrl     = $BaseUrl
     k           = $k
     search      = Summarize-Channel 'search'
     harness     = if ($SearchOnly -or $SkipHarness) { $null } else { Summarize-Channel 'harness' }
+    channelAlignment = if ($SearchOnly -or $SkipHarness) { $null } else {
+        [ordered]@{
+            queriesCompared = $alignmentRows.Count
+            alignedCount    = @($alignmentRows | Where-Object { $_.channelAligned }).Count
+            misalignedCount = $misaligned.Count
+            misalignedIds   = @($misaligned | ForEach-Object { $_.id })
+            details         = $alignmentRows
+        }
+    }
     details     = $rows
 }
 
@@ -278,6 +300,18 @@ if ($summary.harness) {
 | PermissionLeak | $($summary.harness.permissionLeaks) |
 
 "@
+    if ($summary.channelAlignment) {
+        $md += @"
+
+## Search vs Harness chunkId 对齐
+
+| metric | value |
+|--------|-------|
+| aligned | $($summary.channelAlignment.alignedCount) / $($summary.channelAlignment.queriesCompared) |
+| misaligned ids | $($summary.channelAlignment.misalignedIds -join ', ') |
+
+"@
+    }
 }
 $md += "`nJSON: $jsonPath"
 Set-Content -Encoding UTF8 -Path $mdPath -Value $md

@@ -7,6 +7,7 @@ import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.ai.domain.PromptInjectionGuard;
 import com.gymmind.ai.domain.QuestionIntent;
 import com.gymmind.ai.domain.QuestionIntentClassifier;
+import com.gymmind.knowledge.application.KnowledgeSearchCitations;
 import com.gymmind.knowledge.application.KnowledgeSearchService;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
@@ -105,10 +106,8 @@ public class DefaultAiChatService implements AiChatService {
         String authoritativeAnswer = context.stream().filter(ContextSegment::authoritativeAnswer)
                 .map(ContextSegment::text).filter(Objects::nonNull).findFirst().orElse(null);
         if (authoritativeAnswer != null) {
-            var sources = context.stream().filter(item -> !item.authoritativeAnswer())
-                    .map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
-            var citations = context.stream().filter(item -> !item.authoritativeAnswer() && item.id() != null)
-                    .map(item -> SourceCitation.from(item, question)).distinct().toList();
+            var sources = KnowledgeSearchCitations.chunkIdsInOrder(context);
+            var citations = KnowledgeSearchCitations.toCitations(context, question);
             return new AiChatView(authoritativeAnswer, sources, citations);
         }
 
@@ -122,9 +121,8 @@ public class DefaultAiChatService implements AiChatService {
             answer = "模型暂时不可用，请稍后重试。";
         }
         recordUsage(actor, call, "chat");
-        var sources = context.stream().map(ContextSegment::id).filter(Objects::nonNull).distinct().toList();
-        var citations = context.stream().filter(item -> item.id() != null)
-                .map(item -> SourceCitation.from(item, question)).distinct().toList();
+        var sources = KnowledgeSearchCitations.chunkIdsInOrder(context);
+        var citations = KnowledgeSearchCitations.toCitations(context, question);
         return new AiChatView(answer, sources, citations);
     }
 
