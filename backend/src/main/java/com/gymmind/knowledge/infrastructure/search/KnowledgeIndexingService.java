@@ -2,6 +2,8 @@ package com.gymmind.knowledge.infrastructure.search;
 
 import com.gymmind.ai.domain.EmbeddingGateway;
 import com.gymmind.knowledge.application.KnowledgeChunkArtifact;
+import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.infrastructure.parser.Chunk;
 import com.gymmind.knowledge.infrastructure.parser.ChunkStrategy;
 import com.gymmind.knowledge.infrastructure.parser.DeterministicChunker;
@@ -10,6 +12,7 @@ import com.gymmind.knowledge.infrastructure.parser.ParsedDocument;
 import com.gymmind.knowledge.infrastructure.parser.StructuredChunker;
 import com.gymmind.knowledge.infrastructure.parser.HeuristicTokenCounter;
 import java.util.List;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -80,7 +83,7 @@ public class KnowledgeIndexingService {
         int version = strategyVersion == null || strategyVersion <= 0 ? 1 : strategyVersion;
         List<Chunk> parsedChunks = chunkFromBytes(documentId, fileName, contentType, bytes, strategy, version);
         return publishChunks(tenantId, documentId, ownerUserId, parsedChunks, strategy, version, knowledgeKey,
-                knowledgeVersion);
+                knowledgeVersion, DocumentVisibility.TENANT, Set.of());
     }
 
     public List<Chunk> chunkFromBytes(Long documentId, String fileName, String contentType, byte[] bytes,
@@ -103,7 +106,38 @@ public class KnowledgeIndexingService {
                 .map(entry -> new Chunk(entry.id(), String.valueOf(documentId), entry.ordinal(), entry.text()))
                 .toList();
         return publishChunks(tenantId, documentId, ownerUserId, chunks, strategy,
-                artifact.chunkStrategyVersion(), artifact.knowledgeKey(), artifact.knowledgeVersion());
+                artifact.chunkStrategyVersion(), artifact.knowledgeKey(), artifact.knowledgeVersion(),
+                DocumentVisibility.TENANT, Set.of());
+    }
+
+    public IndexPublishResult publishIndex(Long tenantId, Long documentId, Long ownerUserId,
+                                           String fileName, String contentType, byte[] bytes,
+                                           String strategyName, Integer strategyVersion, String knowledgeKey,
+                                           int knowledgeVersion, DocumentVisibility visibility,
+                                           Set<RoleCode> audienceRoles) {
+        if (documentId == null || bytes == null) {
+            return IndexPublishResult.failed();
+        }
+        ChunkStrategy strategy = parseStrategy(strategyName);
+        int version = strategyVersion == null || strategyVersion <= 0 ? 1 : strategyVersion;
+        List<Chunk> parsedChunks = chunkFromBytes(documentId, fileName, contentType, bytes, strategy, version);
+        return publishChunks(tenantId, documentId, ownerUserId, parsedChunks, strategy, version, knowledgeKey,
+                knowledgeVersion, visibility, audienceRoles);
+    }
+
+    public IndexPublishResult publishFromArtifact(Long tenantId, Long documentId, Long ownerUserId,
+                                                  KnowledgeChunkArtifact artifact,
+                                                  DocumentVisibility visibility, Set<RoleCode> audienceRoles) {
+        if (artifact == null || documentId == null || !documentId.equals(artifact.documentId())) {
+            return IndexPublishResult.failed();
+        }
+        ChunkStrategy strategy = parseStrategy(artifact.chunkStrategy());
+        List<Chunk> chunks = artifact.chunks().stream()
+                .map(entry -> new Chunk(entry.id(), String.valueOf(documentId), entry.ordinal(), entry.text()))
+                .toList();
+        return publishChunks(tenantId, documentId, ownerUserId, chunks, strategy,
+                artifact.chunkStrategyVersion(), artifact.knowledgeKey(), artifact.knowledgeVersion(),
+                visibility, audienceRoles);
     }
 
     private List<Chunk> chunkFromBytes(Long documentId, String fileName, String contentType, byte[] bytes,
@@ -118,7 +152,8 @@ public class KnowledgeIndexingService {
 
     private IndexPublishResult publishChunks(Long tenantId, Long documentId, Long ownerUserId, List<Chunk> parsedChunks,
                                              ChunkStrategy strategy, int version, String knowledgeKey,
-                                             int knowledgeVersion) {
+                                             int knowledgeVersion, DocumentVisibility visibility,
+                                             Set<RoleCode> audienceRoles) {
         long indexTenantId = tenantId == null ? PLATFORM_INDEX_TENANT_ID : tenantId;
         List<float[]> vectors = embedding.embed(parsedChunks.stream().map(Chunk::text).toList());
         if (vectors.size() != parsedChunks.size()) {
@@ -126,10 +161,13 @@ public class KnowledgeIndexingService {
         }
         String generationKey = "document-" + documentId + "-" + strategy.name() + "-v" + version + "-"
                 + System.currentTimeMillis();
+        String visibilityName = KnowledgeIndexAudience.visibility(visibility);
+        List<String> roleNames = KnowledgeIndexAudience.roleNames(audienceRoles);
         var indexed = new java.util.ArrayList<IndexedChunk>();
         for (int i = 0; i < parsedChunks.size(); i++) {
             indexed.add(new IndexedChunk(parsedChunks.get(i).id(), indexTenantId, documentId, ownerUserId,
-                    parsedChunks.get(i).text(), vectors.get(i), knowledgeKey, knowledgeVersion, generationKey));
+                    parsedChunks.get(i).text(), vectors.get(i), knowledgeKey, knowledgeVersion, generationKey,
+                    visibilityName, roleNames));
         }
         if (!index.publishWithRollback(indexTenantId, indexed)) {
             return IndexPublishResult.failed();

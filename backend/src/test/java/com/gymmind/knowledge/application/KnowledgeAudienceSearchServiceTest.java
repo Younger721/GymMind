@@ -7,6 +7,7 @@ import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import com.gymmind.knowledge.infrastructure.search.IndexedChunk;
 import com.gymmind.knowledge.infrastructure.search.KeywordIndexPort;
+import com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter;
 import com.gymmind.knowledge.infrastructure.search.VectorIndexPort;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.tenancy.application.TenantQuotaService;
@@ -32,7 +33,7 @@ class KnowledgeAudienceSearchServiceTest {
         var repository = mock(KnowledgeDocumentRepository.class);
         var coachDocument = document(7L, 21L, Set.of(RoleCode.COACH));
         var memberDocument = document(7L, 22L, Set.of(RoleCode.MEMBER));
-        when(keyword.search("q", 7L, 12L)).thenReturn(List.of(
+        when(keyword.search(eq("q"), eq(7L), any(KnowledgeRecallFilter.class))).thenReturn(List.of(
                 chunk("coach", coachDocument), chunk("member", memberDocument)));
         when(vector.search(any(), eq(7L), eq(12L))).thenReturn(List.of());
         when(embedding.embed(any())).thenReturn(List.of(new float[1024]));

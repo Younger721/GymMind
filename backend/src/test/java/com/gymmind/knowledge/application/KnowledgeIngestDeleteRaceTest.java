@@ -48,7 +48,9 @@ class KnowledgeIngestDeleteRaceTest {
 
         DefaultKnowledgeDocumentUseCase useCase = new DefaultKnowledgeDocumentUseCase(
                 documents, store, indexing, null, null);
-        when(indexing.publishIndex(eq(7L), eq(3L), isNull(), eq("guide.txt"), eq("text/plain"), any(byte[].class)))
+        when(indexing.publishIndex(eq(7L), eq(3L), isNull(), eq("guide.txt"), eq("text/plain"), any(byte[].class),
+                anyString(), anyInt(), any(), anyInt(), any(com.gymmind.knowledge.domain.model.DocumentVisibility.class),
+                any(java.util.Set.class)))
                 .thenAnswer(invocation -> {
                     useCase.delete(ADMIN, 3L);
                     return IndexPublishResult.ok("race-gen");

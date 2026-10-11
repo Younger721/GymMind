@@ -16,7 +16,7 @@ import java.util.stream.StreamSupport;
 @Component
 @ConditionalOnProperty(name = "gymmind.search.vector-backend", havingValue = "milvus")
 public class MilvusVectorIndex implements VectorIndexPort {
-    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "documentId", "ownerUserId", "knowledgeKey", "knowledgeVersion", "indexGeneration", "text");
+    private static final List<String> OUTPUT_FIELDS = List.of("id", "tenantId", "documentId", "ownerUserId", "knowledgeKey", "knowledgeVersion", "indexGeneration", "visibility", "audienceRoles", "text");
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final RestClient client;
     private final String collection;
@@ -38,6 +38,8 @@ public class MilvusVectorIndex implements VectorIndexPort {
                 field("knowledgeKey", "VarChar", false, Map.of("max_length", "128")),
                 field("knowledgeVersion", "Int64", false, Map.of()),
                 field("indexGeneration", "VarChar", false, Map.of("max_length", "128")),
+                field("visibility", "VarChar", false, Map.of("max_length", "32")),
+                field("audienceRoles", "VarChar", false, Map.of("max_length", "256")),
                 field("text", "VarChar", false, Map.of("max_length", "65535")),
                 field("vector", "FloatVector", false, Map.of("dim", "1024")));
         return Map.of("collectionName", name,
@@ -52,13 +54,19 @@ public class MilvusVectorIndex implements VectorIndexPort {
     }
 
     public static Map<String, Object> insertBody(String name, IndexedChunk chunk) {
-        return Map.of("collectionName", name, "data", List.of(Map.of(
-                "id", chunk.id(), "tenantId", chunk.tenantId(),
-                "documentId", chunk.documentId() == null ? 0L : chunk.documentId(),
-                "ownerUserId", chunk.ownerUserId() == null ? 0L : chunk.ownerUserId(),
-                "knowledgeKey", chunk.knowledgeKey() == null ? "" : chunk.knowledgeKey(), "knowledgeVersion", chunk.knowledgeVersion(),
-                "indexGeneration", chunk.indexGeneration() == null ? "" : chunk.indexGeneration(),
-                "text", chunk.text(), "vector", chunk.vector())));
+        var row = new java.util.HashMap<String, Object>();
+        row.put("id", chunk.id());
+        row.put("tenantId", chunk.tenantId());
+        row.put("documentId", chunk.documentId() == null ? 0L : chunk.documentId());
+        row.put("ownerUserId", chunk.ownerUserId() == null ? 0L : chunk.ownerUserId());
+        row.put("knowledgeKey", chunk.knowledgeKey() == null ? "" : chunk.knowledgeKey());
+        row.put("knowledgeVersion", chunk.knowledgeVersion());
+        row.put("indexGeneration", chunk.indexGeneration() == null ? "" : chunk.indexGeneration());
+        row.put("visibility", chunk.visibility() == null ? "" : chunk.visibility());
+        row.put("audienceRoles", encodeAudienceRoles(chunk.audienceRoles()));
+        row.put("text", chunk.text());
+        row.put("vector", chunk.vector());
+        return Map.of("collectionName", name, "data", List.of(row));
     }
 
     public static Map<String, Object> searchBody(String name, float[] vector, long tenantId, long userId) {
@@ -82,7 +90,9 @@ public class MilvusVectorIndex implements VectorIndexPort {
                         documentId == 0 ? null : documentId,
                         owner == 0 ? null : owner, row.path("text").asText(), null,
                         row.path("knowledgeKey").asText(null), row.path("knowledgeVersion").asInt(1),
-                        emptyToNull(row.path("indexGeneration").asText(null))));
+                        emptyToNull(row.path("indexGeneration").asText(null)),
+                        emptyToNull(row.path("visibility").asText(null)),
+                        decodeAudienceRoles(row.path("audienceRoles").asText(null))));
             }
             return chunks;
         } catch (Exception ignored) {
@@ -143,7 +153,8 @@ public class MilvusVectorIndex implements VectorIndexPort {
                     .map(node -> node.path("name").asText(""))
                     .filter(name -> !name.isBlank())
                     .collect(java.util.stream.Collectors.toSet());
-            return names.containsAll(List.of("knowledgeKey", "knowledgeVersion", "documentId", "indexGeneration", "vector"));
+            return names.containsAll(List.of("knowledgeKey", "knowledgeVersion", "documentId", "indexGeneration",
+                    "visibility", "audienceRoles", "vector"));
         } catch (Exception ex) {
             return false;
         }
@@ -215,6 +226,20 @@ public class MilvusVectorIndex implements VectorIndexPort {
 
     private static String emptyToNull(String value) {
         return value == null || value.isBlank() ? null : value;
+    }
+
+    static String encodeAudienceRoles(List<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return "";
+        }
+        return String.join(",", roles);
+    }
+
+    static List<String> decodeAudienceRoles(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        return List.of(raw.split(","));
     }
 
     private static void requireVector(float[] vector) {

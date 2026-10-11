@@ -11,6 +11,7 @@ import com.gymmind.knowledge.infrastructure.search.KeywordIndexPort;
 import com.gymmind.knowledge.infrastructure.search.VectorIndexPort;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
 import com.gymmind.knowledge.infrastructure.search.IndexedChunk;
+import com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter;
 import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
@@ -127,7 +128,8 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         // Completed recall details are emitted below, after document visibility
         // and audience filters have been applied.
         Set<String> failedRecallStages = new HashSet<>();
-        HybridRetriever.Result result = retriever.retrieve(query, scopes, actor.userId(), RECALL_TOP_K, FUSION_TOP_K,
+        HybridRetriever.Result result = retriever.retrieve(query, scopes, KnowledgeRecallFilter.of(actor),
+                RECALL_TOP_K, FUSION_TOP_K,
                 event -> {
                     if (event.status() == AiProgressEvent.Status.FAILED) {
                         failedRecallStages.add(event.stage());

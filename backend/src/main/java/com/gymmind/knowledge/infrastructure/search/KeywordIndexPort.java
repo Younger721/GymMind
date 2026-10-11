@@ -15,6 +15,14 @@ public interface KeywordIndexPort {
         return search(query, tenantId).stream().filter(c -> c.visibleTo(userId)).toList();
     }
 
+    default List<IndexedChunk> search(String query, Long tenantId, KnowledgeRecallFilter filter) {
+        Long userId = filter == null ? null : filter.userId();
+        var hits = userId == null
+                ? search(query, tenantId)
+                : search(query, tenantId).stream().filter(c -> c.visibleTo(userId)).toList();
+        return KnowledgeAudienceFilters.apply(hits, filter);
+    }
+
     void delete(String id, Long tenantId);
 
     default void deleteDocument(Long tenantId, Long documentId) {

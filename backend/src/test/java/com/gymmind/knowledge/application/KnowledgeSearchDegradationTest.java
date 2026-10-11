@@ -31,7 +31,7 @@ class KnowledgeSearchDegradationTest {
         var embedding = mock(EmbeddingGateway.class);
         var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
         var context = new KnowledgeSearchDegradationContext();
-        when(keyword.search("q", 7L, 1L)).thenReturn(List.of(
+        when(keyword.search(eq("q"), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of(
                 new IndexedChunk("k1", 7L, "keyword hit", new float[1024])));
         when(embedding.embed(any())).thenThrow(new IllegalStateException("embedding down"));
         var events = new ArrayList<AiProgressEvent>();
@@ -50,7 +50,7 @@ class KnowledgeSearchDegradationTest {
         var keyword = mock(KeywordIndexPort.class);
         var embedding = mock(EmbeddingGateway.class);
         var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
-        when(keyword.search("q", 7L, 1L)).thenReturn(List.of());
+        when(keyword.search(eq("q"), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of());
         when(embedding.embed(any())).thenThrow(new IllegalStateException("embedding down"));
 
         assertThatThrownBy(() -> new DefaultKnowledgeSearchService(
@@ -66,7 +66,7 @@ class KnowledgeSearchDegradationTest {
         var keyword = mock(KeywordIndexPort.class);
         var embedding = mock(EmbeddingGateway.class);
         var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
-        when(keyword.search("q", 7L, 1L)).thenThrow(new IllegalStateException("es down"));
+        when(keyword.search(eq("q"), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenThrow(new IllegalStateException("es down"));
         when(embedding.embed(any())).thenThrow(new IllegalStateException("embedding down"));
 
         assertThatThrownBy(() -> new DefaultKnowledgeSearchService(

@@ -53,7 +53,8 @@ class MilvusVectorIndexTest {
         assertThat(body).containsEntry("filter", "tenantId == 7 && (ownerUserId == 0 || ownerUserId == 11)");
         assertThat(body).containsEntry("limit", 30);
         assertThat(body.get("outputFields")).isEqualTo(List.of(
-                "id", "tenantId", "documentId", "ownerUserId", "knowledgeKey", "knowledgeVersion", "indexGeneration", "text"));
+                "id", "tenantId", "documentId", "ownerUserId", "knowledgeKey", "knowledgeVersion", "indexGeneration",
+                "visibility", "audienceRoles", "text"));
     }
 
     @Test

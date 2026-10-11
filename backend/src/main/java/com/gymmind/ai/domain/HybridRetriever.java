@@ -3,6 +3,7 @@ package com.gymmind.ai.domain;
 import com.gymmind.ai.harness.AiProgressEvent;
 import com.gymmind.knowledge.infrastructure.search.IndexedChunk;
 import com.gymmind.knowledge.infrastructure.search.KeywordIndexPort;
+import com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter;
 import com.gymmind.knowledge.infrastructure.search.VectorIndexPort;
 
 import java.util.ArrayList;
@@ -46,6 +47,12 @@ public final class HybridRetriever {
 
     public Result retrieve(String query, List<Long> tenantIds, Long userId, int recallTopK, int fusionTopK,
                            Consumer<AiProgressEvent> progress) {
+        return retrieve(query, tenantIds, new KnowledgeRecallFilter(userId, java.util.Set.of(), false),
+                recallTopK, fusionTopK, progress);
+    }
+
+    public Result retrieve(String query, List<Long> tenantIds, KnowledgeRecallFilter filter, int recallTopK,
+                           int fusionTopK, Consumer<AiProgressEvent> progress) {
         List<IndexedChunk> keywordHits;
         List<IndexedChunk> vectorHits;
         boolean keywordAvailable = true;
@@ -54,7 +61,8 @@ public final class HybridRetriever {
         reporter.accept(new AiProgressEvent("knowledge_search", "keyword_recall",
                 AiProgressEvent.Status.RUNNING, "关键词检索中", null));
         try {
-            keywordHits = tenantIds.stream().flatMap(scope -> keyword.search(query, scope, userId).stream()).toList();
+            keywordHits = tenantIds.stream()
+                    .flatMap(scope -> recallKeyword(query, scope, filter).stream()).toList();
         } catch (RuntimeException ex) {
             keywordHits = List.of();
             keywordAvailable = false;
@@ -70,7 +78,8 @@ public final class HybridRetriever {
                 AiProgressEvent.Status.RUNNING, "向量检索中", null));
         try {
             float[] queryVector = embedding.embed(List.of(query)).get(0);
-            vectorHits = tenantIds.stream().flatMap(scope -> vector.search(queryVector, scope, userId).stream()).toList();
+            vectorHits = tenantIds.stream()
+                    .flatMap(scope -> recallVector(queryVector, scope, filter).stream()).toList();
         } catch (RuntimeException ex) {
             vectorHits = List.of();
             vectorAvailable = false;
@@ -106,6 +115,25 @@ public final class HybridRetriever {
         reporter.accept(new AiProgressEvent("knowledge_search", "fusion",
                 AiProgressEvent.Status.COMPLETED, "结果融合完成", fused.size()));
         return new Result(true, keywordAvailable, vectorAvailable, fused, all, keywordHits, vectorHits, fusedChunks);
+    }
+
+    private List<IndexedChunk> recallKeyword(String query, Long scope, KnowledgeRecallFilter filter) {
+        if (shouldUseAudienceFilter(filter)) {
+            return keyword.search(query, scope, filter);
+        }
+        return keyword.search(query, scope, filter == null ? null : filter.userId());
+    }
+
+    private List<IndexedChunk> recallVector(float[] queryVector, Long scope, KnowledgeRecallFilter filter) {
+        if (shouldUseAudienceFilter(filter)) {
+            return vector.search(queryVector, scope, filter);
+        }
+        return vector.search(queryVector, scope, filter == null ? null : filter.userId());
+    }
+
+    private static boolean shouldUseAudienceFilter(KnowledgeRecallFilter filter) {
+        return filter != null && !filter.skipAudienceFilter()
+                && filter.actorRoles() != null && !filter.actorRoles().isEmpty();
     }
 
     private static List<RankedChunk> toRanked(List<IndexedChunk> chunks, int limit) {

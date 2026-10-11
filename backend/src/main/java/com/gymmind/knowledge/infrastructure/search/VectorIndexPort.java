@@ -15,6 +15,14 @@ public interface VectorIndexPort {
         return search(vector, tenantId).stream().filter(c -> c.visibleTo(userId)).toList();
     }
 
+    default List<IndexedChunk> search(float[] vector, Long tenantId, KnowledgeRecallFilter filter) {
+        Long userId = filter == null ? null : filter.userId();
+        var hits = userId == null
+                ? search(vector, tenantId)
+                : search(vector, tenantId).stream().filter(c -> c.visibleTo(userId)).toList();
+        return KnowledgeAudienceFilters.apply(hits, filter);
+    }
+
     void delete(String id, Long tenantId);
 
     default void deleteDocument(Long tenantId, Long documentId) {

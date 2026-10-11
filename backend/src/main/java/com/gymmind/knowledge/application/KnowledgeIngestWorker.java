@@ -125,12 +125,10 @@ public class KnowledgeIngestWorker {
         documents.save(document);
         byte[] bytes = requireSourceBytes(document);
         document.updateChunkStrategy(document.chunkStrategy(), document.chunkStrategyVersion());
-        var published = isLegacyGeneral(document)
-                ? indexing.publishIndex(document.tenantId(), document.id(), document.ownerUserId(),
-                document.fileName(), document.contentType(), bytes)
-                : indexing.publishIndex(document.tenantId(), document.id(), document.ownerUserId(),
+        var published = indexing.publishIndex(document.tenantId(), document.id(), document.ownerUserId(),
                 document.fileName(), document.contentType(), bytes,
-                document.chunkStrategy(), document.chunkStrategyVersion(), document.knowledgeKey(), document.knowledgeVersion());
+                document.chunkStrategy(), document.chunkStrategyVersion(), document.knowledgeKey(),
+                document.knowledgeVersion(), document.visibility(), document.effectiveAudienceRoles());
         if (!published.success()) {
             throw new IllegalStateException("knowledge indexing is unavailable");
         }
@@ -191,7 +189,7 @@ public class KnowledgeIngestWorker {
         documents.save(document);
         KnowledgeChunkArtifact artifact = artifacts.readArtifact(document.chunkArtifactKey());
         var published = indexing.publishFromArtifact(document.tenantId(), document.id(),
-                document.ownerUserId(), artifact);
+                document.ownerUserId(), artifact, document.visibility(), document.effectiveAudienceRoles());
         if (!published.success()) {
             throw new IllegalStateException("knowledge indexing is unavailable");
         }

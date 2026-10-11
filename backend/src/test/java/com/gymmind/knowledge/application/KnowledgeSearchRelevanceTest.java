@@ -15,6 +15,8 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,7 +28,7 @@ class KnowledgeSearchRelevanceTest {
         EmbeddingGateway embedding = mock(EmbeddingGateway.class);
         String query = "新手做力量训练要注意什么？";
         when(embedding.embed(any())).thenReturn(List.of(new float[1024]));
-        when(keyword.search(query, 7L, 1L)).thenReturn(List.of(
+        when(keyword.search(eq(query), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of(
                 new IndexedChunk("common", 7L, "有氧训练用于提升心肺能力与热量消耗，建议安排在力量训练之后，或单独安排在低强度日。", new float[1024]),
                 new IndexedChunk("answer", 7L, "训练安全\n新手进行力量训练时应先热身，使用稳定重量并注意安全。", new float[1024])));
         when(vector.search(any(), eq(7L), eq(1L))).thenReturn(List.of());

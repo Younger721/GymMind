@@ -36,11 +36,11 @@ class KnowledgeSearchProgressTest {
         when(documents.findByTenantIdAndIdIn(eq(7L), any())).thenReturn(List.of(allowed, blocked));
         when(documents.findPlatformDocuments()).thenReturn(List.of());
         String longText = "x".repeat(400);
-        when(keyword.search("q", 7L, 1L)).thenReturn(List.of(
+        when(keyword.search(eq("q"), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of(
                 new IndexedChunk("allowed-chunk", 7L, 11L, null, longText, new float[1024]),
                 new IndexedChunk("blocked-chunk", 7L, 12L, null, "不应通过权限筛选", new float[1024])));
         when(embedding.embed(any())).thenReturn(List.of(new float[1024]));
-        when(vector.search(any(), eq(7L), eq(1L))).thenReturn(List.of());
+        when(vector.search(any(), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of());
         var events = new ArrayList<AiProgressEvent>();
 
         new DefaultKnowledgeSearchService(keyword, vector, embedding, null, quotas, documents)
@@ -72,10 +72,10 @@ class KnowledgeSearchProgressTest {
         var vector = mock(VectorIndexPort.class);
         var embedding = mock(EmbeddingGateway.class);
         var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
-        when(keyword.search("q", 7L, 1L)).thenReturn(List.of(
+        when(keyword.search(eq("q"), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of(
                 new IndexedChunk("k1", 7L, "keyword", new float[1024])));
         when(embedding.embed(any())).thenReturn(List.of(new float[1024]));
-        when(vector.search(any(), eq(7L), eq(1L))).thenReturn(List.of());
+        when(vector.search(any(), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of());
         var events = new ArrayList<AiProgressEvent>();
 
         new DefaultKnowledgeSearchService(keyword, vector, embedding, null, quotas)
@@ -92,7 +92,7 @@ class KnowledgeSearchProgressTest {
         var vector = mock(VectorIndexPort.class);
         var embedding = mock(EmbeddingGateway.class);
         var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
-        when(keyword.search("q", 7L, 1L)).thenReturn(List.of());
+        when(keyword.search(eq("q"), eq(7L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class))).thenReturn(List.of());
         when(embedding.embed(any())).thenThrow(new IllegalStateException("embedding unavailable"));
         var events = new ArrayList<AiProgressEvent>();
 
