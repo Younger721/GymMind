@@ -36,7 +36,12 @@ powershell -File ./scripts/rag-eval/run-eval.ps1 -BaseUrl http://localhost:8080
 
 # 仅 Search（不调 LLM，适合 CI 或 Key 不可用）
 powershell -File ./scripts/rag-eval/run-eval.ps1 -SearchOnly
+
+# CI 语料结构校验（无需后端）
+powershell -File ./scripts/rag-eval/validate-eval-fixtures.ps1
 ```
+
+GitHub Actions 见 `.github/workflows/rag-knowledge-search-ci.yml`：默认跑检索相关单测 + `validate-eval-fixtures`；在仓库 Variables 配置 `GYMMIND_EVAL_BASE_URL` 后额外跑 `-SearchOnly`。
 
 重复导入可加 `-SkipIfStateExists`；若需强制重传，删除 `docs/rag-eval/state/ingested.json` 后重跑 seed（可能产生重复文档，建议专用库或重置 DB）。
 

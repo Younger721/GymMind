@@ -37,7 +37,7 @@ class KnowledgeSearchDegradationTest {
         var events = new ArrayList<AiProgressEvent>();
 
         new DefaultKnowledgeSearchService(keyword, mock(VectorIndexPort.class), embedding, null, quotas,
-                null, false, context, new SearchDegradationMetrics(new SimpleMeterRegistry()))
+                null, false, context, new SearchDegradationMetrics(new SimpleMeterRegistry()), null)
                 .search(actor(), "q", events::add);
 
         assertThat(context.headerValue()).isEqualTo("vector");
@@ -55,7 +55,7 @@ class KnowledgeSearchDegradationTest {
 
         assertThatThrownBy(() -> new DefaultKnowledgeSearchService(
                 keyword, mock(VectorIndexPort.class), embedding, null, quotas,
-                null, true, null, null).search(actor(), "q"))
+                null, true, null, null, null).search(actor(), "q"))
                 .isInstanceOf(BusinessException.class)
                 .extracting(error -> ((BusinessException) error).errorCode())
                 .isEqualTo(ErrorCode.DEPENDENCY_UNAVAILABLE);

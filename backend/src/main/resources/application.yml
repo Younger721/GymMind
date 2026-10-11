@@ -22,6 +22,22 @@ gymmind:
     recover-incomplete-ingest: true
     recover-index-on-start: false
     require-dual-recall: false
+    recall-top-k: 30
+    fusion-top-k: 20
+    max-segments-per-document: 3
+    context-budget-chars: 12000
+    query-embedding-cache:
+      enabled: true
+      ttl-seconds: 300
+      max-entries: 512
+    rerank:
+      max-attempts: 2
+      retry-base-ms: 200
+    lexical:
+      long-query-term-threshold: 2
+      long-query-min-score: 4
+      very-long-query-term-threshold: 6
+      very-long-query-min-matches: 4
   ai:
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:}

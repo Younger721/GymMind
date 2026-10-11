@@ -2,6 +2,7 @@ package com.gymmind.ai.domain;
 
 import com.gymmind.knowledge.infrastructure.search.IndexedChunk;
 import com.gymmind.knowledge.infrastructure.search.KeywordIndexPort;
+import com.gymmind.knowledge.infrastructure.search.SearchQueryEmbeddingCache;
 import com.gymmind.knowledge.infrastructure.search.VectorIndexPort;
 import com.gymmind.ai.harness.AiProgressEvent;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,23 @@ class HybridRetrieverTest {
                 event -> events.add(event.stage()));
 
         assertThat(events).containsSubsequence("keyword_recall", "vector_recall", "fusion");
+    }
+
+    @Test
+    void cachesQueryEmbeddingAcrossRetrieves() {
+        var keyword = mock(KeywordIndexPort.class);
+        var vector = mock(VectorIndexPort.class);
+        var embedding = mock(EmbeddingGateway.class);
+        var cache = new SearchQueryEmbeddingCache(60, 10);
+        when(keyword.search("q", 7L, 1L)).thenReturn(List.of());
+        when(embedding.embed(any())).thenReturn(List.of(new float[1024]));
+        when(vector.search(any(), eq(7L), eq(1L))).thenReturn(List.of());
+        var retriever = new HybridRetriever(keyword, vector, embedding, cache);
+
+        retriever.retrieve("q", 7L, 1L, 30, 20);
+        retriever.retrieve("q", 7L, 1L, 30, 20);
+
+        org.mockito.Mockito.verify(embedding, org.mockito.Mockito.times(1)).embed(any());
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.gymmind.knowledge.infrastructure.search.VectorIndexPort;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
 import com.gymmind.knowledge.infrastructure.search.IndexedChunk;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter;
+import com.gymmind.knowledge.infrastructure.search.SearchQueryEmbeddingCache;
 import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
@@ -42,9 +43,6 @@ import java.util.regex.Pattern;
 @Service
 public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
 
-    private static final int RECALL_TOP_K = 30;
-    private static final int FUSION_TOP_K = 20;
-    private static final int MAX_SEGMENTS_PER_DOCUMENT = 3;
     private static final int MAX_PROGRESS_DETAILS = 20;
     private static final int MAX_PROGRESS_EXCERPT = 300;
     private static final Pattern QUERY_PARTS = Pattern.compile("[^\\p{IsHan}A-Za-z0-9]+");
@@ -56,6 +54,7 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
     private final boolean requireDualRecall;
     private final KnowledgeSearchDegradationContext degradationContext;
     private final SearchDegradationMetrics degradationMetrics;
+    private final KnowledgeSearchProperties searchProperties;
 
     public DefaultKnowledgeSearchService(
             KeywordIndexPort keyword,
@@ -73,7 +72,7 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             RerankGateway rerank,
             TenantQuotaService quotas,
             KnowledgeDocumentRepository documents) {
-        this(keyword, vector, embedding, rerank, quotas, documents, false, null, null);
+        this(keyword, vector, embedding, rerank, quotas, documents, false, null, null, null);
     }
 
     @Autowired
@@ -85,9 +84,17 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             TenantQuotaService quotas,
             KnowledgeDocumentRepository documents,
             @org.springframework.beans.factory.annotation.Value("${gymmind.search.require-dual-recall:false}") boolean requireDualRecall,
-            @org.springframework.beans.factory.annotation.Autowired(required = false) KnowledgeSearchDegradationContext degradationContext,
-            @org.springframework.beans.factory.annotation.Autowired(required = false) SearchDegradationMetrics degradationMetrics) {
-        this.retriever = new HybridRetriever(keyword, vector, embedding);
+            @Autowired(required = false) KnowledgeSearchDegradationContext degradationContext,
+            @Autowired(required = false) SearchDegradationMetrics degradationMetrics,
+            @Autowired(required = false) KnowledgeSearchProperties searchProperties) {
+        this.searchProperties = searchProperties == null ? KnowledgeSearchProperties.defaults() : searchProperties;
+        SearchQueryEmbeddingCache queryCache = null;
+        if (this.searchProperties.queryEmbeddingCacheEnabled()) {
+            queryCache = new SearchQueryEmbeddingCache(
+                    this.searchProperties.queryEmbeddingCacheTtlSeconds(),
+                    this.searchProperties.queryEmbeddingCacheMaxEntries());
+        }
+        this.retriever = new HybridRetriever(keyword, vector, embedding, queryCache);
         this.rerank = rerank;
         this.quotas = quotas;
         this.documents = documents;
@@ -129,7 +136,7 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         // and audience filters have been applied.
         Set<String> failedRecallStages = new HashSet<>();
         HybridRetriever.Result result = retriever.retrieve(query, scopes, KnowledgeRecallFilter.of(actor),
-                RECALL_TOP_K, FUSION_TOP_K,
+                searchProperties.recallTopK(), searchProperties.fusionTopK(),
                 event -> {
                     if (event.status() == AiProgressEvent.Status.FAILED) {
                         failedRecallStages.add(event.stage());
@@ -169,7 +176,7 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             try {
                 Map<String, ContextSegment> byId = new HashMap<>();
                 fused.forEach(segment -> byId.put(segment.id(), segment));
-                List<RankedChunk> reranked = rerank.rerank(query, fused);
+                List<RankedChunk> reranked = rerankWithRetry(query, fused);
                 if (reranked != null && !reranked.isEmpty()) {
                     fused = reranked.stream()
                             .map(entry -> byId.get(entry.id()))
@@ -193,11 +200,11 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         // Structured price evidence is appended after lexical/reranker stages so
         // a short promotion notice cannot be discarded for having a weak vector.
         fused = addStructuredPriceContext(actor, query, fused, searchableDocuments);
-        fused = limitPerDocument(fused);
+        fused = limitPerDocument(fused, searchProperties.maxSegmentsPerDocument());
         emit(reporter, "rerank", AiProgressEvent.Status.COMPLETED, "重排序完成", fused.size(),
                 segmentDetails(fused, result.chunksById(), searchableDocuments, "重排序结果"));
         emit(reporter, "citation_prepare", AiProgressEvent.Status.RUNNING, "引用整理中", null);
-        List<ContextSegment> selected = ContextBudgeter.select(fused, 12000);
+        List<ContextSegment> selected = ContextBudgeter.select(fused, searchProperties.contextBudgetChars());
         emit(reporter, "citation_prepare", AiProgressEvent.Status.COMPLETED, "引用整理完成", selected.size(),
                 segmentDetails(selected, result.chunksById(), searchableDocuments, "引用片段"));
         return selected;
@@ -356,7 +363,32 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         return text.toString();
     }
 
-    private static List<ContextSegment> localRerank(String query, List<ContextSegment> candidates) {
+    private List<RankedChunk> rerankWithRetry(String query, List<ContextSegment> fused) {
+        RuntimeException lastFailure = null;
+        int maxAttempts = searchProperties.rerankMaxAttempts();
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            try {
+                return rerank.rerank(query, fused);
+            } catch (RuntimeException ex) {
+                lastFailure = ex;
+                if (attempt >= maxAttempts) {
+                    break;
+                }
+                long delayMs = searchProperties.rerankRetryDelayMs(attempt);
+                if (delayMs > 0) {
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        throw lastFailure == null ? new IllegalStateException("rerank failed") : lastFailure;
+    }
+
+    private List<ContextSegment> localRerank(String query, List<ContextSegment> candidates) {
         if (candidates == null || candidates.size() < 2) return candidates == null ? List.of() : candidates;
         List<String> terms = queryTerms(query);
         if (terms.isEmpty()) return candidates;
@@ -372,8 +404,8 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             scored.add(new ScoredSegment(candidate, score, i, matchedTerms));
         }
         boolean evidence = hasEvidence;
-        int minimumScore = terms.size() > 2 ? 4 : 1;
-        int minimumMatches = terms.size() > 6 ? 4 : 1;
+        int minimumScore = searchProperties.lexicalMinimumScore(terms.size());
+        int minimumMatches = searchProperties.lexicalMinimumMatches(terms.size());
         return scored.stream()
                 .filter(item -> !evidence || (item.score >= minimumScore && item.matchedTerms >= minimumMatches))
                 .sorted(Comparator.comparingInt(ScoredSegment::score).reversed()
@@ -382,7 +414,7 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                 .toList();
     }
 
-    private static List<ContextSegment> filterLexicalEvidence(String query, List<ContextSegment> candidates) {
+    private List<ContextSegment> filterLexicalEvidence(String query, List<ContextSegment> candidates) {
         if (candidates == null || candidates.size() < 2) return candidates == null ? List.of() : candidates;
         List<String> terms = queryTerms(query);
         if (terms.isEmpty()) return candidates;
@@ -393,8 +425,8 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                 .toList();
         boolean hasEvidence = scored.stream().anyMatch(item -> item.score > 0);
         if (!hasEvidence) return candidates;
-        int minimumScore = terms.size() > 2 ? 4 : 1;
-        int minimumMatches = terms.size() > 6 ? 4 : 1;
+        int minimumScore = searchProperties.lexicalMinimumScore(terms.size());
+        int minimumMatches = searchProperties.lexicalMinimumMatches(terms.size());
         List<ContextSegment> filtered = scored.stream()
                 .filter(item -> item.score >= minimumScore && item.matchedTerms >= minimumMatches)
                 .map(ScoredSegment::segment)
@@ -629,13 +661,13 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         return List.copyOf(scopes);
     }
 
-    private static List<ContextSegment> limitPerDocument(List<ContextSegment> segments) {
+    private static List<ContextSegment> limitPerDocument(List<ContextSegment> segments, int maxPerDocument) {
         List<ContextSegment> limited = new ArrayList<>();
         Map<String, Integer> perDocument = new HashMap<>();
         for (ContextSegment segment : segments) {
             String docKey = segment.documentId() == null ? segment.id() : segment.documentId();
             int used = perDocument.getOrDefault(docKey, 0);
-            if (used >= MAX_SEGMENTS_PER_DOCUMENT) {
+            if (used >= maxPerDocument) {
                 continue;
             }
             perDocument.put(docKey, used + 1);

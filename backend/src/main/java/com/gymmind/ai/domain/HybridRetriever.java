@@ -4,6 +4,7 @@ import com.gymmind.ai.harness.AiProgressEvent;
 import com.gymmind.knowledge.infrastructure.search.IndexedChunk;
 import com.gymmind.knowledge.infrastructure.search.KeywordIndexPort;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter;
+import com.gymmind.knowledge.infrastructure.search.SearchQueryEmbeddingCache;
 import com.gymmind.knowledge.infrastructure.search.VectorIndexPort;
 
 import java.util.ArrayList;
@@ -23,11 +24,18 @@ public final class HybridRetriever {
     private final KeywordIndexPort keyword;
     private final VectorIndexPort vector;
     private final EmbeddingGateway embedding;
+    private final SearchQueryEmbeddingCache queryEmbeddingCache;
 
     public HybridRetriever(KeywordIndexPort keyword, VectorIndexPort vector, EmbeddingGateway embedding) {
+        this(keyword, vector, embedding, null);
+    }
+
+    public HybridRetriever(KeywordIndexPort keyword, VectorIndexPort vector, EmbeddingGateway embedding,
+                           SearchQueryEmbeddingCache queryEmbeddingCache) {
         this.keyword = keyword;
         this.vector = vector;
         this.embedding = embedding;
+        this.queryEmbeddingCache = queryEmbeddingCache;
     }
 
     public Result retrieve(String query, Long tenantId, Long userId, int recallTopK, int fusionTopK) {
@@ -77,7 +85,7 @@ public final class HybridRetriever {
         reporter.accept(new AiProgressEvent("knowledge_search", "vector_recall",
                 AiProgressEvent.Status.RUNNING, "向量检索中", null));
         try {
-            float[] queryVector = embedding.embed(List.of(query)).get(0);
+            float[] queryVector = embedQuery(query);
             vectorHits = tenantIds.stream()
                     .flatMap(scope -> recallVector(queryVector, scope, filter).stream()).toList();
         } catch (RuntimeException ex) {
@@ -129,6 +137,13 @@ public final class HybridRetriever {
             return vector.search(queryVector, scope, filter);
         }
         return vector.search(queryVector, scope, filter == null ? null : filter.userId());
+    }
+
+    private float[] embedQuery(String query) {
+        if (queryEmbeddingCache == null) {
+            return embedding.embed(List.of(query)).get(0);
+        }
+        return queryEmbeddingCache.getOrCompute(query, () -> embedding.embed(List.of(query)).get(0));
     }
 
     private static boolean shouldUseAudienceFilter(KnowledgeRecallFilter filter) {
