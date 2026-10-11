@@ -105,7 +105,7 @@ public final class HybridRetriever {
                 .toList();
         reporter.accept(new AiProgressEvent("knowledge_search", "fusion",
                 AiProgressEvent.Status.COMPLETED, "结果融合完成", fused.size()));
-        return new Result(true, fused, all, keywordHits, vectorHits, fusedChunks);
+        return new Result(true, keywordAvailable, vectorAvailable, fused, all, keywordHits, vectorHits, fusedChunks);
     }
 
     private static List<RankedChunk> toRanked(List<IndexedChunk> chunks, int limit) {
@@ -118,13 +118,15 @@ public final class HybridRetriever {
     }
 
     public record Result(boolean available,
+                         boolean keywordAvailable,
+                         boolean vectorAvailable,
                          List<ContextSegment> segments,
                          Map<String, IndexedChunk> chunksById,
                          List<IndexedChunk> keywordHits,
                          List<IndexedChunk> vectorHits,
                          List<IndexedChunk> fusedHits) {
         public Result(boolean available, List<ContextSegment> segments, Map<String, IndexedChunk> chunksById) {
-            this(available, segments, chunksById, List.of(), List.of(), List.of());
+            this(available, available, available, segments, chunksById, List.of(), List.of(), List.of());
         }
 
         /** Compatibility alias for callers that name the merged recall list fusion hits. */
@@ -132,8 +134,23 @@ public final class HybridRetriever {
             return fusedHits;
         }
 
+        /** 响应头 X-GymMind-Search-Degraded：keyword / vector / none */
+        public String degradationHeaderValue() {
+            if (!keywordAvailable && vectorAvailable) {
+                return "keyword";
+            }
+            if (keywordAvailable && !vectorAvailable) {
+                return "vector";
+            }
+            return "none";
+        }
+
+        public boolean degraded() {
+            return available && !"none".equals(degradationHeaderValue());
+        }
+
         public static Result unavailable() {
-            return new Result(false, List.of(), Map.of(), List.of(), List.of(), List.of());
+            return new Result(false, false, false, List.of(), Map.of(), List.of(), List.of(), List.of());
         }
     }
 }

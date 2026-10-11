@@ -21,6 +21,7 @@ gymmind:
     recover-published: false
     recover-incomplete-ingest: true
     recover-index-on-start: false
+    require-dual-recall: false
   ai:
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:}

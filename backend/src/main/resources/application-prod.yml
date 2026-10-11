@@ -16,6 +16,7 @@ gymmind:
     recover-published: false
     recover-incomplete-ingest: true
     recover-index-on-start: false
+    require-dual-recall: false
   security:
     jwt:
       secret: ${JWT_SECRET}

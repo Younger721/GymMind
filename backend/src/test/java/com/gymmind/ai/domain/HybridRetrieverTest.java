@@ -33,6 +33,20 @@ class HybridRetrieverTest {
     }
 
     @Test
+    void marksVectorDegradationWhenEmbeddingFails() {
+        var keyword = mock(KeywordIndexPort.class);
+        var vector = mock(VectorIndexPort.class);
+        var embedding = mock(EmbeddingGateway.class);
+        when(keyword.search("q", 7L, 1L)).thenReturn(List.of(new IndexedChunk("k1", 7L, "keyword", new float[1024])));
+        when(embedding.embed(any())).thenThrow(new IllegalStateException("down"));
+
+        var result = new HybridRetriever(keyword, vector, embedding).retrieve("q", 7L, 1L, 30, 20);
+
+        assertThat(result.available()).isTrue();
+        assertThat(result.degradationHeaderValue()).isEqualTo("vector");
+    }
+
+    @Test
     void returnsUnavailableWhenBothPathsFail() {
         var keyword = mock(KeywordIndexPort.class);
         var vector = mock(VectorIndexPort.class);

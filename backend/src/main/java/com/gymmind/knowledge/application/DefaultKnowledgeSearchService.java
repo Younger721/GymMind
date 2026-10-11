@@ -52,6 +52,9 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
     private final RerankGateway rerank;
     private final TenantQuotaService quotas;
     private final KnowledgeDocumentRepository documents;
+    private final boolean requireDualRecall;
+    private final KnowledgeSearchDegradationContext degradationContext;
+    private final SearchDegradationMetrics degradationMetrics;
 
     public DefaultKnowledgeSearchService(
             KeywordIndexPort keyword,
@@ -62,7 +65,6 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         this(keyword, vector, embedding, rerank, quotas, null);
     }
 
-    @Autowired
     public DefaultKnowledgeSearchService(
             KeywordIndexPort keyword,
             VectorIndexPort vector,
@@ -70,10 +72,27 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             RerankGateway rerank,
             TenantQuotaService quotas,
             KnowledgeDocumentRepository documents) {
+        this(keyword, vector, embedding, rerank, quotas, documents, false, null, null);
+    }
+
+    @Autowired
+    public DefaultKnowledgeSearchService(
+            KeywordIndexPort keyword,
+            VectorIndexPort vector,
+            EmbeddingGateway embedding,
+            RerankGateway rerank,
+            TenantQuotaService quotas,
+            KnowledgeDocumentRepository documents,
+            @org.springframework.beans.factory.annotation.Value("${gymmind.search.require-dual-recall:false}") boolean requireDualRecall,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) KnowledgeSearchDegradationContext degradationContext,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) SearchDegradationMetrics degradationMetrics) {
         this.retriever = new HybridRetriever(keyword, vector, embedding);
         this.rerank = rerank;
         this.quotas = quotas;
         this.documents = documents;
+        this.requireDualRecall = requireDualRecall;
+        this.degradationContext = degradationContext;
+        this.degradationMetrics = degradationMetrics;
     }
 
     @Override
@@ -96,6 +115,9 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
         if (tenantId != null && quotas != null) quotas.ensureKnowledgeModuleEnabled(tenantId);
+        if (degradationContext != null) {
+            degradationContext.beginSearch();
+        }
 
         emit(reporter, "permission_filter", AiProgressEvent.Status.RUNNING, "权限范围筛选中", null);
         List<Long> scopes = searchScopes(actor, tenantId);
@@ -118,6 +140,10 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         if (!result.available()) {
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         }
+        if (requireDualRecall && (!result.keywordAvailable() || !result.vectorAvailable())) {
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
+        }
+        recordDegradation(result, reporter, failedRecallStages);
 
         Map<Long, KnowledgeDocument> searchableDocuments = searchableDocuments(actor, result);
         Set<String> authorizedChunkIds = authorizedChunkIds(result, searchableDocuments);
@@ -411,6 +437,25 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
     }
 
     private record ScoredSegment(ContextSegment segment, int score, int originalOrder, int matchedTerms) { }
+
+    private void recordDegradation(HybridRetriever.Result result, Consumer<AiProgressEvent> reporter,
+                                   Set<String> failedRecallStages) {
+        String headerValue = result.degradationHeaderValue();
+        if (degradationContext != null) {
+            degradationContext.applyDegradation(headerValue);
+        }
+        if (!result.degraded()) {
+            return;
+        }
+        if (degradationMetrics != null) {
+            degradationMetrics.recordDegraded(headerValue);
+        }
+        String stages = failedRecallStages.isEmpty()
+                ? headerValue
+                : String.join(",", failedRecallStages.stream().sorted().toList());
+        emit(reporter, "recall_degraded", AiProgressEvent.Status.COMPLETED,
+                "检索已降级，不可用阶段：" + stages, failedRecallStages.size());
+    }
 
     private static void emit(Consumer<AiProgressEvent> progress, String stage,
                              AiProgressEvent.Status status, String message, Integer resultCount) {
