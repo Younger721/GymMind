@@ -156,61 +156,29 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
     @Override
     public List<AiWorkoutPlanTarget> targets(CurrentActor actor) {
         Long tenantId = ActorAccess.tenantId(actor);
-        if (actor == null || tenantId == null || !actor.hasPermission("ai:plan")) {
+        if (actor == null || tenantId == null || !actor.hasPermission("ai:plan")
+                || !actor.roles().contains(RoleCode.MEMBER)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (actor.roles().contains(RoleCode.MEMBER)) {
-            return List.of(target(memberForUser(tenantId, actor.userId())));
-        }
-        if (actor.roles().contains(RoleCode.COACH)) {
-            if (coaches == null || assignments == null || members == null) {
-                throw new BusinessException(ErrorCode.FORBIDDEN);
-            }
-            Coach coach = coaches.findByTenantIdAndUserId(tenantId, actor.userId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-            List<AiWorkoutPlanTarget> result = new ArrayList<>();
-            for (Long memberId : assignments.findActiveMemberIdsByTenantIdAndCoachId(tenantId, coach.getId())) {
-                members.findByTenantIdAndId(tenantId, memberId).map(this::target).ifPresent(result::add);
-            }
-            return result;
-        }
-        if (ActorAccess.canManageTenant(actor) && actor.hasPermission("member:read") && members != null) {
-            return members.findAllByTenantId(tenantId, Pageable.unpaged()).stream().map(this::target).toList();
-        }
-        throw new BusinessException(ErrorCode.FORBIDDEN);
+        return List.of(target(memberForUser(tenantId, actor.userId())));
     }
 
     private Long resolveTarget(CurrentActor actor, Long tenantId, Long requestedMemberId) {
-        if (actor.roles().contains(RoleCode.MEMBER)) {
-            if (members == null) {
-                // Legacy constructor is used only by old isolated tests/integrations.
-                if (requestedMemberId == null) throw new BusinessException(ErrorCode.FORBIDDEN);
-                return requestedMemberId;
-            }
-            Member self = memberForUser(tenantId, actor.userId());
-            if (requestedMemberId != null && !Objects.equals(requestedMemberId, self.getId())) {
-                throw new BusinessException(ErrorCode.FORBIDDEN);
-            }
-            return self.getId();
+        if (!actor.roles().contains(RoleCode.MEMBER)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (actor.roles().contains(RoleCode.COACH)) {
-            if (requestedMemberId == null || coaches == null || assignments == null) {
-                throw new BusinessException(ErrorCode.FORBIDDEN);
-            }
-            Coach coach = coaches.findByTenantIdAndUserId(tenantId, actor.userId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
-            if (!assignments.existsByTenantIdAndCoachIdAndMemberIdAndActive(tenantId, coach.getId(), requestedMemberId)) {
+        if (members == null) {
+            // 旧测试构造器：仅允许显式 memberId，且必须是会员角色。
+            if (requestedMemberId == null) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             return requestedMemberId;
         }
-        if (ActorAccess.canManageTenant(actor) && actor.hasPermission("member:read")
-                && requestedMemberId != null && members != null) {
-            members.findByTenantIdAndId(tenantId, requestedMemberId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-            return requestedMemberId;
+        Member self = memberForUser(tenantId, actor.userId());
+        if (requestedMemberId != null && !Objects.equals(requestedMemberId, self.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        throw new BusinessException(ErrorCode.FORBIDDEN);
+        return self.getId();
     }
 
     private Member memberForUser(Long tenantId, Long userId) {

@@ -4,20 +4,6 @@
     <p class="simple-page-desc">围绕会员训练工作，快速制定计划、分析记录和生成沟通内容。</p>
 
     <el-tabs v-model="tab" type="card">
-      <el-tab-pane label="制定训练计划" name="plan">
-        <div class="simple-card coach-card">
-          <p class="hint">选择会员并描述目标，AI 会生成可审核的训练计划草案。</p>
-          <el-form label-width="120px">
-            <el-form-item label="会员">
-              <el-select v-model="coachMemberId" filterable placeholder="选择你负责的会员" style="width: 100%">
-                <el-option v-for="target in targets" :key="target.memberId" :label="`${target.name || '会员'}（${target.memberNumber || target.memberId}）`" :value="String(target.memberId)" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="训练需求"><el-input v-model="planRequest" type="textarea" rows="3" placeholder="例如：增肌，每周训练 3 次，有哑铃和杠铃" /></el-form-item>
-            <el-button type="primary" :loading="loading" @click="runPlan">生成计划草案</el-button>
-          </el-form>
-        </div>
-      </el-tab-pane>
       <el-tab-pane label="调整训练计划" name="adjust">
         <div class="simple-card coach-card">
           <p class="hint">描述会员近期的训练表现或恢复情况，AI 会给出调整建议。</p>
@@ -95,10 +81,9 @@
 import { onMounted, reactive, ref } from 'vue'
 import JsonBlock from '@/components/business/JsonBlock.vue'
 import { aiExtendedApi } from '@/api/aiExtended'
-import { workoutPlansApi } from '@/api/workouts'
 import { workoutPlanDraftApi, type WorkoutPlanTarget } from '@/api/workoutPlanDraft'
 
-const tab = ref('plan')
+const tab = ref('adjust')
 const loading = ref(false)
 const result = ref<unknown>(null)
 const memberStats = reactive({
@@ -108,7 +93,6 @@ const memberStats = reactive({
   membershipDaysRemaining: 7,
   membershipExpiring: true
 })
-const planRequest = ref('')
 const adjustRequest = ref('')
 const goal = ref('增肌')
 const coachMemberId = ref('')
@@ -128,11 +112,6 @@ function runMemberAnalysis() {
   if (!coachMemberId.value) return
   const request = `请分析会员训练活跃度：距上次训练 ${memberStats.daysSinceLastWorkout} 天，近30天训练 ${memberStats.workoutsLast30Days} 次，前30天训练 ${memberStats.workoutsPrevious30Days} 次，会籍剩余 ${memberStats.membershipDaysRemaining} 天，即将到期 ${memberStats.membershipExpiring ? '是' : '否'}。`
   return run(() => aiExtendedApi.coachAssistant({ memberId: Number(coachMemberId.value), request }))
-}
-
-function runPlan() {
-  if (!coachMemberId.value || !planRequest.value.trim()) return
-  return run(() => workoutPlansApi.aiDraft({ memberId: Number(coachMemberId.value), request: planRequest.value }))
 }
 
 function runAdjust() {

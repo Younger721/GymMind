@@ -2,8 +2,6 @@ package com.gymmind.analytics.application;
 
 import com.gymmind.analytics.domain.ChurnRiskCalculator;
 import com.gymmind.analytics.domain.ChurnSignals;
-import com.gymmind.coach.application.CoachAssignmentService;
-import com.gymmind.coach.domain.model.CoachAssignmentStatus;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
@@ -16,34 +14,25 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 public class DefaultMemberChurnRiskService implements MemberChurnRiskService {
 
     private final JdbcTemplate jdbc;
-    private final CoachAssignmentService assignments;
     private final ChurnRiskCalculator calculator = new ChurnRiskCalculator();
 
-    public DefaultMemberChurnRiskService(JdbcTemplate jdbc, CoachAssignmentService assignments) {
+    public DefaultMemberChurnRiskService(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
-        this.assignments = assignments;
     }
 
     @Override
     public List<MemberChurnRiskView> list(CurrentActor actor) {
         Long tenant = ActorAccess.tenantId(actor);
-        if (tenant == null || !actor.hasPermission("analytics:read")) {
+        if (tenant == null || !actor.hasPermission("analytics:read")
+                || !actor.roles().contains(RoleCode.GYM_ADMIN)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-        Set<Long> allowed = null;
-        if (actor.roles().contains(RoleCode.COACH) && !ActorAccess.canManageTenant(actor)) {
-            allowed = new HashSet<>(assignments.list(actor, CoachAssignmentStatus.ACTIVE).stream()
-                    .map(a -> a.getMemberId())
-                    .toList());
         }
         Instant now = Instant.now();
         Instant from30 = now.minus(Duration.ofDays(30));
@@ -53,9 +42,6 @@ public class DefaultMemberChurnRiskService implements MemberChurnRiskService {
         List<MemberChurnRiskView> out = new ArrayList<>();
         for (Map<String, Object> member : members) {
             Long id = ((Number) member.get("id")).longValue();
-            if (allowed != null && !allowed.contains(id)) {
-                continue;
-            }
             Instant lastCheckIn = jdbc.query(
                     "select check_in_at from gym_check_in where tenant_id=? and member_id=? order by check_in_at desc limit 1",
                     rs -> rs.next() ? rs.getTimestamp("check_in_at").toInstant() : null,

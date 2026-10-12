@@ -247,13 +247,13 @@ public final class PermissionCatalog {
     private static Map<RoleCode, Map<String, Set<String>>> roleMenuOperations() {
         Map<RoleCode, Map<String, Set<String>>> mappings = new EnumMap<>(RoleCode.class);
         mappings.put(RoleCode.COACH, roleOperations(
-                Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory", "ai:plan")),
+                Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory")),
                 Map.entry("menu:knowledge", Set.of("knowledge:read", "knowledge:write")),
                 Map.entry("menu:courses", Set.of("course:read", "course:write", "booking:write")),
                 Map.entry("menu:training", Set.of(
                         "exercise:read", "exercise:write", "video:read", "workout:read", "workout:write",
                         "workout-record:read", "nutrition:read", "nutrition:write",
-                        "ai:recommend", "ai:plan"))));
+                        "ai:recommend"))));
         mappings.put(RoleCode.MEMBER, roleOperations(
                 Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory", "ai:plan")),
                 Map.entry("menu:courses", Set.of("course:read", "booking:write")),

@@ -96,7 +96,8 @@ class SystemCatalogInitializerTest {
                 .contains("course:read", "booking:write");
 
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.COACH, "menu:training"))
-                .contains("exercise:read", "exercise:write", "video:read", "workout:write", "ai:plan")
+                .contains("exercise:read", "exercise:write", "video:read", "workout:write")
+                .doesNotContain("ai:plan")
                 .doesNotContain("video:write", "workout-record:write");
         assertThat(PermissionCatalog.operationPermissionsFor(RoleCode.MEMBER, "menu:training"))
                 .contains("exercise:read", "video:read", "workout:write", "workout-record:write", "nutrition:write", "ai:plan")

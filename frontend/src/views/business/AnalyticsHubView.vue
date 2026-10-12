@@ -5,7 +5,7 @@
         <h2 class="simple-page-title">门店运营统计</h2>
         <p class="simple-page-desc">基于门店签到（gym_check_in）汇总有效会员与签到人次；与 AI 门店运营数据口径一致。</p>
       </div>
-      <router-link to="/member-risks" class="risk-link">会员流失预警 →</router-link>
+      <router-link to="/assistant" class="risk-link">会员流失预警请使用 AI 助手 →</router-link>
     </div>
 
     <div class="simple-card filter-box">

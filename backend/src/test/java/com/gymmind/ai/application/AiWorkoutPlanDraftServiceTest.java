@@ -121,17 +121,11 @@ class AiWorkoutPlanDraftServiceTest {
     }
 
     @Test
-    void coachCannotTargetUnassignedMember() {
+    void coachCannotGenerateAiWorkoutDraft() {
         var actor = new CurrentActor(8L, 7L, Set.of(RoleCode.COACH), Set.of("ai:plan"), 0, "token");
         var model = mock(ChatModelGateway.class);
-        var coaches = mock(CoachRepository.class);
-        var coach = mock(Coach.class);
-        when(coach.getId()).thenReturn(11L);
-        when(coaches.findByTenantIdAndUserId(7L, 8L)).thenReturn(java.util.Optional.of(coach));
-        var assignments = mock(CoachAssignmentRepository.class);
-        when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndActive(7L, 11L, 42L)).thenReturn(false);
-        var service = service(model, null, coaches, assignments, mock(WorkoutHistoryQueryService.class),
-                mock(ExerciseRepository.class));
+        var service = service(model, null, mock(CoachRepository.class), mock(CoachAssignmentRepository.class),
+                mock(WorkoutHistoryQueryService.class), mock(ExerciseRepository.class));
 
         assertThatThrownBy(() -> service.generateDraft(actor, 42L, "减脂", false))
                 .isInstanceOf(BusinessException.class);

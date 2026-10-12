@@ -131,7 +131,7 @@ const canConfigure = computed(() => authStore.roles.includes('GYM_ADMIN')
 const configLink = '/agents/manage'
 const roleProfile = computed(() => {
   if (authStore.isPlatformAdmin) return { name: '平台 AI 管理助手', samples: ['查看 AI 使用情况', '检查租户 AI 状态'] }
-  if (authStore.roles.includes('GYM_ADMIN')) return { name: '门店运营助手', samples: ['上个月来了多少会员？', '和上上个月相比变化多少？', '最近哪些会员活跃度下降？', '本月有哪些会员会籍快到期？', '最近预约到店率怎么样？'] }
+  if (authStore.roles.includes('GYM_ADMIN')) return { name: '门店运营助手', samples: ['上个月来了多少会员？', '和上上个月相比变化多少？', '哪些会员流失风险高？', '本月有哪些会员会籍快到期？', '最近预约到店率怎么样？'] }
   if (authStore.roles.includes('COACH')) return { name: '教练工作助手', samples: ['给会员制定训练建议', '查看训练动作要点'] }
   return {
     name: '我的训练助手',
