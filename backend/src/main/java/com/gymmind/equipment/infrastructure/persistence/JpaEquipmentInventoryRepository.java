@@ -14,9 +14,4 @@ class JpaEquipmentInventoryRepository implements EquipmentInventoryRepository {
     public Optional<EquipmentInventory> findByTenantIdAndCatalogId(Long tenantId, Long catalogId) { return delegate.findByTenantIdAndCatalogId(tenantId, catalogId); }
     public List<EquipmentInventory> findAllByTenantId(Long tenantId) { return delegate.findAllByTenantId(tenantId); }
     public List<EquipmentInventory> findAll() { return delegate.findAll(); }
-
-    @Override
-    public void deleteAll() {
-        delegate.deleteAll();
-    }
 }

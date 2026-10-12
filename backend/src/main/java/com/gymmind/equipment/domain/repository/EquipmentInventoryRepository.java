@@ -9,7 +9,4 @@ public interface EquipmentInventoryRepository {
     Optional<EquipmentInventory> findByTenantIdAndCatalogId(Long tenantId, Long catalogId);
     List<EquipmentInventory> findAllByTenantId(Long tenantId);
     List<EquipmentInventory> findAll();
-
-    /** 开发演示：清空门店库存后按申请单重建 */
-    void deleteAll();
 }
