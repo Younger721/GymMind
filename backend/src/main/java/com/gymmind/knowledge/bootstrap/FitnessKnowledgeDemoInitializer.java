@@ -41,7 +41,6 @@ import java.util.Set;
 public class FitnessKnowledgeDemoInitializer implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(FitnessKnowledgeDemoInitializer.class);
-    private static final String KEY_PREFIX = "DEMO_FITNESS:";
     private static final Set<String> GYM_KNOWLEDGE_PERMS = Set.of("knowledge:read", "knowledge:write");
 
     private record DemoDoc(KnowledgeCategory category, String resourcePath, String fileName) {
@@ -104,11 +103,14 @@ public class FitnessKnowledgeDemoInitializer implements ApplicationRunner {
             CurrentActor actor = new CurrentActor(gymAdminId, tenantId,
                     Set.of(RoleCode.GYM_ADMIN), GYM_KNOWLEDGE_PERMS, 0L, "fitness-knowledge-demo");
             for (DemoDoc doc : DOCS) {
-                String knowledgeKey = KEY_PREFIX + doc.category().code();
-                if (!documents.findByKnowledgeKey(tenantId, knowledgeKey).isEmpty()) {
+                boolean alreadySeeded = documents.findByTenantId(tenantId).stream()
+                        .anyMatch(d -> doc.category().code().equals(d.category())
+                                && doc.fileName().equals(d.fileName()));
+                if (alreadySeeded) {
                     continue;
                 }
                 byte[] content = readResource(doc.resourcePath());
+                // 首次上传不传 knowledgeKey（由文档服务在替换版本时再维护 key）
                 knowledge.upload(actor, new UploadKnowledgeDocumentCommand(
                         doc.fileName(),
                         "text/markdown",
@@ -126,7 +128,7 @@ public class FitnessKnowledgeDemoInitializer implements ApplicationRunner {
                         null,
                         null,
                         null,
-                        knowledgeKey));
+                        null));
                 log.info("已导入健身演示知识 tenantId={} category={}", tenantId, doc.category());
             }
         }
