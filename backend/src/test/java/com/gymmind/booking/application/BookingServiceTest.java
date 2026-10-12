@@ -9,6 +9,7 @@ import com.gymmind.course.domain.model.Course;
 import com.gymmind.course.domain.repository.CourseRepository;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.member.domain.model.Member;
@@ -34,18 +35,33 @@ import static org.mockito.Mockito.when;
 class BookingServiceTest {
 
     @Test
-    void platformAdminListsBookingsAcrossTenantsWithoutContext() {
+    void platformAdminRequiresTenantContextForBookingList() {
+        BookingRepository bookings = mock(BookingRepository.class);
+        BookingService service = new DefaultBookingService(mock(CourseRepository.class), bookings,
+                mock(MembershipEntitlementPort.class), mock(AuditRecorder.class), CLOCK);
+        var platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token");
+
+        assertThatThrownBy(() -> service.list(platform))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.TENANT_CONTEXT_REQUIRED);
+        verify(bookings, never()).findAll();
+    }
+
+    @Test
+    void platformAdminListsBookingsForSelectedTenant() {
         CourseRepository courses = mock(CourseRepository.class);
         BookingRepository bookings = mock(BookingRepository.class);
         Booking first = Booking.create(11L, 41L, 4L);
-        Booking second = Booking.create(22L, 51L, 8L);
-        when(bookings.findAll()).thenReturn(java.util.List.of(first, second));
+        when(bookings.findAllByTenantId(11L)).thenReturn(java.util.List.of(first));
         BookingService service = new DefaultBookingService(courses, bookings, mock(MembershipEntitlementPort.class), mock(AuditRecorder.class), CLOCK);
-
-        var result = service.list(new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token"));
-
-        assertThat(result).hasSize(2);
-        verify(bookings).findAll();
+        com.gymmind.shared.security.TenantContextHolder.set(11L);
+        try {
+            var result = service.list(new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "token"));
+            assertThat(result).hasSize(1);
+            verify(bookings).findAllByTenantId(11L);
+        } finally {
+            com.gymmind.shared.security.TenantContextHolder.clear();
+        }
     }
 
     @Test

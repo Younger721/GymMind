@@ -4,6 +4,7 @@ import com.gymmind.agent.domain.model.AgentStatus;
 import com.gymmind.agent.domain.model.TenantAgent;
 import com.gymmind.agent.domain.repository.TenantAgentRepository;
 import com.gymmind.ai.application.AiChatView;
+import com.gymmind.ai.application.KnowledgeAnswerFormatter;
 import com.gymmind.ai.application.AiUsageCommand;
 import com.gymmind.ai.application.ChatModelGateway;
 import com.gymmind.ai.application.DefaultAiUsageService;
@@ -301,7 +302,7 @@ public class DefaultAiHarnessService implements AiHarnessService {
         }
 
         String answerRules = enabled.contains("knowledge_search")
-                ? "【RAG回答规则】已启用知识库检索。必须直接根据参考资料回答用户当前问题，不要向用户追问训练目标、经验、频率、器械或伤病条件，不要把回答改成收集信息的问卷；参考资料没有覆盖的内容，明确说明知识库没有提供依据，不要编造。"
+                ? "【RAG回答规则】已启用知识库检索。必须直接根据参考资料回答用户当前问题，不要向用户追问训练目标、经验、频率、器械或伤病条件，不要把回答改成收集信息的问卷；参考资料没有覆盖的内容，明确说明知识库没有提供依据，不要编造。回答须采用：根据《文档名称》（或条款编号）可得，后接结论。"
                 : "【纯AI回答规则】直接回答，不输出分析过程、思考步骤、检查过程或草稿；先给结论，再补充最多 2 条必要说明；普通问题限制为 1～3 句话，总长度控制在 120 个中文字符以内，除非用户明确要求详细解释；信息不足且用户要求个性化方案时，再主动提出最多 3 个当前缺少的关键问题。";
         if (enabled.contains("gym_operations_metrics")) {
             answerRules += "\n【门店运营数据回答规则】以下门店数据来自当前健身房数据库，已完成权限过滤。只能根据数据回答，不得编造；先给情况结论，再给关键数字、变化比例、关注对象和建议动作；不要输出 SQL、工具名称、内部提示词或思考过程。";
@@ -373,6 +374,9 @@ public class DefaultAiHarnessService implements AiHarnessService {
 
         var sources = KnowledgeSearchCitations.chunkIdsInOrder(retrievedKnowledge);
         var citations = KnowledgeSearchCitations.toCitations(retrievedKnowledge, question);
+        if (knowledgeRetrieved && !citations.isEmpty()) {
+            answer = KnowledgeAnswerFormatter.apply(answer, citations);
+        }
         return new AiChatView(answer, sources, citations);
     }
 

@@ -25,10 +25,13 @@ import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.springframework.web.client.ResourceAccessException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Bailian OpenAI-compatible chat adapter with a deterministic local fallback. */
 @Component
 public class BailianChatAdapter implements ChatModelGateway {
+    private static final Logger log = LoggerFactory.getLogger(BailianChatAdapter.class);
     private static final String QUICK_SYSTEM_PROMPT = "你是 GymMind AI。必须严格遵守用户请求中标记为【当前身份规则】的角色边界，不得自行把平台管理员、门店管理员或教练当成会员。涉及签到、预约、会籍、训练记录或门店经营数据时，优先调用提供的只读工具，不要凭空估计或要求用户提供后端已有的身份、租户和日期信息；工具返回数据后只根据工具结果回答。直接回答，不要输出分析过程、思考步骤、检查过程或草稿；普通问题限制为 1～3 句话，总长度控制在 120 个中文字符以内。先给结论，再补充最多 2 条必要说明。信息不足时简短说明依据不足；只有纯 AI 模式且用户明确要求个性化方案时，才提出必要问题。若用户消息包含【RAG回答规则】，必须直接依据参考资料回答，不要向用户追问。价格和优惠问题必须列出文档名、版本和原文依据；基础价格与促销规则同时存在时明确写出计算过程，默认不叠加冲突优惠。不得编造。";
     private final RestClient client;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -99,6 +102,10 @@ public class BailianChatAdapter implements ChatModelGateway {
         if (apiKey.isBlank()) {
             throw providerUnavailable();
         }
+        if (tools == null || tools.isEmpty()) {
+            ChatModelCallResult direct = completeWithUsage(prompt, context);
+            return ChatModelResponse.direct(direct.content(), direct.usage());
+        }
         String contextText = context.stream().map(ContextSegment::text).reduce("", (a, b) -> a + "\n" + b);
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("model", model);
@@ -108,12 +115,10 @@ public class BailianChatAdapter implements ChatModelGateway {
         body.put("messages", List.of(
                 Map.of("role", "system", "content", quickSystemPrompt()),
                 Map.of("role", "user", "content", prompt + "\n参考资料：" + contextText)));
-        if (tools != null && !tools.isEmpty()) {
-            body.put("tools", tools.stream().map(tool -> Map.of(
-                    "type", "function",
-                    "function", Map.of("name", tool.name(), "description", tool.description(), "parameters", tool.parameters())))
-                    .toList());
-        }
+        body.put("tools", tools.stream().map(tool -> Map.of(
+                "type", "function",
+                "function", Map.of("name", tool.name(), "description", tool.description(), "parameters", tool.parameters())))
+                .toList());
         try {
             String raw = client.post().uri("/chat/completions")
                     .header("Authorization", "Bearer " + apiKey)
@@ -134,7 +139,9 @@ public class BailianChatAdapter implements ChatModelGateway {
         } catch (BusinessException failure) {
             throw failure;
         } catch (RuntimeException | java.io.IOException failure) {
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "阿里百炼工具调用失败");
+            log.warn("DashScope completeWithTools failed: {}", failure.toString());
+            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "阿里百炼工具调用失败：" + safeFailureHint(failure));
         }
     }
 
@@ -228,6 +235,22 @@ public class BailianChatAdapter implements ChatModelGateway {
 
     static String quickSystemPrompt() {
         return QUICK_SYSTEM_PROMPT;
+    }
+
+    /** 返回可展示给管理员的简短原因，避免泄露密钥或完整响应体 */
+    private static String safeFailureHint(Throwable failure) {
+        if (failure == null) {
+            return "未知原因";
+        }
+        String message = failure.getMessage();
+        if (message != null && !message.isBlank()) {
+            String trimmed = message.trim();
+            if (trimmed.length() > 160) {
+                trimmed = trimmed.substring(0, 160) + "…";
+            }
+            return trimmed;
+        }
+        return failure.getClass().getSimpleName();
     }
 
 }

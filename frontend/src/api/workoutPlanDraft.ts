@@ -50,7 +50,14 @@ export const workoutPlanDraftApi = {
     )
   },
 
-  generate(body: { memberId?: number | null; request: string; includeHistory: boolean }) {
+  generate(body: {
+    memberId?: number | null
+    request?: string
+    includeHistory?: boolean
+    goal?: string
+    sessionsPerWeek?: number
+    experience?: string
+  }) {
     return apiClient.post<any, ApiResponse<WorkoutPlanDraftResponse | WorkoutPlanDraft>>(
       '/v1/ai/workout-plan-drafts',
       body

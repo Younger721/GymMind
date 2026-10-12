@@ -151,6 +151,11 @@ const canManage = computed(() => authStore.isPlatformAdmin
   || (authStore.roles.includes('GYM_ADMIN')
     && hasMenuPermission(MENU_CODES.KNOWLEDGE)))
 
+/** 入库流水线未结束的状态，需轮询列表直至就绪或失败 */
+const ingestInProgressStatuses = ['UPLOADING', 'PARSING', 'CHUNKED', 'INDEXING'] as const
+const isIngestInProgress = (status: string) =>
+  (ingestInProgressStatuses as readonly string[]).includes(status)
+
 const load = async () => {
   loading.value = true
   try {
@@ -232,6 +237,8 @@ const statusText = (s: string) => {
   const map: Record<string, string> = {
     UPLOADING: '上传中',
     PARSING: '解析中',
+    CHUNKED: '已切片',
+    INDEXING: '索引中',
     READY: '就绪',
     FAILED: '失败',
     DELETED: '已删除'
@@ -258,12 +265,12 @@ const chunkStrategyText = (strategy?: string) => {
 const statusType = (s: string) => {
   if (s === 'READY') return 'success'
   if (s === 'FAILED') return 'danger'
-  if (s === 'PARSING' || s === 'UPLOADING') return 'warning'
+  if (isIngestInProgress(s)) return 'warning'
   return 'info'
 }
 
 const publicationText = (row: KnowledgeDocumentView) => {
-  if (row.status === 'UPLOADING' || row.status === 'PARSING') return '处理中'
+  if (isIngestInProgress(row.status)) return '处理中'
   if (row.status === 'FAILED') return '不可用'
   return row.published ? '已发布' : '待发布'
 }
@@ -278,14 +285,17 @@ const startPolling = () => {
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = setInterval(async () => {
     await load()
-    if (documents.value.every(row => !['UPLOADING', 'PARSING'].includes(row.status))) {
+    if (documents.value.every(row => !isIngestInProgress(row.status))) {
       if (pollTimer) clearInterval(pollTimer)
       pollTimer = undefined
     }
   }, 3000)
 }
 
-onMounted(async () => { await load(); if (documents.value.some(row => ['UPLOADING', 'PARSING'].includes(row.status))) startPolling() })
+onMounted(async () => {
+  await load()
+  if (documents.value.some(row => isIngestInProgress(row.status))) startPolling()
+})
 onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>
 

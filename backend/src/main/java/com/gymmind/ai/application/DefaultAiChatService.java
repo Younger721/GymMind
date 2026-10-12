@@ -123,6 +123,7 @@ public class DefaultAiChatService implements AiChatService {
         recordUsage(actor, call, "chat");
         var sources = KnowledgeSearchCitations.chunkIdsInOrder(context);
         var citations = KnowledgeSearchCitations.toCitations(context, question);
+        answer = KnowledgeAnswerFormatter.apply(answer, citations);
         return new AiChatView(answer, sources, citations);
     }
 

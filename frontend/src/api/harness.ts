@@ -83,7 +83,16 @@ export const harnessApi = {
       await consumeSseStream(response.body.getReader(), ({ type: eventType, data }) => {
         if (eventType === 'error') {
           let message = data
-          try { message = (JSON.parse(data) as { message?: string }).message || message } catch { /* plain text error */ }
+          try {
+            const payload = JSON.parse(data) as { message?: string; code?: string; traceId?: string }
+            message = payload.message || message
+            if (payload.code || payload.traceId) {
+              const parts = [message]
+              if (payload.code) parts.push(`错误码：${payload.code}`)
+              if (payload.traceId) parts.push(`追踪号：${payload.traceId}`)
+              message = parts.join('；')
+            }
+          } catch { /* plain text error */ }
           throw new Error(message)
         }
         if (eventType === 'done') {

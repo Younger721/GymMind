@@ -120,7 +120,7 @@ class UserInvitationServiceTest {
                 Set.of("platform:tenant:write"), 0L, "platform-token");
         assertThatThrownBy(() -> service.invite(platform,
                 new InviteUserCommand("member@example.com", RoleCode.MEMBER)))
-                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+                .extracting("errorCode").isEqualTo(ErrorCode.TENANT_CONTEXT_REQUIRED);
 
         UserInvitation expired = UserInvitation.issue(10L, "expired@example.com", RoleCode.MEMBER,
                 UserInvitation.sha256("expired"), NOW.minusSeconds(1));

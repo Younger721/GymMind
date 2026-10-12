@@ -1,5 +1,5 @@
--- 为所有启用中的健身房初始化常用器械目录和库存。
--- 脚本可重复执行：已存在的目录和库存不会重复插入或覆盖。
+-- 为所有启用中的健身房初始化常用器械目录（门店库存由申请/配送/入库流程写入，不在此脚本灌数）。
+-- 脚本可重复执行：已存在的目录不会重复插入。
 
 INSERT INTO equipment_catalog
     (version, created_at, updated_at, name, category, description, unit, active)
@@ -22,35 +22,3 @@ FROM (
 ) seed
 LEFT JOIN equipment_catalog existing ON existing.name = seed.name
 WHERE existing.id IS NULL;
-
-INSERT INTO tenant_equipment
-    (tenant_id, version, created_at, updated_at, catalog_id,
-     delivered_quantity, received_quantity, usable_quantity, abnormal_quantity, last_received_at)
-SELECT
-    tenant.id,
-    0,
-    NOW(6),
-    NOW(6),
-    catalog.id,
-    seed.quantity,
-    seed.quantity,
-    seed.quantity,
-    0,
-    NOW(6)
-FROM sys_tenant tenant
-JOIN (
-    SELECT '跑步机' AS name, 8 AS quantity
-    UNION ALL SELECT '动感单车', 12
-    UNION ALL SELECT '椭圆机', 6
-    UNION ALL SELECT '划船机', 4
-    UNION ALL SELECT '哑铃', 20
-    UNION ALL SELECT '杠铃架', 4
-) seed ON 1 = 1
-JOIN equipment_catalog catalog ON catalog.name = seed.name
-WHERE tenant.status = 'ACTIVE'
-  AND NOT EXISTS (
-      SELECT 1
-      FROM tenant_equipment existing
-      WHERE existing.tenant_id = tenant.id
-        AND existing.catalog_id = catalog.id
-  );

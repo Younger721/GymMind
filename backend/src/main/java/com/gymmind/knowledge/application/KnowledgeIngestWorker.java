@@ -4,6 +4,7 @@ import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
 import com.gymmind.shared.async.PersistentJobQueue;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +49,7 @@ public class KnowledgeIngestWorker {
         this(jobs, documents, store, indexing, artifacts, settings, defaultJobProperties(), clock);
     }
 
+    @Autowired
     public KnowledgeIngestWorker(
             PersistentJobQueue jobs,
             KnowledgeDocumentRepository documents,

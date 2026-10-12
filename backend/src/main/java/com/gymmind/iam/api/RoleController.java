@@ -3,6 +3,8 @@ package com.gymmind.iam.api;
 import com.gymmind.iam.api.response.RoleResponse;
 import com.gymmind.iam.application.UserAdministrationService;
 import com.gymmind.shared.api.ApiResponse;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.CurrentActorProvider;
@@ -55,7 +57,10 @@ public class RoleController {
     @PutMapping("/{roleCode}/permissions")
     public ApiResponse<Void> updatePermissions(@PathVariable RoleCode roleCode, @RequestBody PermissionUpdate request) {
         CurrentActor actor = actors.requireCurrent();
-        service.replaceRolePermissions(actor, roleCode, request == null ? Set.of() : request.permissions());
+        if (request == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        service.replaceRolePermissions(actor, roleCode, request.permissions());
         return ApiResponse.success(null);
     }
 

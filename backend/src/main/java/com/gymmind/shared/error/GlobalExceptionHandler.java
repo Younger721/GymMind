@@ -70,6 +70,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException exception) {
+        // 依赖类错误保留业务侧给出的可读说明（如百炼调用失败原因摘要），便于排查
+        if (exception.errorCode() == ErrorCode.DEPENDENCY_UNAVAILABLE) {
+            String detail = exception.getMessage();
+            if (detail != null && !detail.isBlank() && !detail.equals(exception.errorCode().message())) {
+                return ResponseEntity.status(exception.errorCode().status())
+                        .body(ApiResponse.error(exception.errorCode().name(), detail));
+            }
+        }
         return response(exception.errorCode());
     }
 

@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/** Agent 查询与 prompt 更新；create/update/disable 由服务层暂返回 FORBIDDEN（二期开放）。 */
 @RestController
 @RequestMapping("/api/v1/agents")
 @SecurityRequirement(name = "bearerAuth")

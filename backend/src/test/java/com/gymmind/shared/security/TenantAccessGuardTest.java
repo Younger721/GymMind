@@ -39,7 +39,7 @@ class TenantAccessGuardTest {
         assertThatThrownBy(() -> guard.requireTenant(platform))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
-                .isEqualTo(ErrorCode.FORBIDDEN);
+                .isEqualTo(ErrorCode.TENANT_CONTEXT_REQUIRED);
     }
 
     @Test

@@ -8,6 +8,9 @@ public interface WorkoutPlanService {
     WorkoutPlanView create(CurrentActor actor, CreateWorkoutPlanCommand command);
     WorkoutPlanView createForCurrentMember(CurrentActor actor, CreateWorkoutPlanCommand command);
     WorkoutPlanView updateForCurrentMember(CurrentActor actor, Long id, CreateWorkoutPlanCommand command);
+
+    /** 教练/管理员更新会员草稿计划（须能访问该会员） */
+    WorkoutPlanView updateForCoach(CurrentActor actor, Long id, CreateWorkoutPlanCommand command);
     WorkoutPlanView saveValidatedDraft(CurrentActor actor, CreateWorkoutPlanCommand command);
     WorkoutPlanView find(CurrentActor actor, Long id);
     List<WorkoutPlanView> list(CurrentActor actor);

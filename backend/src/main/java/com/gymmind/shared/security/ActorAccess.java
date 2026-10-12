@@ -42,12 +42,18 @@ public final class ActorAccess {
         if (actor == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        if (permission == null || permission.isBlank()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
         if (isSuperAdmin(actor)) {
             requireTenantId(actor);
             return;
         }
         if (actor.tenantId() == null
                 || !actor.roles().contains(RoleCode.GYM_ADMIN)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (!actor.hasPermission(permission)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
@@ -67,7 +73,11 @@ public final class ActorAccess {
         }
         if (actor.tenantId() == null
                 || !actor.roles().contains(RoleCode.GYM_ADMIN)
-                || permission == null) {
+                || permission == null
+                || permission.isBlank()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (!actor.hasPermission(permission)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

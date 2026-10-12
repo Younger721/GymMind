@@ -6,15 +6,15 @@ import com.gymmind.ai.harness.AiHarnessPlugin;
 import com.gymmind.ai.harness.AiHarnessPluginDescriptor;
 import com.gymmind.ai.harness.capability.ToolExecutionContext;
 import com.gymmind.ai.harness.capability.ToolResult;
+import com.gymmind.analytics.application.TenantOperationsQueryService;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.iam.domain.model.RoleCode;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.gymmind.analytics.application.TenantOperationsMath;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -29,16 +29,16 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
     private static final AiHarnessPluginDescriptor DESCRIPTOR = new AiHarnessPluginDescriptor(
             "gym_operations_metrics", "门店运营数据", "查询当前健身房签到、预约、会籍和训练活跃数据", "TOOL", "analytics:read", true, true);
     private static final String QUESTION_KEYWORDS = "到店|签到|来了|活跃|预约|到店率|会籍|续费|到期|训练次数|训练活跃|会员减少|会员增加|经营|运营|趋势|变化|对比|比较|环比";
-    private final JdbcTemplate jdbc;
+    private final TenantOperationsQueryService operationsQuery;
     private final Clock clock;
 
     @Autowired
-    public GymOperationsMetricsTool(JdbcTemplate jdbc) {
-        this(jdbc, Clock.systemDefaultZone());
+    public GymOperationsMetricsTool(TenantOperationsQueryService operationsQuery) {
+        this(operationsQuery, Clock.systemDefaultZone());
     }
 
-    GymOperationsMetricsTool(JdbcTemplate jdbc, Clock clock) {
-        this.jdbc = jdbc;
+    GymOperationsMetricsTool(TenantOperationsQueryService operationsQuery, Clock clock) {
+        this.operationsQuery = operationsQuery;
         this.clock = clock;
     }
 
@@ -54,7 +54,7 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
         Long tenantId = ActorAccess.tenantId(actor);
         if (tenantId == null) return;
         OperationsMetricsQuery query = resolveQuery(input, LocalDate.now(clock));
-        OperationsMetricsContext metrics = query(tenantId, query);
+        OperationsMetricsContext metrics = operationsQuery.queryMetrics(tenantId, query);
         context.add(new ContextSegment("gym-operations:" + tenantId + ":" + query.from(), "gym_operations_metrics", format(metrics)));
     }
 
@@ -64,7 +64,7 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
         try {
             OperationsQueryIntent intent = parseStructuredIntent(arguments, LocalDate.now(clock));
             Long tenantId = ActorAccess.tenantId(actor);
-            OperationsMetricsContext metrics = query(tenantId, intent.query());
+            OperationsMetricsContext metrics = operationsQuery.queryMetrics(tenantId, intent.query());
             List<String> grouped = intent.groupBy() == OperationsGroupBy.NONE
                     ? List.of()
                     : groupedCheckIns(tenantId, intent.query(), intent.groupBy(), intent.metrics());
@@ -135,9 +135,7 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
     }
 
     static BigDecimal changeRate(long current, long previous) {
-        if (previous == 0) return current == 0 ? BigDecimal.ZERO.setScale(1) : BigDecimal.valueOf(100).setScale(1);
-        return BigDecimal.valueOf(current - previous).multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(previous), 1, RoundingMode.HALF_UP);
+        return TenantOperationsMath.changeRate(current, previous);
     }
 
     private static OperationsMetricsQuery resolveStructuredPeriod(String period, LocalDate today) {
@@ -187,32 +185,29 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
         return previousCalendarMonth(today);
     }
 
-    private OperationsMetricsContext query(Long tenantId, OperationsMetricsQuery q) {
-        LocalDate previousFrom = q.from().minusMonths(1);
-        LocalDate previousTo = q.to().minusMonths(1);
-        if (q.from().getDayOfMonth() == 1
-                && q.to().equals(q.from().plusMonths(1).minusDays(1))) {
-            previousTo = previousFrom.withDayOfMonth(previousFrom.lengthOfMonth());
+    private List<String> groupedCheckIns(Long tenantId, OperationsMetricsQuery query,
+                                         OperationsGroupBy groupBy, List<OperationsMetric> metrics) {
+        if (metrics.stream().noneMatch(Set.of(OperationsMetric.UNIQUE_VISITORS, OperationsMetric.CHECK_IN_COUNT)::contains)) {
+            return List.of();
         }
-        long visitors = scalar("SELECT COUNT(DISTINCT member_id) FROM gym_check_in WHERE tenant_id=? AND DATE(check_in_at) BETWEEN ? AND ?", tenantId, q.from(), q.to());
-        long checkIns = scalar("SELECT COUNT(*) FROM gym_check_in WHERE tenant_id=? AND DATE(check_in_at) BETWEEN ? AND ?", tenantId, q.from(), q.to());
-        long previousVisitors = scalar("SELECT COUNT(DISTINCT member_id) FROM gym_check_in WHERE tenant_id=? AND DATE(check_in_at) BETWEEN ? AND ?", tenantId, previousFrom, previousTo);
-        long previousCheckIns = scalar("SELECT COUNT(*) FROM gym_check_in WHERE tenant_id=? AND DATE(check_in_at) BETWEEN ? AND ?", tenantId, previousFrom, previousTo);
-        long activeMembers = scalar("SELECT COUNT(*) FROM member_profile WHERE tenant_id=? AND status='ACTIVE'", tenantId);
-        long bookings = scalar("SELECT COUNT(*) FROM course_booking WHERE tenant_id=? AND DATE(created_at) BETWEEN ? AND ? AND status <> 'CANCELLED'", tenantId, q.from(), q.to());
-        long completed = scalar("SELECT COUNT(*) FROM course_booking WHERE tenant_id=? AND DATE(checked_in_at) BETWEEN ? AND ? AND status='COMPLETED'", tenantId, q.from(), q.to());
-        long expiring7 = scalar("SELECT COUNT(DISTINCT member_id) FROM member_membership WHERE tenant_id=? AND status='ACTIVE' AND expires_at >= CURRENT_TIMESTAMP AND expires_at < DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 7 DAY)", tenantId);
-        long expiring30 = scalar("SELECT COUNT(DISTINCT member_id) FROM member_membership WHERE tenant_id=? AND status='ACTIVE' AND expires_at >= CURRENT_TIMESTAMP AND expires_at < DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 DAY)", tenantId);
-        long inactive = scalar("SELECT COUNT(*) FROM member_profile m WHERE m.tenant_id=? AND m.status='ACTIVE' AND NOT EXISTS (SELECT 1 FROM gym_check_in c WHERE c.tenant_id=m.tenant_id AND c.member_id=m.id AND c.check_in_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY))", tenantId);
-        long workoutMembers = scalar("SELECT COUNT(DISTINCT member_id) FROM workout_record WHERE tenant_id=? AND workout_date BETWEEN ? AND ? AND status='COMPLETED'", tenantId, q.from(), q.to());
-        long workoutCount = scalar("SELECT COUNT(*) FROM workout_record WHERE tenant_id=? AND workout_date BETWEEN ? AND ? AND status='COMPLETED'", tenantId, q.from(), q.to());
-        List<MemberFollowUpItem> followUps = jdbc.query("SELECT m.id,m.full_name,DATEDIFF(CURRENT_DATE,MAX(c.check_in_at)) days_since FROM member_profile m LEFT JOIN gym_check_in c ON c.tenant_id=m.tenant_id AND c.member_id=m.id WHERE m.tenant_id=? AND m.status='ACTIVE' GROUP BY m.id,m.full_name HAVING MAX(c.check_in_at) IS NULL OR MAX(c.check_in_at) < DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY) ORDER BY days_since DESC LIMIT 20", (rs, row) -> new MemberFollowUpItem(rs.getLong("id"), rs.getString("full_name"), "连续30天未到店", rs.getInt("days_since")), tenantId);
-        return new OperationsMetricsContext(q.from(), q.to(), q.periodLabel(), visitors, checkIns, activeMembers, previousVisitors, previousCheckIns, changeRate(visitors, previousVisitors), bookings, completed, bookings == 0 ? BigDecimal.ZERO.setScale(1) : BigDecimal.valueOf(completed).multiply(BigDecimal.valueOf(100)).divide(BigDecimal.valueOf(bookings), 1, RoundingMode.HALF_UP), expiring7, expiring30, inactive, workoutMembers, workoutCount, followUps);
-    }
-
-    private long scalar(String sql, Object... args) {
-        Number value = jdbc.queryForObject(sql, Number.class, args);
-        return value == null ? 0 : value.longValue();
+        String group = switch (groupBy) {
+            case DAY -> "day";
+            case WEEK -> "week";
+            case MONTH -> "month";
+            case NONE -> throw new IllegalArgumentException("不支持的分组维度");
+        };
+        return operationsQuery.trend(tenantId, query.from(), query.to(), group).stream()
+                .map(point -> {
+                    StringBuilder line = new StringBuilder(point.bucket());
+                    if (metrics.contains(OperationsMetric.UNIQUE_VISITORS)) {
+                        line.append(" 到店会员").append(point.uniqueVisitors()).append("人");
+                    }
+                    if (metrics.contains(OperationsMetric.CHECK_IN_COUNT)) {
+                        line.append(" 签到").append(point.checkInPersonTimes()).append("次");
+                    }
+                    return line.toString();
+                })
+                .toList();
     }
 
     private String format(OperationsMetricsContext m) {
@@ -227,28 +222,6 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
             m.followUps().forEach(item -> out.append(" ").append(item.memberName()).append("（").append(item.daysSinceLastCheckIn()).append("天未到店）；"));
         }
         return out.toString();
-    }
-
-    private List<String> groupedCheckIns(Long tenantId, OperationsMetricsQuery query,
-                                         OperationsGroupBy groupBy, List<OperationsMetric> metrics) {
-        if (metrics.stream().noneMatch(Set.of(OperationsMetric.UNIQUE_VISITORS, OperationsMetric.CHECK_IN_COUNT)::contains)) {
-            return List.of();
-        }
-        String expression = switch (groupBy) {
-            case DAY -> "DATE(check_in_at)";
-            case WEEK -> "YEARWEEK(check_in_at, 1)";
-            case MONTH -> "DATE_FORMAT(check_in_at, '%Y-%m')";
-            case NONE -> throw new IllegalArgumentException("不支持的分组维度");
-        };
-        String sql = "SELECT " + expression + " AS bucket, COUNT(DISTINCT member_id) AS visitors, COUNT(*) AS check_ins "
-                + "FROM gym_check_in WHERE tenant_id=? AND DATE(check_in_at) BETWEEN ? AND ? GROUP BY " + expression
-                + " ORDER BY MIN(check_in_at)";
-        return jdbc.query(sql, (rs, row) -> {
-            StringBuilder line = new StringBuilder(rs.getString("bucket"));
-            if (metrics.contains(OperationsMetric.UNIQUE_VISITORS)) line.append(" 到店会员").append(rs.getLong("visitors")).append("人");
-            if (metrics.contains(OperationsMetric.CHECK_IN_COUNT)) line.append(" 签到").append(rs.getLong("check_ins")).append("次");
-            return line.toString();
-        }, tenantId, query.from(), query.to());
     }
 
     private String formatStructured(OperationsMetricsContext m, OperationsQueryIntent intent, List<String> grouped) {

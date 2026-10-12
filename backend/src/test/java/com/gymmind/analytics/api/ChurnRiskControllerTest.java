@@ -37,11 +37,11 @@ class ChurnRiskControllerTest {
     @Test
     void assessesRiskForCurrentTenant() throws Exception {
         when(actors.requireCurrent()).thenReturn(gymAdmin());
-        when(service.assess(any(), any())).thenReturn(new ChurnRiskResult(82, ChurnRiskLevel.HIGH, java.util.List.of("长期未训练")));
+        when(service.assess(any(), any())).thenReturn(new ChurnRiskResult(82, ChurnRiskLevel.HIGH, java.util.List.of("长期未到店")));
 
         mockMvc.perform(post("/api/v1/analytics/churn-risks")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"daysSinceLastWorkout\":45,\"workoutsLast30Days\":1,\"workoutsPrevious30Days\":8,\"membershipDaysRemaining\":3,\"membershipExpiring\":true}"))
+                        .content("{\"daysSinceLastCheckIn\":45,\"checkInsLast30Days\":1,\"checkInsPrevious30Days\":8,\"bookingsLast30Days\":0,\"courseParticipationsLast30Days\":0,\"membershipDaysRemaining\":3,\"membershipExpiring\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.score").value(82))
                 .andExpect(jsonPath("$.data.level").value("HIGH"));
@@ -53,7 +53,7 @@ class ChurnRiskControllerTest {
     void rejectsNegativeSignals() throws Exception {
         mockMvc.perform(post("/api/v1/analytics/churn-risks")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"daysSinceLastWorkout\":-1,\"workoutsLast30Days\":1,\"workoutsPrevious30Days\":1,\"membershipDaysRemaining\":1,\"membershipExpiring\":false}"))
+                        .content("{\"daysSinceLastCheckIn\":-1,\"checkInsLast30Days\":1,\"checkInsPrevious30Days\":1,\"bookingsLast30Days\":0,\"courseParticipationsLast30Days\":0,\"membershipDaysRemaining\":1,\"membershipExpiring\":false}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
         verifyNoInteractions(service, actors);

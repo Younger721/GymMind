@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import com.gymmind.knowledge.infrastructure.parser.Chunk;
 import com.gymmind.knowledge.infrastructure.parser.ChunkStrategy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -19,13 +20,14 @@ public class KnowledgeChunkArtifactService {
     private final ObjectMapper mapper;
     private final Clock clock;
 
+    @Autowired
     public KnowledgeChunkArtifactService(KnowledgeObjectStore store, ObjectMapper mapper, Clock clock) {
         this.store = store;
         this.mapper = mapper.copy().findAndRegisterModules();
         this.clock = clock;
     }
 
-    public KnowledgeChunkArtifactService(KnowledgeObjectStore store, ObjectMapper mapper) {
+    KnowledgeChunkArtifactService(KnowledgeObjectStore store, ObjectMapper mapper) {
         this(store, mapper, Clock.systemUTC());
     }
 

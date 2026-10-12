@@ -58,9 +58,15 @@ public class WorkoutPlanController {
         return ApiResponse.success(service.createForCurrentMember(actors.requireCurrent(), request.toCommand()));
     }
 
-    @PutMapping({"/member/{id}", "/{id}"})
+    @PutMapping("/member/{id}")
     public ApiResponse<WorkoutPlanView> updateForCurrentMember(@PathVariable Long id, @Valid @RequestBody MemberRequest request) {
         return ApiResponse.success(service.updateForCurrentMember(actors.requireCurrent(), id, request.toCommand()));
+    }
+
+    /** 教练更新会员草稿计划（全量替换，含 memberId） */
+    @PutMapping("/{id}")
+    public ApiResponse<WorkoutPlanView> updateForCoach(@PathVariable Long id, @Valid @RequestBody Request request) {
+        return ApiResponse.success(service.updateForCoach(actors.requireCurrent(), id, request.toCommand()));
     }
 
     @GetMapping

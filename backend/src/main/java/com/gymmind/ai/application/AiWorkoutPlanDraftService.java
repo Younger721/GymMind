@@ -10,5 +10,7 @@ public interface AiWorkoutPlanDraftService {
 
     AiWorkoutPlanDraftResponse generateDraft(CurrentActor actor, Long memberId, String request, boolean includeHistory);
 
+    AiWorkoutPlanDraftResponse generateDraft(CurrentActor actor, Long memberId, AiWorkoutPlanDraftRequest request);
+
     List<AiWorkoutPlanTarget> targets(CurrentActor actor);
 }

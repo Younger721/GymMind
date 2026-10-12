@@ -38,9 +38,8 @@ public class ExerciseVideoController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public void delete(@PathVariable Long id) {
         service.delete(actors.requireCurrent(), id);
-        return ApiResponse.success(null);
     }
 
     public record VideoRequest(@NotNull Long exerciseId, @NotBlank String title, @NotBlank String platform,

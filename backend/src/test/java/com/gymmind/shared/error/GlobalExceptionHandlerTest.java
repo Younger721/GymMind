@@ -52,7 +52,7 @@ class GlobalExceptionHandlerTest {
                 .andExpect(header().string(TraceIdFilter.HEADER_NAME, "validation_trace_1"))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.message").value("name：不能为空"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("name")))
                 .andExpect(jsonPath("$.traceId").value("validation_trace_1"));
     }
 

@@ -33,11 +33,25 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
         Long tenantId = ActorAccess.tenantId(actor);
         if (command.tenantId() != null && !tenantId.equals(command.tenantId())) throw new BusinessException(ErrorCode.FORBIDDEN);
         coaches.findByTenantIdAndId(tenantId, command.coachId()).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (memberships == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (!memberships.existsByTenantIdAndMemberId(tenantId, command.memberId())) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
         if (assignments.findActiveByTenantIdAndCoachIdAndMemberId(tenantId, command.coachId(), command.memberId()).isPresent()) return;
         assignments.save(CoachAssignment.create(tenantId, command.coachId(), command.memberId()));
         audit.record(new AuditEvent("COACH_ASSIGNED", "COACH_MEMBER_ASSIGNMENT", command.coachId(), AuditResult.SUCCESS, "coach-assignment-service", Map.of()));
     }
-    @Override @Transactional public void unassign(CurrentActor actor, Long coachId, Long memberId) { requireAdmin(actor); assignments.deleteActiveByTenantIdAndCoachIdAndMemberId(ActorAccess.tenantId(actor), coachId, memberId); audit.record(new AuditEvent("COACH_UNASSIGNED", "COACH_MEMBER_ASSIGNMENT", coachId, AuditResult.SUCCESS, "coach-assignment-service", Map.of())); }
+    @Override @Transactional public void unassign(CurrentActor actor, Long coachId, Long memberId) {
+        requireAdmin(actor);
+        Long tenantId = ActorAccess.tenantId(actor);
+        if (!assignments.existsByTenantIdAndCoachIdAndMemberIdAndActive(tenantId, coachId, memberId)) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        assignments.deleteActiveByTenantIdAndCoachIdAndMemberId(tenantId, coachId, memberId);
+        audit.record(new AuditEvent("COACH_UNASSIGNED", "COACH_MEMBER_ASSIGNMENT", coachId, AuditResult.SUCCESS, "coach-assignment-service", Map.of()));
+    }
     @Override @Transactional public CoachAssignment request(CurrentActor actor, Long coachId) {
         if (actor == null || !actor.roles().contains(RoleCode.MEMBER) || actor.tenantId() == null || coachId == null) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long tenantId = actor.tenantId();

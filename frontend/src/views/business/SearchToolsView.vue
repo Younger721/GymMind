@@ -1,7 +1,7 @@
 <template>
   <div>
     <h2 class="simple-page-title">搜索与导入</h2>
-    <p class="simple-page-desc">视频、文章与知识库检索</p>
+    <p class="simple-page-desc">文章与知识库检索（运动视频功能暂缓）</p>
 
     <div class="simple-card">
       <el-input v-model="keyword" placeholder="输入关键词" clearable @keyup.enter="searchAll">
@@ -10,7 +10,6 @@
         </template>
       </el-input>
       <div class="btn-row">
-        <el-button size="small" @click="searchVideos">仅视频</el-button>
         <el-button size="small" @click="searchArticles">仅文章</el-button>
         <el-button size="small" @click="searchKnowledge">知识库</el-button>
       </div>
@@ -59,11 +58,6 @@ const { rows, loading, runLoader } = useBizList()
 const submitting = ref(false)
 const actionResult = ref<unknown>(null)
 const article = reactive({ url: '', title: '', summary: '' })
-
-async function searchVideos() {
-  if (!keyword.value.trim()) return ElMessage.warning('请输入关键词')
-  await runLoader(async () => searchRows(await searchApi.searchVideos(keyword.value.trim())))
-}
 
 async function searchArticles() {
   if (!keyword.value.trim()) return ElMessage.warning('请输入关键词')

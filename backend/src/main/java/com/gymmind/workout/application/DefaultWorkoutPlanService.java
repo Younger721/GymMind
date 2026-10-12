@@ -103,6 +103,40 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         if (!memberId.equals(plan.getMemberId()) || plan.getStatus() != WorkoutPlanStatus.DRAFT) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (command == null) throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         CreateWorkoutPlanCommand normalized = new CreateWorkoutPlanCommand(tenantId, memberId, null, command.name(), command.goal(), command.startDate(), command.endDate(), command.description(), command.items());
+        replaceDraftPlanItems(plan, tenantId, normalized);
+        return view(plan);
+    }
+
+    @Override
+    @Transactional
+    public WorkoutPlanView updateForCoach(CurrentActor actor, Long id, CreateWorkoutPlanCommand command) {
+        require(actor);
+        if (command == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        Long tenantId = ActorAccess.tenantId(actor);
+        members.findByTenantIdAndId(tenantId, command.memberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        WorkoutPlan plan = plans.findByTenantIdAndId(tenantId, id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!command.memberId().equals(plan.getMemberId())) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (!assignments.canAccess(actor, plan.getMemberId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (plan.getStatus() != WorkoutPlanStatus.DRAFT) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        CreateWorkoutPlanCommand normalized = new CreateWorkoutPlanCommand(tenantId, command.memberId(), command.coachId(),
+                command.name(), command.goal(), command.startDate(), command.endDate(), command.description(), command.items());
+        replaceDraftPlanItems(plan, tenantId, normalized);
+        audit.record(new AuditEvent("WORKOUT_PLAN_UPDATED", "WORKOUT_PLAN", plan.getId(), AuditResult.SUCCESS,
+                "workout-plan-service", Map.of("resourceName", plan.getName())));
+        return view(plan);
+    }
+
+    private void replaceDraftPlanItems(WorkoutPlan plan, Long tenantId, CreateWorkoutPlanCommand normalized) {
         validator.validate(normalized);
         var resolvedNames = normalized.items().stream().map(item -> resolveExerciseName(tenantId, item)).toList();
         plan.update(normalized.name(), normalized.goal(), normalized.startDate(), normalized.endDate(), normalized.description());
@@ -111,9 +145,11 @@ public class DefaultWorkoutPlanService implements WorkoutPlanService {
         for (int i = 0; i < normalized.items().size(); i++) {
             var item = normalized.items().get(i);
             String name = resolvedNames.get(i);
-            items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(), name, item.dayOfWeek(), item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(), item.sortOrder() > 0 ? item.sortOrder() : ++index));
+            items.save(com.gymmind.workout.domain.model.WorkoutPlanItem.create(plan, item.exerciseId(), name, item.dayOfWeek(),
+                    item.sets(), item.reps(), item.restSeconds(), item.weight(), item.notes(), item.phase(),
+                    item.sortOrder() > 0 ? item.sortOrder() : ++index));
         }
-        return view(plan);
+        plans.save(plan);
     }
 
     @Override

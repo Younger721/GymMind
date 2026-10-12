@@ -1,113 +1,219 @@
 <template>
-  <div>
-    <h2 class="simple-page-title">风险预警</h2>
-    <p class="simple-page-desc">基于签到、训练和会籍状态识别待跟进会员</p>
+  <div class="tenant-ops">
+    <div class="page-head">
+      <div>
+        <h2 class="simple-page-title">门店运营统计</h2>
+        <p class="simple-page-desc">基于门店签到（gym_check_in）汇总有效会员与签到人次；与 AI 门店运营数据口径一致。</p>
+      </div>
+      <router-link to="/member-risks" class="risk-link">会员流失预警 →</router-link>
+    </div>
 
     <div class="simple-card filter-box">
       <el-form inline>
-        <el-form-item label="开始">
-          <el-input v-model="from" placeholder="2026-09-01" />
-        </el-form-item>
-        <el-form-item label="结束">
-          <el-input v-model="to" placeholder="2026-09-17" />
-        </el-form-item>
-        <el-form-item label="周起始">
-          <el-input v-model="weekStart" placeholder="2026-09-15" />
+        <el-form-item label="统计区间">
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始"
+            end-placeholder="结束"
+            value-format="YYYY-MM-DD"
+            :disabled="loading"
+          />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="loadDashboard">运营概览</el-button>
-          <el-button :loading="loading" @click="loadWeekly">周指标</el-button>
-          <el-button :loading="loading" @click="loadReport">周报</el-button>
-          <el-button :loading="loading" @click="loadAiReport">运营助手摘要</el-button>
+          <el-button @click="applyPreset('lastMonth')" :disabled="loading">上一自然月</el-button>
+          <el-button @click="applyPreset('monthToDate')" :disabled="loading">本月至今</el-button>
+          <el-button type="primary" :loading="loading" @click="load">查询</el-button>
         </el-form-item>
       </el-form>
     </div>
 
-    <div class="simple-card filter-box">
-      <h3 class="sub-title">会员风险评估</h3>
-      <p class="panel-desc">当前接口接收单个会员的指标，后续接入会员列表批量计算。</p>
-      <el-form label-width="140px">
-        <el-form-item label="距上次训练(天)">
-          <el-input-number v-model="churn.daysSinceLastWorkout" :min="0" />
-        </el-form-item>
-        <el-form-item label="近30天训练次数">
-          <el-input-number v-model="churn.workoutsLast30Days" :min="0" />
-        </el-form-item>
-        <el-form-item label="前30天训练次数">
-          <el-input-number v-model="churn.workoutsPrevious30Days" :min="0" />
-        </el-form-item>
-        <el-form-item label="会籍剩余天数">
-          <el-input-number v-model="churn.membershipDaysRemaining" :min="0" />
-        </el-form-item>
-        <el-form-item label="会籍即将到期">
-          <el-switch v-model="churn.membershipExpiring" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" :loading="loading" @click="runChurn">计算风险</el-button>
-        </el-form-item>
-      </el-form>
+    <div v-if="summary" class="kpi-grid">
+      <div class="kpi simple-card">
+        <span class="kpi-label">当前有效会员</span>
+        <strong class="kpi-value">{{ summary.activeMembers }}</strong>
+        <small class="kpi-hint">档案总数 {{ summary.totalMembers }}</small>
+      </div>
+      <div class="kpi simple-card">
+        <span class="kpi-label">签到人次</span>
+        <strong class="kpi-value">{{ summary.checkInPersonTimes }}</strong>
+        <small class="kpi-hint">{{ summary.periodLabel }}</small>
+      </div>
+      <div class="kpi simple-card">
+        <span class="kpi-label">到店会员数</span>
+        <strong class="kpi-value">{{ summary.uniqueVisitors }}</strong>
+        <small class="kpi-hint">周期内至少签到 1 次</small>
+      </div>
+      <div class="kpi simple-card">
+        <span class="kpi-label">签到人次较上期</span>
+        <strong class="kpi-value" :class="changeClass(summary.checkInPersonTimesChangeRate)">
+          {{ formatChange(summary.checkInPersonTimesChangeRate) }}
+        </strong>
+        <small v-if="summary.previousCheckInPersonTimes != null" class="kpi-hint">
+          上期 {{ summary.previousCheckInPersonTimes }} 人次
+        </small>
+      </div>
     </div>
 
-    <JsonBlock v-if="result" :data="result" />
+    <div class="simple-card trend-card">
+      <div class="trend-head">
+        <h3>按日签到人次</h3>
+        <span class="muted">{{ summary?.periodLabel || '' }}</span>
+      </div>
+      <el-table :data="trend" v-loading="loading" stripe empty-text="该区间暂无签到记录">
+        <el-table-column prop="day" label="日期" width="140">
+          <template #default="{ row }">{{ row.day || row.bucket }}</template>
+        </el-table-column>
+        <el-table-column prop="checkInPersonTimes" label="签到人次" width="120" />
+        <el-table-column prop="uniqueVisitors" label="到店会员" width="120" />
+      </el-table>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import JsonBlock from '@/components/business/JsonBlock.vue'
-import { analyticsApi } from '@/api/analytics'
+import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import {
+  analyticsApi,
+  currentMonthToDateRange,
+  previousCalendarMonthRange,
+  type TenantOperationsSummary,
+  type TenantOperationsTrendPoint
+} from '@/api/analytics'
 
-const from = ref('2026-09-01')
-const to = ref('2026-09-17')
-const weekStart = ref('2026-09-15')
 const loading = ref(false)
-const result = ref<unknown>(null)
+const dateRange = ref<[string, string] | null>(null)
+const summary = ref<TenantOperationsSummary | null>(null)
+const trend = ref<TenantOperationsTrendPoint[]>([])
 
-const churn = reactive({
-  daysSinceLastWorkout: 14,
-  workoutsLast30Days: 2,
-  workoutsPrevious30Days: 8,
-  membershipDaysRemaining: 7,
-  membershipExpiring: true
-})
+function applyPreset(preset: 'lastMonth' | 'monthToDate') {
+  const range = preset === 'lastMonth' ? previousCalendarMonthRange() : currentMonthToDateRange()
+  dateRange.value = [range.from, range.to]
+  void load()
+}
 
-async function run(fn: () => Promise<unknown>) {
+function formatChange(value?: number | string | null) {
+  if (value == null || value === '') return '—'
+  const num = typeof value === 'number' ? value : Number(value)
+  if (Number.isNaN(num)) return String(value)
+  return `${num > 0 ? '+' : ''}${num}%`
+}
+
+function changeClass(value?: number | string | null) {
+  const num = typeof value === 'number' ? value : Number(value)
+  if (Number.isNaN(num) || num === 0) return ''
+  return num > 0 ? 'up' : 'down'
+}
+
+async function load() {
+  if (!dateRange.value || dateRange.value.length !== 2) {
+    ElMessage.warning('请选择统计区间')
+    return
+  }
+  const [from, to] = dateRange.value
   loading.value = true
   try {
-    result.value = await fn()
+    const [summaryRes, trendRes] = await Promise.all([
+      analyticsApi.tenantOperationsSummary(from, to, true),
+      analyticsApi.tenantOperationsTrend(from, to, 'day')
+    ])
+    summary.value = summaryRes.data || null
+    trend.value = trendRes.data || []
+  } catch {
+    ElMessage.error('加载门店运营统计失败')
+    summary.value = null
+    trend.value = []
   } finally {
     loading.value = false
   }
 }
 
-function loadDashboard() {
-  return run(() => analyticsApi.dashboard(from.value, to.value))
-}
-
-function loadWeekly() {
-  return run(() => analyticsApi.weeklyMetrics(weekStart.value))
-}
-
-function loadReport() {
-  return run(() => analyticsApi.weeklyReport(weekStart.value))
-}
-
-function loadAiReport() {
-  return run(() => analyticsApi.aiWeeklyReport(weekStart.value))
-}
-
-function runChurn() {
-  return run(() => analyticsApi.churnRisk({ ...churn }))
-}
+onMounted(() => {
+  applyPreset('lastMonth')
+})
 </script>
 
 <style scoped>
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.page-head .simple-page-desc {
+  margin-bottom: 0;
+}
+
+.risk-link {
+  color: var(--primary);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
 .filter-box {
   margin-bottom: 16px;
 }
 
-.sub-title {
-  margin: 0 0 12px;
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.kpi {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kpi-label {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.kpi-value {
+  font-size: 32px;
+  line-height: 1.1;
+  color: var(--primary);
+}
+
+.kpi-value.up {
+  color: #19b477;
+}
+
+.kpi-value.down {
+  color: #e85d5d;
+}
+
+.kpi-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.trend-card {
+  padding: 16px 18px;
+}
+
+.trend-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.trend-head h3 {
+  margin: 0;
   font-size: 15px;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 13px;
 }
 </style>

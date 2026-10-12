@@ -41,9 +41,10 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
     private final ChunkStrategySelector strategySelector;
     private final UserAccountRepository users;
     private final KnowledgeChunkArtifactService chunkArtifacts;
+    private final KnowledgeChunkRepository chunks;
 
     public DefaultKnowledgeDocumentUseCase(KnowledgeDocumentRepository repository, KnowledgeObjectStore store) {
-        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null);
+        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null, null);
     }
 
     public DefaultKnowledgeDocumentUseCase(
@@ -52,7 +53,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             KnowledgeIndexingService indexing,
             KnowledgeIngestWorker ingestWorker,
             TenantQuotaService quotas) {
-        this(repository, store, indexing, ingestWorker, quotas, null, null, null);
+        this(repository, store, indexing, ingestWorker, quotas, null, null, null, null);
     }
 
     @Autowired
@@ -65,7 +66,9 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             ChatModelGateway chatModel,
             UserAccountRepository users,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            KnowledgeChunkArtifactService chunkArtifacts) {
+            KnowledgeChunkArtifactService chunkArtifacts,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            KnowledgeChunkRepository chunks) {
         this.repository = repository;
         this.store = store;
         this.indexing = indexing;
@@ -74,9 +77,11 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         this.strategySelector = new ChunkStrategySelector(chatModel);
         this.users = users;
         this.chunkArtifacts = chunkArtifacts;
+        this.chunks = chunks;
     }
 
     @Override
+    @Transactional
     public KnowledgeDocumentView upload(CurrentActor actor, UploadKnowledgeDocumentCommand command) {
         write(actor);
         Long tenantId = actor.isPlatformAdmin() ? null : ActorAccess.requireTenantId(actor);
@@ -124,8 +129,9 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         }
         document.updateAudienceRoles(resolveAudienceRoles(actor, tenantId, command.visibility(), command.audienceRoles()));
         document.updateChunkStrategy(selectChunkStrategy(command), 1);
-        store.put(document.objectKey(), command.content(), command.contentType());
+        // 先落库再写对象存储，失败时事务回滚，避免 DB 与 MinIO 不一致
         KnowledgeDocument saved = repository.save(document);
+        store.put(saved.objectKey(), command.content(), command.contentType());
         if (ingestWorker != null) {
             ingestWorker.enqueue(saved.tenantId(), saved.id());
         }
@@ -199,6 +205,9 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         KnowledgeDocument document = getForUpdate(actor, id);
         if (indexing != null) {
             indexing.deleteDocument(document.tenantId(), document.id());
+        }
+        if (chunks != null) {
+            chunks.deleteByTenantIdAndDocumentId(document.tenantId(), document.id());
         }
         document.tombstone();
         if (chunkArtifacts != null && document.chunkArtifactKey() != null) {

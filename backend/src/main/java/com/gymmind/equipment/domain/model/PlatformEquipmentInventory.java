@@ -61,6 +61,17 @@ public class PlatformEquipmentInventory extends AuditableEntity {
         inTransitQuantity -= quantity;
     }
 
+    /** 开发演示：按申请/配送汇总回填平台仓数量，保证 W + 在途 + 门店已入库 = 基准库存 */
+    public void reconcileFromRequestTotals(int warehouseQuantity, int inTransitQuantity, int outboundQuantity) {
+        if (warehouseQuantity < 0 || inTransitQuantity < 0 || outboundQuantity < 0) {
+            throw new IllegalArgumentException("Invalid platform inventory reconciliation");
+        }
+        this.warehouseQuantity = warehouseQuantity;
+        this.inTransitQuantity = inTransitQuantity;
+        this.outboundQuantity = outboundQuantity;
+        this.lastAdjustedAt = Instant.now();
+    }
+
     public Long getCatalogId() { return catalogId; }
     public int getWarehouseQuantity() { return warehouseQuantity; }
     public int getInTransitQuantity() { return inTransitQuantity; }

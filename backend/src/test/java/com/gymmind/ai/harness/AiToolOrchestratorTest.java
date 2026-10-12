@@ -35,6 +35,19 @@ class AiToolOrchestratorTest {
             Set.of(RoleCode.MEMBER), Set.of("ai:chat"), 0, "test-token");
 
     @Test
+    void skipsToolDecisionWhenNoReadToolsRegistered() {
+        ChatModelGateway model = mock(ChatModelGateway.class);
+        AiToolOrchestrator orchestrator = new AiToolOrchestrator(
+                new AiCapabilityRegistry(List.of()), model, new ObjectMapper());
+
+        var result = orchestrator.decide(ACTOR, "训练区重伤怎么办？", List.of(), ignored -> { });
+
+        assertThat(result.directAnswer()).isNull();
+        assertThat(result.toolResults()).isEmpty();
+        verify(model, never()).completeWithTools(anyString(), anyList(), anyList());
+    }
+
+    @Test
     void directAnswerDoesNotExecuteCapabilities() {
         ChatModelGateway model = mock(ChatModelGateway.class);
         when(model.completeWithTools(anyString(), anyList(), anyList()))
@@ -79,7 +92,7 @@ class AiToolOrchestratorTest {
                 .thenReturn(ChatModelResponse.toolCalls(List.of(
                         new ChatToolCall("delete_everything", new ObjectMapper().createObjectNode()))));
         AiToolOrchestrator orchestrator = new AiToolOrchestrator(
-                new AiCapabilityRegistry(List.of()), model, new ObjectMapper());
+                new AiCapabilityRegistry(List.of(capability("member_training_context"))), model, new ObjectMapper());
 
         assertThatThrownBy(() -> orchestrator.decide(ACTOR, "帮我查一下", List.of(), ignored -> { }))
                 .isInstanceOf(IllegalArgumentException.class)

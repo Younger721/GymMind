@@ -7,8 +7,12 @@ import com.gymmind.ai.harness.application.UpdateHarnessConfigCommand;
 import com.gymmind.ai.harness.application.AiChatTurn;
 import com.gymmind.ai.harness.AiProgressEvent;
 import com.gymmind.shared.api.ApiResponse;
+import com.gymmind.shared.api.TraceIdFilter;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActorProvider;
 import com.gymmind.shared.security.CurrentActor;
+import org.slf4j.MDC;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -84,8 +88,7 @@ public class AiHarnessController {
                 emitter.complete();
             } catch (Exception ex) {
                 try {
-                    emitter.send(SseEmitter.event().name("error")
-                            .data(Map.of("message", ex.getMessage() == null ? "AI 服务暂时不可用" : ex.getMessage())));
+                    emitter.send(SseEmitter.event().name("error").data(buildStreamError(ex)));
                 } catch (Exception ignored) {
                     // 客户端已断开连接
                 }
@@ -95,6 +98,20 @@ public class AiHarnessController {
         return org.springframework.http.ResponseEntity.status(HttpStatus.OK)
                 .contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(emitter);
+    }
+
+    private static Map<String, String> buildStreamError(Exception ex) {
+        String message = ex.getMessage() == null || ex.getMessage().isBlank()
+                ? "AI 服务暂时不可用"
+                : ex.getMessage();
+        String code = ex instanceof BusinessException business
+                ? business.errorCode().name()
+                : ErrorCode.DEPENDENCY_UNAVAILABLE.name();
+        String traceId = MDC.get(TraceIdFilter.MDC_KEY);
+        if (traceId == null || traceId.isBlank()) {
+            return Map.of("message", message, "code", code);
+        }
+        return Map.of("message", message, "code", code, "traceId", traceId);
     }
 
     private static void sendToken(SseEmitter emitter, String token) {

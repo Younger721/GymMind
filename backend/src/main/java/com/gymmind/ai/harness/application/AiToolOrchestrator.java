@@ -59,6 +59,12 @@ public class AiToolOrchestrator {
         java.util.Set<String> candidateIds = capabilities.stream()
                 .map(capability -> capability.descriptor().id()).collect(java.util.stream.Collectors.toSet());
         long started = System.currentTimeMillis();
+        // 仅知识库问答时没有可注册只读工具，跳过带 tool_choice 的决策请求，避免百炼空 tools 报错
+        if (definitions.isEmpty()) {
+            progress.accept(new AiProgressEvent("orchestrator", "tool_decision", AiProgressEvent.Status.COMPLETED,
+                    "无业务只读工具，直接生成回答", 0));
+            return new AiToolOrchestrationResult(null, List.of(), List.of());
+        }
         ChatModelResponse response = model.completeWithTools(question, context, definitions);
         if (response == null) return new AiToolOrchestrationResult(null, List.of(), List.of());
         if (!response.hasToolCalls()) {

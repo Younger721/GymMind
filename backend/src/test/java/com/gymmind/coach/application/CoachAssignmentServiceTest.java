@@ -38,10 +38,13 @@ class CoachAssignmentServiceTest {
     void assignUsesActorTenantAndCanBeUnassigned() {
         CoachRepository coaches = mock(CoachRepository.class);
         CoachAssignmentRepository assignments = mock(CoachAssignmentRepository.class);
+        var memberships = mock(com.gymmind.member.domain.repository.MemberTenantRepository.class);
         when(coaches.findByTenantIdAndId(11L, 3L)).thenReturn(Optional.of(Coach.create(11L, 31L, "C-001", "Coach", "13900000000")));
+        when(memberships.existsByTenantIdAndMemberId(11L, 41L)).thenReturn(true);
+        when(assignments.existsByTenantIdAndCoachIdAndMemberIdAndActive(11L, 3L, 41L)).thenReturn(true);
         when(assignments.findActiveByTenantIdAndCoachIdAndMemberId(11L, 3L, 41L)).thenReturn(Optional.empty());
         when(assignments.save(any(CoachAssignment.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        CoachAssignmentService service = new DefaultCoachAssignmentService(coaches, assignments, mock(AuditRecorder.class));
+        CoachAssignmentService service = new DefaultCoachAssignmentService(coaches, assignments, mock(AuditRecorder.class), null, memberships);
 
         service.assign(admin(11L), new AssignCoachCommand(null, 3L, 41L));
         verify(assignments).save(any(CoachAssignment.class));
@@ -66,6 +69,20 @@ class CoachAssignmentServiceTest {
 
         service.request(memberActor(11L, 41L), 3L);
         verify(assignments).save(any(CoachAssignment.class));
+    }
+
+    @Test
+    void assignRejectsMemberOutsideTenant() {
+        CoachRepository coaches = mock(CoachRepository.class);
+        CoachAssignmentRepository assignments = mock(CoachAssignmentRepository.class);
+        var memberships = mock(com.gymmind.member.domain.repository.MemberTenantRepository.class);
+        when(coaches.findByTenantIdAndId(11L, 3L)).thenReturn(Optional.of(Coach.create(11L, 31L, "C-001", "Coach", "13900000000")));
+        when(memberships.existsByTenantIdAndMemberId(11L, 99L)).thenReturn(false);
+        CoachAssignmentService service = new DefaultCoachAssignmentService(coaches, assignments, mock(AuditRecorder.class), null, memberships);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.assign(admin(11L), new AssignCoachCommand(null, 3L, 99L)))
+                .isInstanceOf(BusinessException.class);
+        verify(assignments, never()).save(any());
     }
 
     @Test

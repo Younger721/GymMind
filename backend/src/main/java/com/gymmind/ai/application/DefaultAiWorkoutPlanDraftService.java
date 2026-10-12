@@ -83,10 +83,27 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
 
     @Override
     public AiWorkoutPlanDraftResponse generateDraft(CurrentActor actor, Long requestedMemberId,
+                                                    AiWorkoutPlanDraftRequest draftRequest) {
+        if (draftRequest == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        return generateDraftInternal(actor, requestedMemberId, draftRequest);
+    }
+
+    @Override
+    public AiWorkoutPlanDraftResponse generateDraft(CurrentActor actor, Long requestedMemberId,
                                                     String request, boolean includeHistory) {
+        return generateDraftInternal(actor, requestedMemberId,
+                new AiWorkoutPlanDraftRequest(request, includeHistory, null, null, null));
+    }
+
+    private AiWorkoutPlanDraftResponse generateDraftInternal(CurrentActor actor, Long requestedMemberId,
+                                                             AiWorkoutPlanDraftRequest draftRequest) {
+        String request = draftRequest.request();
+        boolean includeHistory = draftRequest.includeHistory();
         Long tenantId = ActorAccess.tenantId(actor);
         if (actor == null || tenantId == null || !actor.hasPermission("ai:plan")
-                || request == null || request.isBlank()) {
+                || !draftRequest.hasAnyInput()) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         Long memberId = resolveTarget(actor, tenantId, requestedMemberId);
@@ -97,7 +114,13 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
             historySummary = history.summarize(tenantId, memberId,
                     LocalDate.now().minusWeeks(8), LocalDate.now(), 30);
         }
-        String prompt = buildPrompt(tenantId, request, includeHistory, historySummary);
+        String prompt = WorkoutPlanPromptComposer.compose(
+                request,
+                draftRequest.goal(),
+                draftRequest.sessionsPerWeek(),
+                draftRequest.experience(),
+                includeHistory,
+                historySummary);
         final String response;
         try {
             long started = System.currentTimeMillis();
@@ -194,20 +217,6 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
         if (members == null) throw new BusinessException(ErrorCode.FORBIDDEN);
         return members.findByTenantIdAndUserId(tenantId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-    }
-
-    private String buildPrompt(Long tenantId, String request, boolean includeHistory, WorkoutHistorySummary summary) {
-        StringBuilder prompt = new StringBuilder("请仅输出结构化训练计划JSON，不要输出解释。"
-                + "每个动作使用 exerciseName 文本名称，不需要 exerciseId；包含 dayOfWeek、phase、sortOrder、sets、reps、restSeconds、weight、notes。\n用户需求：").append(request);
-        prompt.append("\n训练历史：");
-        if (!includeHistory) {
-            prompt.append("未参考训练记录（用户已关闭）。");
-        } else if (summary == null) {
-            prompt.append("近期暂无可参考训练记录。");
-        } else {
-            prompt.append(summary.promptText());
-        }
-        return prompt.toString();
     }
 
     private CreateWorkoutPlanCommand parsePlan(String response, Long tenantId, Long memberId) {

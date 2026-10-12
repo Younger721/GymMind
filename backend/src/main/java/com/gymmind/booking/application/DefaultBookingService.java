@@ -209,13 +209,18 @@ public class DefaultBookingService implements BookingService {
     public List<BookingView> list(CurrentActor actor, Long courseId) {
         requireAuthenticated(actor);
         Long tenantId = ActorAccess.tenantId(actor);
-        List<Booking> result = ActorAccess.isSuperAdmin(actor)
-                ? bookings.findAll()
-                : bookings.findAllByTenantId(tenantId);
+        List<Booking> result;
         if (ActorAccess.isSuperAdmin(actor)) {
-            if (courseId != null) result = result.stream().filter(booking -> booking.getCourseId().equals(courseId)).toList();
+            if (tenantId == null) {
+                throw new BusinessException(ErrorCode.TENANT_CONTEXT_REQUIRED);
+            }
+            result = bookings.findAllByTenantId(tenantId);
+            if (courseId != null) {
+                result = result.stream().filter(booking -> booking.getCourseId().equals(courseId)).toList();
+            }
             return result.stream().map(this::view).toList();
         }
+        result = bookings.findAllByTenantId(tenantId);
         if (actor.roles().contains(RoleCode.MEMBER)) {
             Long memberId = resolveMemberId(actor, null, tenantId);
             result = result.stream().filter(booking -> booking.getMemberId().equals(memberId)).toList();

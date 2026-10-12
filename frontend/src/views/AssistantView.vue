@@ -9,12 +9,7 @@
       <div class="status-pill"><span class="status-dot"></span>助手在线</div>
     </div>
 
-    <el-radio-group v-model="mode" class="mode-switch" aria-label="助手模式">
-      <el-radio-button value="knowledge">AI 咨询</el-radio-button>
-      <el-radio-button v-if="canGeneratePlan" value="workout-plan">训练计划</el-radio-button>
-    </el-radio-group>
-
-    <div v-if="mode === 'knowledge'" class="chat-layout">
+    <div class="chat-layout">
       <aside class="history-panel simple-card">
         <div class="history-heading"><strong>最近对话</strong><el-button size="small" type="primary" plain @click="newConversation">新建对话</el-button></div>
         <div v-for="item in sessions" :key="item.sessionKey" class="history-item" :class="{active:item.sessionKey===sessionId}" @click="selectSession(item.sessionKey)">
@@ -85,7 +80,7 @@
                 </div>
               </div>
             </div>
-            <div class="bubble markdown-body" v-html="renderMarkdown(msg.content)"></div>
+            <div class="bubble markdown-body" :class="{ 'bubble-error': msg.failed }" v-html="renderMarkdown(msg.content)"></div>
             <ul v-if="msg.sources?.length" class="sources">
               <li v-for="(s, j) in msg.sources" :key="j">{{ sourceLabel(s) }}</li>
             </ul>
@@ -101,107 +96,23 @@
       </form>
       </div>
     </div>
-
-    <section v-else class="plan-workspace">
-      <div class="simple-card plan-form">
-        <div class="form-heading">
-          <div>
-            <h3>生成训练计划</h3>
-            <p>填写结构化需求，AI 会结合你有权限查看的近期训练记录生成草案。</p>
-          </div>
-          <el-checkbox v-model="includeHistory">参考近期训练记录</el-checkbox>
-        </div>
-
-        <el-form label-position="top" @submit.prevent="generatePlan">
-          <div class="form-grid">
-            <el-form-item label="训练目标" required><el-input v-model="planForm.goal" placeholder="例如：增肌、减脂、提升力量" /></el-form-item>
-            <el-form-item label="每周训练次数" required><el-input-number v-model="planForm.frequency" :min="1" :max="7" controls-position="right" /></el-form-item>
-            <el-form-item label="训练经验" required>
-              <el-select v-model="planForm.experience" placeholder="请选择">
-                <el-option label="新手（少于 6 个月）" value="beginner" />
-                <el-option label="有一定经验（6-24 个月）" value="intermediate" />
-                <el-option label="进阶（24 个月以上）" value="advanced" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="计划周期（周）" required><el-input-number v-model="planForm.durationWeeks" :min="1" :max="52" controls-position="right" /></el-form-item>
-            <el-form-item label="可用器械"><el-input v-model="planForm.equipment" placeholder="例如：哑铃、杠铃、固定器械" /></el-form-item>
-            <el-form-item label="限制或伤病"><el-input v-model="planForm.limitations" placeholder="没有请填写无" /></el-form-item>
-          </div>
-
-          <el-form-item v-if="targets.length > 1" label="计划对象" required>
-            <el-select v-model="selectedTargetId" placeholder="选择会员" class="target-select">
-              <el-option v-for="target in targets" :key="target.memberId" :label="targetLabel(target)" :value="target.memberId" />
-            </el-select>
-          </el-form-item>
-          <p v-else-if="targets.length === 1" class="target-hint">计划对象：{{ targetLabel(targets[0]) }}</p>
-          <p v-else-if="targetsLoading" class="target-hint">正在读取可用的计划对象…</p>
-          <p v-else class="target-hint">暂无可用的计划对象，暂时无法生成计划。</p>
-          <el-button type="primary" :loading="planLoading" :disabled="!canGenerate" @click="generatePlan">生成可编辑草案</el-button>
-        </el-form>
-      </div>
-
-      <div v-if="draft" class="simple-card draft-card">
-        <div class="draft-heading">
-          <div><h3>草案审核</h3><p>{{ draft.description || '请检查计划内容，确认后才会保存。' }}</p></div>
-          <el-tag v-if="history.included" type="success">已参考 {{ history.recordCount }} 条训练记录</el-tag>
-          <el-tag v-else type="info">未参考训练记录</el-tag>
-        </div>
-        <el-form label-position="top" class="draft-meta">
-          <div class="form-grid">
-            <el-form-item label="计划名称"><el-input v-model="draft.name" /></el-form-item>
-            <el-form-item label="计划目标"><el-input v-model="draft.goal" /></el-form-item>
-            <el-form-item label="开始日期"><el-input v-model="draft.startDate" type="date" /></el-form-item>
-            <el-form-item label="结束日期"><el-input v-model="draft.endDate" type="date" /></el-form-item>
-          </div>
-        </el-form>
-        <el-table :data="draft.items" border size="small" class="draft-table">
-          <el-table-column label="训练日" width="100"><template #default="scope"><el-input-number v-model="scope.row.dayOfWeek" :min="1" :max="7" controls-position="right" /></template></el-table-column>
-          <el-table-column label="动作 ID" min-width="110"><template #default="scope"><el-input-number v-model="scope.row.exerciseId" :min="1" controls-position="right" /></template></el-table-column>
-          <el-table-column label="组数" width="100"><template #default="scope"><el-input-number v-model="scope.row.sets" :min="1" controls-position="right" /></template></el-table-column>
-          <el-table-column label="次数" width="100"><template #default="scope"><el-input-number v-model="scope.row.reps" :min="1" controls-position="right" /></template></el-table-column>
-          <el-table-column label="休息（秒）" width="125"><template #default="scope"><el-input-number v-model="scope.row.restSeconds" :min="0" controls-position="right" /></template></el-table-column>
-          <el-table-column label="重量" width="100"><template #default="scope"><el-input-number v-model="scope.row.weight" :min="0" :precision="1" controls-position="right" /></template></el-table-column>
-          <el-table-column label="备注" min-width="180"><template #default="scope"><el-input v-model="scope.row.notes" /></template></el-table-column>
-          <el-table-column label="操作" width="75" fixed="right"><template #default="scope"><el-button link type="danger" @click="removeItem(scope.$index)">移除</el-button></template></el-table-column>
-        </el-table>
-        <div class="draft-actions">
-          <el-button plain @click="addItem">添加训练项</el-button>
-          <el-button type="primary" :loading="saveLoading" :disabled="!draft.items.length" @click="saveDraft">确认并保存</el-button>
-        </div>
-        <p v-if="savedPlanId" class="saved-hint">计划已保存。<router-link to="/training">前往训练管理查看</router-link></p>
-      </div>
-    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import { harnessApi, type HarnessPluginDescriptor, type HarnessProgressEvent } from '@/api/harness'
 import { aiChatHistoryApi, type ChatSession } from '@/api/aiChatHistory'
 import { marked } from 'marked'
-import { workoutPlanDraftApi, type WorkoutPlanDraft, type WorkoutPlanHistory, type WorkoutPlanTarget } from '@/api/workoutPlanDraft'
 import { useAuthStore } from '@/stores/auth'
 import { hasPermission } from '@/utils/permissions'
-import { canUseTenantOperation } from '@/utils/operationAccess'
 import { MENU_CODES } from '@/utils/menuPermissions'
 
-type AssistantMode = 'knowledge' | 'workout-plan'
-interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean; processStepExpanded?: Record<string, boolean> }
+interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean; processStepExpanded?: Record<string, boolean>; failed?: boolean }
 
-const route = useRoute()
-const router = useRouter()
 const authStore = useAuthStore()
-const canGeneratePlan = computed(() => canUseTenantOperation(
-  authStore.isPlatformAdmin,
-  authStore.permissions,
-  authStore.roles,
-  'ai:plan',
-  ['GYM_ADMIN', 'COACH', 'MEMBER']
-))
-const mode = ref<AssistantMode>(route.query.mode === 'workout-plan' && canGeneratePlan.value ? 'workout-plan' : 'knowledge')
 const availablePlugins = ref<HarnessPluginDescriptor[]>([])
 const assistantName = ref('门店智能助手')
 const enabledPlugins = ref<string[]>(['basic_chat'])
@@ -213,29 +124,24 @@ const loading = ref(false)
 const boxRef = ref<HTMLElement>()
 const sessionStorageKey = computed(() => `gymmind-ai-chat:${authStore.tenantId ?? `platform-${authStore.platformContextTenantId ?? 'none'}`}:${authStore.userId ?? 'anonymous'}`)
 const sessionId = ref(localStorage.getItem(sessionStorageKey.value + ':session') || `web-${Date.now()}`)
-const targets = ref<WorkoutPlanTarget[]>([])
-const selectedTargetId = ref<number>()
-const targetsLoading = ref(false)
-const planLoading = ref(false)
-const saveLoading = ref(false)
-const savedPlanId = ref<number>()
-const includeHistory = ref(true)
-const draft = ref<WorkoutPlanDraft>()
-const history = ref<WorkoutPlanHistory>({ included: false, recordCount: 0 })
-const planForm = reactive({ goal: '', frequency: 3, experience: 'beginner', durationWeeks: 8, equipment: '', limitations: '' })
 
 const canConfigure = computed(() => authStore.roles.includes('GYM_ADMIN')
   && !authStore.isPlatformAdmin
   && hasPermission(MENU_CODES.AI_CONFIG))
 const configLink = '/agents/manage'
-const canGenerate = computed(() => canGeneratePlan.value
-  && Boolean(planForm.goal.trim() && planForm.experience && !targetsLoading.value
-    && targets.value.length > 0 && selectedTargetId.value))
 const roleProfile = computed(() => {
   if (authStore.isPlatformAdmin) return { name: '平台 AI 管理助手', samples: ['查看 AI 使用情况', '检查租户 AI 状态'] }
   if (authStore.roles.includes('GYM_ADMIN')) return { name: '门店运营助手', samples: ['上个月来了多少会员？', '和上上个月相比变化多少？', '最近哪些会员活跃度下降？', '本月有哪些会员会籍快到期？', '最近预约到店率怎么样？'] }
   if (authStore.roles.includes('COACH')) return { name: '教练工作助手', samples: ['给会员制定训练建议', '查看训练动作要点'] }
-  return { name: '我的训练助手', samples: ['如何开始力量训练', '帮我安排本周训练'] }
+  return {
+    name: '我的训练助手',
+    samples: [
+      '深蹲动作有哪些常见错误？',
+      '新手每周训练几次比较合适？',
+      '史密斯机怎么用才安全？',
+      '减脂期饮食要注意什么？'
+    ]
+  }
 })
 const samples = computed(() => roleProfile.value.samples)
 const isGymAdmin = computed(() => authStore.roles.includes('GYM_ADMIN') && !authStore.isPlatformAdmin)
@@ -261,14 +167,23 @@ const renderMarkdown = (content: string) => {
 }
 const persistConversation = () => {
   localStorage.setItem(sessionStorageKey.value + ':session', sessionId.value)
-  const persisted = messages.value.slice(-40).map(({ role, content, sources }) => ({ role, content, sources }))
+  const persisted = messages.value.slice(-40).map(({ role, content, sources, processSteps, processExpanded, failed }) =>
+    ({ role, content, sources, processSteps, processExpanded, failed }))
   localStorage.setItem(sessionStorageKey.value + ':messages', JSON.stringify(persisted))
 }
 const restoreConversation = () => {
   try {
     const raw = localStorage.getItem(sessionStorageKey.value + ':messages')
     const saved = raw ? JSON.parse(raw) : []
-    if (Array.isArray(saved)) messages.value = saved.filter(item => item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
+    if (Array.isArray(saved)) {
+      messages.value = saved.filter(item => item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
+        .map(item => ({
+          ...item,
+          processSteps: Array.isArray(item.processSteps) ? item.processSteps : undefined,
+          processExpanded: item.processExpanded !== false,
+          failed: Boolean(item.failed)
+        }))
+    }
   } catch { messages.value = [] }
 }
 const loadSessions = async () => { try { sessions.value = (await aiChatHistoryApi.list()).data || [] } catch { sessions.value = [] } }
@@ -292,8 +207,6 @@ const deleteSession = async (key: string) => {
     if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message || error?.message || '删除对话失败')
   }
 }
-const clearKnowledgeSession = () => { void newConversation() }
-
 const loadHarnessConfig = async () => {
   try {
     const res = await harnessApi.getConfig()
@@ -308,18 +221,6 @@ const loadHarnessConfig = async () => {
   }
 }
 
-const loadTargets = async () => {
-  if (!canGeneratePlan.value) return
-  targetsLoading.value = true
-  try {
-    const res = await workoutPlanDraftApi.getTargets()
-    const data = res.data
-    const list = Array.isArray(data) ? data : data?.targets || []
-    targets.value = list
-    selectedTargetId.value = list.length === 1 ? list[0].memberId : undefined
-  } catch { targets.value = []; selectedTargetId.value = undefined } finally { targetsLoading.value = false }
-}
-const targetLabel = (target: WorkoutPlanTarget) => target.displayName || target.name || target.username || target.email || `会员 #${target.memberId}`
 const ask = (text: string) => { input.value = text; send() }
 
 const processStatusLabel = (status: HarnessProgressEvent['status']) => ({
@@ -358,7 +259,7 @@ const send = async () => {
       result => {
         // Some browsers/proxies may deliver the final SSE event without the
         // preceding token events. Always use the authoritative final answer.
-        if (!message.content && result.answer) message.content = result.answer
+        if (result.answer) message.content = result.answer
         message.sources = result.citations ?? result.sources ?? []
         persistConversation()
         scrollBottom()
@@ -378,56 +279,29 @@ const send = async () => {
   } catch (error: any) {
     const messageText = error?.message || '发送失败，请稍后重试'
     const last = messages.value[messages.value.length - 1]
-    if (last?.role === 'assistant' && !last.content) last.content = messageText
+    if (last?.role === 'assistant') {
+      if (!last.content) last.content = messageText
+      else if (!last.content.includes(messageText)) last.content = `${last.content}\n\n**错误：** ${messageText}`
+      last.failed = true
+      last.processExpanded = true
+      if (!last.processSteps) last.processSteps = []
+      last.processSteps.push({
+        pluginId: 'harness',
+        stage: 'chat_error',
+        status: 'FAILED',
+        message: messageText
+      })
+      persistConversation()
+    }
     ElMessage.error(messageText)
   } finally { loading.value = false; scrollBottom() }
 }
 
-const buildPlanRequest = () => [`训练目标：${planForm.goal.trim()}`, `每周训练次数：${planForm.frequency}`, `训练经验：${planForm.experience}`, `计划周期：${planForm.durationWeeks} 周`, `可用器械：${planForm.equipment.trim() || '未指定'}`, `限制或伤病：${planForm.limitations.trim() || '无'}`].join('\n')
-const normalizeDraft = (value: WorkoutPlanDraft | { plan?: WorkoutPlanDraft; history?: WorkoutPlanHistory }) => {
-  const response = value as { plan?: WorkoutPlanDraft; history?: WorkoutPlanHistory }
-  return { plan: response.plan || value as WorkoutPlanDraft, history: response.history || { included: includeHistory.value, recordCount: 0 } }
-}
-
-const generatePlan = async () => {
-  if (!canGenerate.value || planLoading.value) return
-  planLoading.value = true; savedPlanId.value = undefined; draft.value = undefined
-  try {
-    const res = await workoutPlanDraftApi.generate({ memberId: selectedTargetId.value ?? null, request: buildPlanRequest(), includeHistory: includeHistory.value })
-    const normalized = normalizeDraft(res.data); draft.value = normalized.plan; history.value = normalized.history
-    ElMessage.success('草案已生成，请审核后保存')
-  } catch (error: any) { ElMessage.error(error.response?.data?.message || '生成失败，请稍后重试') } finally { planLoading.value = false }
-}
-const addItem = () => { draft.value?.items.push({ exerciseId: 1, dayOfWeek: 1, sets: 3, reps: 10, restSeconds: 60, weight: 0, notes: '' }) }
-const removeItem = (index: number) => draft.value?.items.splice(index, 1)
-const saveDraft = async () => {
-  if (!canGeneratePlan.value || !draft.value || !draft.value.items.length || saveLoading.value) return
-  saveLoading.value = true
-  try { const res = await workoutPlanDraftApi.save(draft.value); savedPlanId.value = res.data?.id; ElMessage.success('训练计划已保存') }
-  catch (error: any) { ElMessage.error(error.response?.data?.message || '保存失败，请检查计划内容') }
-  finally { saveLoading.value = false }
-}
-
-watch(mode, async (next, previous) => {
-  if (next === previous) return
-  clearKnowledgeSession(); draft.value = undefined; savedPlanId.value = undefined
-  await router.replace({ query: { ...route.query, mode: next } })
-  if (next === 'workout-plan' && canGeneratePlan.value) await loadTargets()
-})
-watch(() => route.query.mode, value => {
-  const next: AssistantMode = value === 'workout-plan' && canGeneratePlan.value ? 'workout-plan' : 'knowledge'
-  if (mode.value !== next) mode.value = next
-})
 onMounted(async () => {
   restoreConversation()
   await loadHarnessConfig()
   await loadSessions()
   if (sessions.value.some(item => item.sessionKey === sessionId.value)) await loadSessionMessages()
-  if (mode.value === 'workout-plan' && canGeneratePlan.value) {
-    await loadTargets()
-  } else if (route.query.mode === 'workout-plan' && !canGeneratePlan.value) {
-    await router.replace({ query: { ...route.query, mode: undefined } })
-  }
 })
 </script>
 
@@ -436,7 +310,6 @@ onMounted(async () => {
 .eyebrow { color:var(--primary); font-size:11px; font-weight:700; letter-spacing:1.5px; margin-bottom:7px; }
 .status-pill { display:flex; align-items:center; gap:7px; color:#277a5c; background:#ecfdf5; border:1px solid #c9f1df; border-radius:999px; padding:7px 12px; font-size:12px; font-weight:600; }
 .status-dot { width:7px; height:7px; border-radius:50%; background:#21b77a; box-shadow:0 0 0 3px #c9f1df; }
-.mode-switch { margin-bottom: 14px; }
 .chat-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:12px; align-items:stretch; }
 .history-panel { padding:12px; min-height:470px; }
 .history-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; font-size:13px; }
@@ -467,6 +340,7 @@ onMounted(async () => {
 .msg.assistant { flex-direction:row; align-items:flex-start; }
 .assistant-content { max-width: 85%; min-width: 0; }
 .msg.assistant .bubble { background: #fff; border: 1px solid #e1e7ec; border-radius:4px 14px 14px 14px; box-shadow:0 3px 10px rgba(27,43,61,.04); }
+.msg.assistant .bubble-error { border-color: #f5c2c7; background: #fff5f5; color: #842029; }
 .bubble { max-width: 85%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; white-space: pre-wrap; font-size: 14px; }
 .markdown-body { white-space: normal; overflow-wrap: anywhere; }
 .markdown-body :deep(p) { margin: 0 0 10px; }
@@ -518,18 +392,6 @@ onMounted(async () => {
 .process-detail-chunk { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:10px; }
 .process-detail-excerpt { color:#687983; white-space:pre-wrap; overflow-wrap:anywhere; }
 .input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
-.plan-workspace { display: grid; gap: 16px; }
-.plan-form, .draft-card { padding: 20px; }
-.form-heading, .draft-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.form-heading h3, .draft-heading h3 { margin: 0 0 5px; font-size: 17px; }
-.form-heading p, .draft-heading p { margin: 0; color: var(--text-muted); font-size: 13px; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
-.target-select { width: 100%; max-width: 420px; }
-.target-hint { margin: -3px 0 16px; color: var(--text-muted); font-size: 13px; }
-.draft-meta { margin-bottom: 4px; }
-.draft-table { width: 100%; }
-.draft-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; }
-.saved-hint { margin: 12px 0 0; color: var(--success, #26834b); font-size: 13px; }
 @media (max-width: 850px) { .chat-layout { grid-template-columns:1fr; } .history-panel { min-height:0; display:flex; gap:6px; overflow:auto; } .history-heading { flex:none; flex-direction:column; align-items:flex-start; } .history-item { min-width:150px; width:auto; } }
-@media (max-width: 700px) { .form-grid { grid-template-columns: 1fr; } .form-heading, .draft-heading { flex-direction: column; } .chat-box { height: calc(100vh - 260px); } .page-heading { gap:10px; } .status-pill { padding:6px 9px; } .sample-grid { grid-template-columns:1fr; } }
+@media (max-width: 700px) { .chat-box { height: calc(100vh - 260px); } .page-heading { gap:10px; } .status-pill { padding:6px 9px; } .sample-grid { grid-template-columns:1fr; } }
 </style>

@@ -98,7 +98,11 @@ function Measure-Query {
         $forbiddenDocs = @($QueryRow.forbiddenDocuments)
     }
 
-    $top = if ($Channel -eq 'search') { @($Segments | Select-Object -First $k) } else { @($Citations | Select-Object -First $k) }
+    $top = @(
+        if ($Channel -eq 'search') { @($Segments | Select-Object -First $k) }
+        else { @($Citations | Select-Object -First $k) }
+    )
+    $topCount = @($top).Count
 
     $hit = if ($Channel -eq 'search') {
         Test-SegmentHit -Segments $top -Anchors $expectedAnchors -DocNames $expectedDocs
@@ -113,7 +117,7 @@ function Measure-Query {
         Count-RelevantTopItems -TopItems $top -Anchors $expectedAnchors -DocNames $expectedDocs -Channel $Channel
     }
     $chunkPrecisionAtK = if ($expectedAnchors.Count -eq 0) { $null } else {
-        if ($top.Count -eq 0) { 0 } else { $relevantInTop / $top.Count }
+        if ($topCount -eq 0) { 0 } else { $relevantInTop / $topCount }
     }
     # 与经典 IR 一致：相关 chunk 召回率（标注为期望锚点/文档，Top-K 中命中条数 / 期望锚点数）
     $chunkRecallAtK = if ($expectedAnchors.Count -eq 0) { $null } else {
@@ -158,7 +162,7 @@ function Measure-Query {
         permissionLeak  = $permissionLeak
         leakAnchors     = $leakAnchors
         leakDocuments   = $leakDocs
-        topCount        = $top.Count
+        topCount        = $topCount
         error           = $ErrorMsg
     }
 }

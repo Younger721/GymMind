@@ -22,7 +22,8 @@ public final class SecurityTestActors {
 
     public static CurrentActor gymAdmin() {
         return tenantActor(10L, Set.of(RoleCode.GYM_ADMIN),
-                Set.of("tenant:settings:read", "tenant:settings:write"));
+                Set.of("tenant:settings:read", "tenant:settings:write",
+                        "role:permission:read", "role:permission:write"));
     }
 
     public static CurrentActor tenantActor(Long tenantId, Set<RoleCode> roles, Set<String> permissions) {

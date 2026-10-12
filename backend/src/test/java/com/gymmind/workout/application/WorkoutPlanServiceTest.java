@@ -231,6 +231,31 @@ class WorkoutPlanServiceTest {
                 .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
     }
 
+    @Test
+    void coachCanUpdateMemberDraftPlan() {
+        WorkoutPlanRepository plans = mock(WorkoutPlanRepository.class);
+        WorkoutPlanItemRepository items = mock(WorkoutPlanItemRepository.class);
+        ExerciseRepository exercises = mock(ExerciseRepository.class);
+        MemberRepository members = mock(MemberRepository.class);
+        CoachAssignmentService assignments = mock(CoachAssignmentService.class);
+        when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(mock(com.gymmind.member.domain.model.Member.class)));
+        when(assignments.canAccess(any(), eq(41L))).thenReturn(true);
+        var plan = com.gymmind.workout.domain.model.WorkoutPlan.create(11L, 41L, 77L, "旧计划", "力量",
+                LocalDate.now(), LocalDate.now().plusDays(30), "说明");
+        when(plans.findByTenantIdAndId(11L, 5L)).thenReturn(Optional.of(plan));
+        when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(items.findAllByPlanId(any())).thenReturn(java.util.List.of());
+        WorkoutPlanService service = new DefaultWorkoutPlanService(plans, items, exercises, members, assignments,
+                mock(AuditRecorder.class));
+
+        WorkoutPlanView updated = service.updateForCoach(coach(11L), 5L, new CreateWorkoutPlanCommand(null, 41L, 77L,
+                "新计划", "增肌", LocalDate.now(), LocalDate.now().plusDays(14), "更新",
+                java.util.List.of(new WorkoutPlanItemCommand(null, "深蹲", 2, 5, 8, 90, 0, "", "MAIN", 1))));
+
+        assertThat(updated.name()).isEqualTo("新计划");
+        verify(items).deleteAllByPlanId(any());
+    }
+
     private static CreateWorkoutPlanCommand validCommand(long memberId) {
         return new CreateWorkoutPlanCommand(null, memberId, null, "Strength", "muscle gain", LocalDate.now(),
                 LocalDate.now().plusDays(30), "notes",

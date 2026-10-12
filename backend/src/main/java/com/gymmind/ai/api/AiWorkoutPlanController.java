@@ -41,7 +41,13 @@ public class AiWorkoutPlanController {
     @PostMapping("/workout-plan-drafts")
     public ApiResponse<AiWorkoutPlanDraftResponse> generateDraft(@RequestBody DraftRequest request) {
         boolean includeHistory = request.includeHistory() == null || request.includeHistory();
-        return ApiResponse.success(service.generateDraft(actors.requireCurrent(), request.memberId(), request.request(), includeHistory));
+        var draftRequest = new com.gymmind.ai.application.AiWorkoutPlanDraftRequest(
+                request.request(),
+                includeHistory,
+                request.goal(),
+                request.sessionsPerWeek(),
+                request.experience());
+        return ApiResponse.success(service.generateDraft(actors.requireCurrent(), request.memberId(), draftRequest));
     }
 
     @PostMapping("/workout-plan")
@@ -52,9 +58,15 @@ public class AiWorkoutPlanController {
         return ApiResponse.success(workoutPlans.saveValidatedDraft(actor, draft));
     }
 
-    public record DraftRequest(Long memberId, String request, Boolean includeHistory) {
+    public record DraftRequest(
+            Long memberId,
+            String request,
+            Boolean includeHistory,
+            String goal,
+            Integer sessionsPerWeek,
+            String experience) {
         public DraftRequest(Long memberId, String request) {
-            this(memberId, request, true);
+            this(memberId, request, true, null, null, null);
         }
     }
 }
