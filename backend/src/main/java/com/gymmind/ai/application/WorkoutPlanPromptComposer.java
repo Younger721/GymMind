@@ -20,7 +20,8 @@ public final class WorkoutPlanPromptComposer {
         StringBuilder prompt = new StringBuilder(
                 "请仅输出结构化训练计划JSON，不要输出解释。"
                         + "每个动作使用 exerciseName 文本名称，不需要 exerciseId；"
-                        + "包含 name、goal、startDate、endDate、description 与 items（dayOfWeek、phase、sortOrder、sets、reps、restSeconds、weight、notes）。");
+                        + "包含 name、goal、startDate、endDate、description 与 items（dayOfWeek 为 1～7、phase 仅 WARMUP/MAIN/STRETCH、sortOrder、sets、reps、restSeconds、weight、notes）；"
+                        + "description 不可为空；startDate/endDate 使用 yyyy-MM-dd。");
         if (goal != null && !goal.isBlank()) {
             prompt.append("\n健身目标：").append(goal.trim());
         }

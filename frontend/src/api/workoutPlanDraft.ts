@@ -60,7 +60,8 @@ export const workoutPlanDraftApi = {
   }) {
     return apiClient.post<any, ApiResponse<WorkoutPlanDraftResponse | WorkoutPlanDraft>>(
       '/v1/ai/workout-plan-drafts',
-      body
+      body,
+      { skipErrorToast: true }
     )
   },
 

@@ -124,7 +124,7 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
         final String response;
         try {
             long started = System.currentTimeMillis();
-            ChatModelCallResult call = model.completeWithUsage(prompt, List.of());
+            ChatModelCallResult call = model.completeStructuredJson(prompt, List.of());
             if (call == null) call = ChatModelCallResult.unavailable(model.complete(prompt, List.of()),
                     Math.max(0, System.currentTimeMillis() - started), "OK");
             if (usage != null) {
@@ -200,12 +200,24 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
                 items.add(new WorkoutPlanItemCommand(exerciseId, exerciseName, item.path("dayOfWeek").asInt(),
                         item.path("sets").asInt(), item.path("reps").asInt(), item.path("restSeconds").asInt(),
                         item.path("weight").asDouble(), item.path("notes").asText(""),
-                        item.path("phase").asText("MAIN"), item.path("sortOrder").asInt(0)));
+                        normalizePhase(item.path("phase").asText("MAIN")), item.path("sortOrder").asInt(0)));
+            }
+            String name = root.path("name").asText("").trim();
+            if (name.isBlank()) {
+                name = "AI 训练计划";
+            }
+            String goal = root.path("goal").asText("").trim();
+            if (goal.isBlank()) {
+                goal = "综合训练";
+            }
+            String description = root.path("description").asText("").trim();
+            if (description.isBlank()) {
+                description = "由 AI 根据表单与训练记录生成的草案。";
             }
             var command = new CreateWorkoutPlanCommand(tenantId, memberId, null,
-                    root.path("name").asText(), root.path("goal").asText(),
+                    name, goal,
                     LocalDate.parse(root.path("startDate").asText()), LocalDate.parse(root.path("endDate").asText()),
-                    root.path("description").asText(), items);
+                    description, items);
             validator.validate(command);
             return command;
         } catch (BusinessException ex) {
@@ -217,6 +229,17 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
 
     private AiWorkoutPlanTarget target(Member member) {
         return new AiWorkoutPlanTarget(member.getId(), member.getFullName(), member.getMemberNumber());
+    }
+
+    private static String normalizePhase(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "MAIN";
+        }
+        String phase = raw.trim().toUpperCase();
+        if (java.util.Set.of("WARMUP", "MAIN", "STRETCH").contains(phase)) {
+            return phase;
+        }
+        return "MAIN";
     }
 
     private String stripFences(String response) {

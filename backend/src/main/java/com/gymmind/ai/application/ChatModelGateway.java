@@ -19,6 +19,13 @@ public interface ChatModelGateway {
         }
     }
 
+    /**
+     * 结构化 JSON 任务（如训练计划草案）：需要更长输出，默认实现退化为普通 complete。
+     */
+    default ChatModelCallResult completeStructuredJson(String prompt, List<ContextSegment> context) {
+        return completeWithUsage(prompt, context);
+    }
+
     /** Whether this gateway can send native OpenAI-compatible tool definitions. */
     default boolean supportsToolCalling() {
         return false;
