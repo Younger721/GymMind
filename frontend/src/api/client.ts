@@ -113,7 +113,9 @@ apiClient.interceptors.response.use(
             }
             break
           case 404:
-            ElMessage.error('接口不存在，请检查前后端版本')
+            // 业务级资源不存在：未映射的接口在本后端会落到 500 INTERNAL_ERROR，
+            // 因此 404 一定是业务资源缺失，直接展示后端提示，避免误报接口不存在
+            ElMessage.error(message || '资源不存在')
             break
           case 500:
             ElMessage.error(message || '服务器错误')
