@@ -57,6 +57,10 @@ public final class PermissionCatalog {
             new Entry("equipment:stats:read", "Read equipment statistics"),
             new Entry("membership:read", "Read membership packages"),
             new Entry("membership:write", "Manage membership packages"),
+            new Entry("membership:change:request", "Request membership freeze or transfer"),
+            new Entry("membership:change:read", "Read membership change requests"),
+            new Entry("membership:change:approve", "Approve membership change requests"),
+            new Entry("membership:change:cancel", "Cancel pending membership change requests"),
             new Entry("payment:write", "Record offline payments"),
             new Entry("order:write", "Create orders"),
             new Entry("booking:write", "Create bookings"),
@@ -193,7 +197,8 @@ public final class PermissionCatalog {
                 "member:read", "member:write", "coach:read", "coach:write", "coach:assign",
                 "coach-relation:request", "coach-relation:read", "coach-relation:accept",
                 "coach-relation:reject", "coach-relation:manage", "membership:read", "membership:write",
-                "payment:write", "order:write", "checkin:write"));
+                "membership:change:request", "membership:change:read", "membership:change:approve",
+                "membership:change:cancel", "payment:write", "order:write", "checkin:write"));
         mappings.put("menu:courses", Set.of("course:read", "course:write", "booking:write"));
         mappings.put("menu:equipment", Set.of(
                 "equipment:catalog:read", "equipment:catalog:write", "equipment:inventory:read",
@@ -255,12 +260,15 @@ public final class PermissionCatalog {
                         "workout-record:read", "nutrition:read", "nutrition:write",
                         "ai:recommend"))));
         mappings.put(RoleCode.MEMBER, roleOperations(
-                Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory", "ai:plan")),
+                // 会员在 AI 中心可检索租户知识库（动作规范、安全提示等），不开放知识库管理菜单
+                Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory", "ai:plan", "knowledge:read")),
                 Map.entry("menu:courses", Set.of("course:read", "booking:write")),
                 Map.entry("menu:training", Set.of(
                         "exercise:read", "video:read", "workout:read", "workout-record:read",
                         "workout:write", "workout-record:write", "nutrition:read", "nutrition:write",
-                        "ai:recommend", "ai:plan"))));
+                        "ai:recommend", "ai:plan")),
+                Map.entry("menu:profile", Set.of(
+                        "membership:change:request", "membership:change:read", "membership:change:cancel"))));
         return mappings.entrySet().stream().collect(Collectors.toUnmodifiableMap(
                 Map.Entry::getKey, entry -> entry.getValue().entrySet().stream()
                         .collect(Collectors.toUnmodifiableMap(Map.Entry::getKey, value -> Set.copyOf(value.getValue())))));

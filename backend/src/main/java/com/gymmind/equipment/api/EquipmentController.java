@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import com.gymmind.shared.error.BusinessException;
+import com.gymmind.shared.error.ErrorCode;
 
 import java.util.List;
 import java.util.Map;
@@ -48,12 +50,18 @@ public class EquipmentController {
     @PostMapping("/catalog")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<EquipmentCatalogView> createCatalog(@Valid @RequestBody CatalogRequest request) {
-        return ApiResponse.success(service.createCatalog(actors.requireCurrent(), request.name(), request.category(), request.description(), request.unit()));
+        boolean active = request.active() == null || request.active();
+        return ApiResponse.success(service.createCatalog(actors.requireCurrent(), request.name(), request.category(),
+                request.description(), request.unit(), active));
     }
 
     @PatchMapping("/catalog/{id}")
     public ApiResponse<EquipmentCatalogView> updateCatalog(@PathVariable Long id, @Valid @RequestBody CatalogRequest request) {
-        return ApiResponse.success(service.updateCatalog(actors.requireCurrent(), id, request.name(), request.category(), request.description(), request.unit(), request.active()));
+        if (request.active() == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        return ApiResponse.success(service.updateCatalog(actors.requireCurrent(), id, request.name(), request.category(),
+                request.description(), request.unit(), request.active()));
     }
 
     @GetMapping("/inventory")
@@ -114,10 +122,7 @@ public class EquipmentController {
     }
 
     public record CatalogRequest(@NotBlank String name, @NotBlank String category, String description,
-                                 String unit, boolean active) {
-        public CatalogRequest(String name, String category, String description, String unit) {
-            this(name, category, description, unit, true);
-        }
+                                 String unit, Boolean active) {
     }
 
     public record CreateRequest(String note, @NotEmpty List<@Valid RequestItem> items) {}

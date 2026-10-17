@@ -89,9 +89,11 @@ export interface PlatformEquipmentInventory {
 
 export const equipmentApi = {
   listCatalog(activeOnly = false) {
-    return apiClient.get<any, ApiResponse<EquipmentCatalog[]>>('/v1/equipment/catalog', { params: { activeOnly } })
+    return apiClient.get<any, ApiResponse<EquipmentCatalog[]>>('/v1/equipment/catalog', {
+      params: { activeOnly: activeOnly ? 'true' : 'false' }
+    })
   },
-  createCatalog(body: Pick<EquipmentCatalog, 'name' | 'category' | 'description' | 'unit'>) {
+  createCatalog(body: Pick<EquipmentCatalog, 'name' | 'category' | 'description' | 'unit'> & { active?: boolean }) {
     return apiClient.post<any, ApiResponse<EquipmentCatalog>>('/v1/equipment/catalog', body)
   },
   updateCatalog(id: number, body: Pick<EquipmentCatalog, 'name' | 'category' | 'description' | 'unit'> & { active: boolean }) {

@@ -16,4 +16,8 @@ interface SpringDataMemberMembershipRepository extends JpaRepository<MemberMembe
 
     Optional<MemberMembership> findFirstByTenantIdAndMemberIdAndStatusOrderByExpiresAtDesc(
             Long t, Long m, MemberMembershipStatus status);
+
+    Optional<MemberMembership> findByTenantIdAndId(Long tenantId, Long id);
+
+    List<MemberMembership> findAllByFreezeUntilIsNotNull();
 }

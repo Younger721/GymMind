@@ -53,8 +53,8 @@
     </div>
 
     <div v-if="activeTab === 'catalog' && isPlatformAdmin" class="simple-card table-card" v-loading="loading">
-      <div class="toolbar"><el-switch v-model="activeOnly" active-text="仅显示启用" @change="loadCatalog" /><el-input v-model="catalogKeyword" clearable placeholder="搜索器械名称" style="width: 220px" /></div>
-      <el-table :data="filteredCatalogs" stripe><el-table-column prop="name" label="器械名称" min-width="160" /><el-table-column prop="category" label="分类" width="130" /><el-table-column prop="unit" label="单位" width="90" /><el-table-column prop="description" label="说明" min-width="220" /><el-table-column label="状态" width="100"><template #default="{ row }"><el-tag :type="row.active ? 'success' : 'info'">{{ row.active ? '启用' : '停用' }}</el-tag></template></el-table-column><el-table-column label="操作" width="100"><template #default="{ row }"><el-button link type="primary" @click="openCatalog(row)">编辑</el-button></template></el-table-column></el-table>
+      <div class="toolbar"><el-switch v-model="activeOnly" active-text="仅显示启用" inactive-text="显示全部" /><el-input v-model="catalogKeyword" clearable placeholder="搜索器械名称" style="width: 220px" /></div>
+      <el-table :data="filteredCatalogs" stripe><el-table-column prop="name" label="器械名称" min-width="160" /><el-table-column prop="category" label="分类" width="130" /><el-table-column prop="unit" label="单位" width="90" /><el-table-column prop="description" label="说明" min-width="220" /><el-table-column label="状态" width="120"><template #default="{ row }"><el-switch :model-value="row.active" active-text="启用" inactive-text="停用" inline-prompt :loading="togglingCatalogId === row.id" @change="(value: boolean) => toggleCatalogActive(row, value)" /></template></el-table-column><el-table-column label="操作" width="100"><template #default="{ row }"><el-button link type="primary" @click="openCatalog(row)">编辑</el-button></template></el-table-column></el-table>
       <el-empty v-if="!loading && !filteredCatalogs.length" description="暂无器械目录" :image-size="56" />
     </div>
 
@@ -133,10 +133,17 @@ const warehouseAdjustmentVisible = ref(false)
 const adjustmentItem = ref<PlatformEquipmentInventory | null>(null)
 const adjustmentDelta = ref(0)
 const adjustmentReason = ref('')
+const togglingCatalogId = ref<number | null>(null)
 const statusOptions: Array<{ value: EquipmentRequestStatus; label: string }> = [
   { value: 'PENDING', label: '待审批' }, { value: 'APPROVED', label: '已批准' }, { value: 'REJECTED', label: '已驳回' }, { value: 'DELIVERING', label: '配送中' }, { value: 'WAITING_RECEIVE', label: '待确认' }, { value: 'RECEIVED', label: '已入库' }, { value: 'CANCELLED', label: '已取消' }
 ]
-const filteredCatalogs = computed(() => catalogs.value.filter(item => !catalogKeyword.value.trim() || item.name.toLowerCase().includes(catalogKeyword.value.trim().toLowerCase())))
+const filteredCatalogs = computed(() => {
+  const keyword = catalogKeyword.value.trim().toLowerCase()
+  return catalogs.value.filter(item => {
+    if (activeOnly.value && !item.active) return false
+    return !keyword || item.name.toLowerCase().includes(keyword)
+  })
+})
 const availableCatalogs = computed(() => catalogs.value.filter(item => item.active && !requestItems.value.some(line => line.catalogId === item.id)))
 const filteredInventory = computed(() => inventory.value.filter(item => { const keyword = inventoryKeyword.value.trim().toLowerCase(); return !keyword || `${item.tenantName || ''} ${item.name}`.toLowerCase().includes(keyword) }))
 function statusLabel(status: EquipmentRequestStatus) { return statusOptions.find(item => item.value === status)?.label || status }
@@ -165,14 +172,71 @@ async function loadTenants() {
     tenants.value = []
   }
 }
-async function loadCatalog() { try { catalogs.value = (await equipmentApi.listCatalog(activeOnly.value)).data ?? [] } catch { ElMessage.error('器械目录加载失败') } }
+function normalizeCatalog(item: EquipmentCatalog): EquipmentCatalog {
+  return { ...item, active: item.active !== false }
+}
+
+async function loadCatalog() {
+  try {
+    const rows = (await equipmentApi.listCatalog(false)).data ?? []
+    catalogs.value = rows.map(normalizeCatalog)
+  } catch {
+    ElMessage.error('器械目录加载失败')
+  }
+}
+
+async function toggleCatalogActive(row: EquipmentCatalog, active: boolean) {
+  togglingCatalogId.value = row.id
+  try {
+    await equipmentApi.updateCatalog(row.id, {
+      name: row.name,
+      category: row.category,
+      description: row.description ?? '',
+      unit: row.unit,
+      active
+    })
+    row.active = active
+    ElMessage.success(active ? '已启用' : '已停用')
+  } catch {
+    await loadCatalog()
+  } finally {
+    togglingCatalogId.value = null
+  }
+}
 async function loadInventory() { try { inventory.value = (await equipmentApi.listInventory(effectiveTenantId())).data ?? [] } catch { ElMessage.error('库存加载失败') } }
 async function loadRequests() { try { requests.value = (await equipmentApi.listRequests({ tenantId: effectiveTenantId(), ...(requestStatus.value ? { status: requestStatus.value } : {}) })).data ?? [] } catch { ElMessage.error('申请记录加载失败') } }
 async function loadStatistics() { try { statistics.value = (await equipmentApi.statistics(effectiveTenantId())).data } catch { ElMessage.error('统计加载失败') } }
 async function loadDeliveries() { try { deliveries.value = (await equipmentApi.listDeliveries(effectiveTenantId())).data ?? [] } catch { ElMessage.error('配送记录加载失败') } }
 async function loadActiveTab() { loading.value = true; try { if (activeTab.value === 'overview') await loadStatistics(); if (activeTab.value === 'catalog') await loadCatalog(); if (activeTab.value === 'inventory') await loadInventory(); if (activeTab.value === 'requests') await loadRequests(); if (activeTab.value === 'deliveries') await loadDeliveries() } finally { loading.value = false } }
 function openCatalog(catalog?: EquipmentCatalog) { editingCatalog.value = catalog || null; Object.assign(catalogForm, catalog ? { name: catalog.name, category: catalog.category, description: catalog.description || '', unit: catalog.unit, active: catalog.active } : { name: '', category: '', description: '', unit: '台', active: true }); catalogDialogVisible.value = true }
-async function saveCatalog() { if (!catalogForm.name.trim() || !catalogForm.category.trim()) { ElMessage.warning('请填写器械名称和分类'); return }; saving.value = true; try { if (editingCatalog.value) await equipmentApi.updateCatalog(editingCatalog.value.id, { ...catalogForm }); else await equipmentApi.createCatalog({ ...catalogForm }); ElMessage.success('器械目录已保存'); catalogDialogVisible.value = false; await loadCatalog() } catch { /* client interceptor提示 */ } finally { saving.value = false } }
+async function saveCatalog() {
+  if (!catalogForm.name.trim() || !catalogForm.category.trim()) {
+    ElMessage.warning('请填写器械名称和分类')
+    return
+  }
+  saving.value = true
+  const payload = {
+    name: catalogForm.name.trim(),
+    category: catalogForm.category.trim(),
+    description: catalogForm.description?.trim() || '',
+    unit: catalogForm.unit?.trim() || '台',
+    active: Boolean(catalogForm.active)
+  }
+  try {
+    if (editingCatalog.value) {
+      await equipmentApi.updateCatalog(editingCatalog.value.id, payload)
+    } else {
+      await equipmentApi.createCatalog(payload)
+    }
+    ElMessage.success('器械目录已保存')
+    catalogDialogVisible.value = false
+    await loadCatalog()
+  } catch {
+    /* client interceptor提示 */
+  } finally {
+    saving.value = false
+  }
+}
 function openRequest() { requestNote.value = ''; requestItems.value = [{ catalogId: undefined, quantity: 1 }]; requestDialogVisible.value = true; void loadCatalog() }
 async function submitRequest() { const items = requestItems.value.filter(item => item.catalogId && item.quantity > 0).map(item => ({ catalogId: item.catalogId as number, quantity: item.quantity })); if (!items.length) { ElMessage.warning('请至少选择一种器械'); return }; saving.value = true; try { await equipmentApi.createRequest({ note: requestNote.value.trim() || undefined, items }); ElMessage.success('器械申请已提交'); requestDialogVisible.value = false; activeTab.value = 'requests'; await loadRequests() } catch { /* client interceptor提示 */ } finally { saving.value = false } }
 function viewRequest(request: EquipmentRequest) { selectedRequest.value = request; detailVisible.value = true }

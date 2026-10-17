@@ -18,6 +18,12 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
+      path: '/knowledge/:id/edit',
+      name: 'knowledge-doc-edit',
+      component: () => import('@/views/KnowledgeDocEditorView.vue'),
+      meta: { requiresAuth: true, menuPermission: MENU_CODES.KNOWLEDGE, fullscreen: true }
+    },
+    {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
       meta: { requiresAuth: true },
@@ -47,6 +53,7 @@ const router = createRouter({
         { path: 'search', redirect: '/knowledge' },
         { path: 'members', redirect: '/courses' },
         { path: 'courses', name: 'courses', component: () => import('@/views/business/CourseCenterView.vue'), meta: { menuPermission: MENU_CODES.COURSES } },
+        { path: 'membership-changes', name: 'membership-changes', component: () => import('@/views/business/MembershipChangeApprovalView.vue'), meta: { menuPermission: MENU_CODES.OPERATIONS } },
         { path: 'equipment', name: 'equipment', component: () => import('@/views/business/EquipmentManagementView.vue'), meta: { menuPermission: MENU_CODES.EQUIPMENT } },
         { path: 'bookings', redirect: '/courses' },
         { path: 'exercises', name: 'exercises', redirect: '/training', meta: { menuPermission: MENU_CODES.TRAINING } },

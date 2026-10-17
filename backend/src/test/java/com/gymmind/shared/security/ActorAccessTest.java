@@ -33,4 +33,12 @@ class ActorAccessTest {
         assertThatCode(() -> ActorAccess.requireExplicitGymAdmin(admin, "coach:assign"))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void requireGymAdminApprovalRejectsPlatformAdmin() {
+        CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
+                Set.of("membership:change:approve"), 0L, "t");
+        assertThatThrownBy(() -> ActorAccess.requireGymAdminApproval(platform, "membership:change:approve"))
+                .isInstanceOf(BusinessException.class);
+    }
 }

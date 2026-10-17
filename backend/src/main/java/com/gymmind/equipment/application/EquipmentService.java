@@ -7,7 +7,7 @@ import java.util.Map;
 
 public interface EquipmentService {
     List<EquipmentCatalogView> listCatalog(CurrentActor actor, boolean activeOnly);
-    EquipmentCatalogView createCatalog(CurrentActor actor, String name, String category, String description, String unit);
+    EquipmentCatalogView createCatalog(CurrentActor actor, String name, String category, String description, String unit, boolean active);
     EquipmentCatalogView updateCatalog(CurrentActor actor, Long id, String name, String category, String description, String unit, boolean active);
     List<EquipmentInventoryView> listInventory(CurrentActor actor, Long tenantId);
     List<EquipmentRequestView> listRequests(CurrentActor actor, Long tenantId, EquipmentRequestStatus status);

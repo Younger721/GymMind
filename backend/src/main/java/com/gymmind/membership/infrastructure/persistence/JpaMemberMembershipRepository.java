@@ -30,4 +30,14 @@ class JpaMemberMembershipRepository implements MemberMembershipRepository {
         return d.findFirstByTenantIdAndMemberIdAndStatusOrderByExpiresAtDesc(
                 t, m, MemberMembershipStatus.ACTIVE);
     }
+
+    @Override
+    public Optional<MemberMembership> findByTenantIdAndId(Long tenantId, Long id) {
+        return d.findByTenantIdAndId(tenantId, id);
+    }
+
+    @Override
+    public List<MemberMembership> findAllWithFreezePeriod() {
+        return d.findAllByFreezeUntilIsNotNull();
+    }
 }

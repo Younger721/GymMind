@@ -55,14 +55,42 @@
       </div>
     </div>
 
-    <div v-else class="simple-card empty-card">当前账号不是会员，暂无签到二维码和套餐信息。</div>
+    <div v-if="overview?.membership?.id" class="simple-card change-card">
+      <h3>停卡申请</h3>
+      <p class="muted">提交后需健身房管理员审批，最长单次 30 天。</p>
+      <el-form inline @submit.prevent="submitFreeze">
+        <el-form-item label="停卡区间">
+          <el-date-picker v-model="freezeRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始" end-placeholder="结束" />
+        </el-form-item>
+        <el-form-item label="说明"><el-input v-model="freezeReason" placeholder="可选" clearable /></el-form-item>
+        <el-button type="primary" :loading="freezeSubmitting" @click="submitFreeze">提交停卡</el-button>
+      </el-form>
+      <el-table v-if="myRequests.length" :data="myRequests" size="small" stripe class="request-table">
+        <el-table-column label="类型" width="80"><template #default="{ row }">{{ row.type === 'FREEZE' ? '停卡' : '转卡' }}</template></el-table-column>
+        <el-table-column label="状态" width="90"><template #default="{ row }">{{ requestStatusLabel(row.status) }}</template></el-table-column>
+        <el-table-column label="详情" min-width="160">
+          <template #default="{ row }">
+            <span v-if="row.type === 'FREEZE'">{{ row.freezeStart }} ~ {{ row.freezeEnd }}</span>
+            <span v-else>转至 #{{ row.targetMemberId }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90">
+          <template #default="{ row }">
+            <el-button v-if="row.status === 'PENDING'" link type="danger" @click="cancelRequest(row.id)">取消</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <div v-if="!overview?.member" class="simple-card empty-card">当前账号不是会员，暂无签到二维码和套餐信息。</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { computed } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { membershipChangeRequestsApi, type MembershipChangeRequest } from '@/api/membershipChangeRequests'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
 import { useAuthStore } from '@/stores/auth'
@@ -74,6 +102,10 @@ const previousOverview = ref<ProfileOverview | null>(null)
 const selectedMonth = ref(monthKey(new Date()))
 const qrDataUrl = ref('')
 const error = ref('')
+const freezeRange = ref<[string, string] | null>(null)
+const freezeReason = ref('')
+const freezeSubmitting = ref(false)
+const myRequests = ref<MembershipChangeRequest[]>([])
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 
 interface CalendarCell { date: string; day: number }
@@ -113,8 +145,61 @@ async function loadOverview() {
     qrDataUrl.value = response.data?.member?.checkInToken
       ? await QRCode.toDataURL(response.data.member.checkInToken, { width: 220, margin: 2 })
       : ''
+    if (response.data?.membership?.id) {
+      await loadMyRequests()
+    } else {
+      myRequests.value = []
+    }
   } catch {
     error.value = '个人信息加载失败，请稍后重试'
+  }
+}
+
+async function loadMyRequests() {
+  try {
+    const res = await membershipChangeRequestsApi.list()
+    myRequests.value = res.data ?? []
+  } catch {
+    myRequests.value = []
+  }
+}
+
+function requestStatusLabel(status: string) {
+  const map: Record<string, string> = { PENDING: '待审批', APPROVED: '已通过', REJECTED: '已驳回', CANCELLED: '已取消' }
+  return map[status] ?? status
+}
+
+async function submitFreeze() {
+  const membershipId = overview.value?.membership?.id
+  if (!membershipId || !freezeRange.value?.[0] || !freezeRange.value[1]) {
+    ElMessage.warning('请选择停卡日期')
+    return
+  }
+  freezeSubmitting.value = true
+  try {
+    await membershipChangeRequestsApi.create({
+      type: 'FREEZE',
+      membershipId,
+      freezeStart: freezeRange.value[0],
+      freezeEnd: freezeRange.value[1],
+      reason: freezeReason.value.trim() || undefined
+    })
+    ElMessage.success('停卡申请已提交')
+    freezeRange.value = null
+    freezeReason.value = ''
+    await loadMyRequests()
+  } finally {
+    freezeSubmitting.value = false
+  }
+}
+
+async function cancelRequest(id: number) {
+  try {
+    await membershipChangeRequestsApi.cancel(id)
+    ElMessage.success('已取消')
+    await loadMyRequests()
+  } catch {
+    /* interceptor */
   }
 }
 

@@ -91,4 +91,19 @@ public final class ActorAccess {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
+
+    /**
+     * 会籍变更审批：仅健身房管理员，平台管理员不可代审。
+     */
+    public static void requireGymAdminApproval(CurrentActor actor, String permission) {
+        if (actor == null || isSuperAdmin(actor)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (actor.tenantId() == null || !actor.roles().contains(RoleCode.GYM_ADMIN)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (permission == null || permission.isBlank() || !actor.hasPermission(permission)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
 }

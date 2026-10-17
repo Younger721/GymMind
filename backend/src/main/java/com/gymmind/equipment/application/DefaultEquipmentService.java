@@ -62,10 +62,13 @@ public class DefaultEquipmentService implements EquipmentService {
     }
 
     @Transactional
-    public EquipmentCatalogView createCatalog(CurrentActor actor, String name, String category, String description, String unit) {
+    public EquipmentCatalogView createCatalog(CurrentActor actor, String name, String category, String description,
+                                              String unit, boolean active) {
         requirePlatform(actor);
         try {
-            EquipmentCatalog saved = catalogs.save(EquipmentCatalog.create(name, category, description, unit));
+            EquipmentCatalog catalog = EquipmentCatalog.create(name, category, description, unit);
+            catalog.setActive(active);
+            EquipmentCatalog saved = catalogs.save(catalog);
             warehouse.save(PlatformEquipmentInventory.create(saved.getId(), 0));
             return EquipmentCatalogView.from(saved);
         } catch (IllegalArgumentException ex) {
