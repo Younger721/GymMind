@@ -21,6 +21,16 @@ class JpaCourseRepository implements CourseRepository {
     }
 
     @Override
+    public boolean reserveCapacity(Long tenantId, Long courseId) {
+        return delegate.reserveCapacity(tenantId, courseId) == 1;
+    }
+
+    @Override
+    public boolean releaseCapacity(Long tenantId, Long courseId) {
+        return delegate.releaseCapacity(tenantId, courseId) == 1;
+    }
+
+    @Override
     public Optional<Course> findById(Long id) {
         return delegate.findById(id);
     }

@@ -6,6 +6,8 @@ import java.util.Optional;
 
 public interface CourseRepository {
     Course save(Course course);
+    boolean reserveCapacity(Long tenantId, Long courseId);
+    boolean releaseCapacity(Long tenantId, Long courseId);
     Optional<Course> findById(Long id);
     Optional<Course> findByTenantIdAndId(Long tenantId, Long id);
     List<Course> findAllByTenantId(Long tenantId);

@@ -129,7 +129,7 @@ class BookingServiceTest {
         when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(course));
         when(bookings.findByTenantIdAndMemberIdAndCourseId(11L, member.getId(), 4L)).thenReturn(Optional.empty());
         when(bookings.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courses.reserveCapacity(11L, 4L)).thenReturn(true);
         BookingService service = new DefaultBookingService(courses, bookings, entitlements,
                 mock(AuditRecorder.class), CLOCK, members);
 
@@ -158,7 +158,7 @@ class BookingServiceTest {
             booking.getClass(); // keep booking reference
             return booking;
         });
-        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courses.reserveCapacity(11L, 4L)).thenReturn(true, false);
 
         BookingService service = new DefaultBookingService(
                 courses, bookings, entitlements, mock(AuditRecorder.class), CLOCK);
@@ -167,6 +167,28 @@ class BookingServiceTest {
         verify(entitlements).reserve(11L, 41L);
         assertThatThrownBy(() -> service.book(admin(11L), new BookCourseCommand(null, 42L, 4L)))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void bookingFailsWhenAtomicCapacityReservationFindsNoAvailableSeat() {
+        CourseRepository courses = mock(CourseRepository.class);
+        BookingRepository bookings = mock(BookingRepository.class);
+        MembershipEntitlementPort entitlements = mock(MembershipEntitlementPort.class);
+        Course course = Course.create(11L, 3L, "Yoga", "GROUP",
+                FIXED_NOW.plusSeconds(3600), FIXED_NOW.plusSeconds(7200), 1, "Studio");
+        when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(course));
+        when(bookings.findByTenantIdAndMemberIdAndCourseId(11L, 41L, 4L)).thenReturn(Optional.empty());
+        when(courses.reserveCapacity(11L, 4L)).thenReturn(false);
+
+        BookingService service = new DefaultBookingService(
+                courses, bookings, entitlements, mock(AuditRecorder.class), CLOCK);
+
+        assertThatThrownBy(() -> service.book(admin(11L), new BookCourseCommand(null, 41L, 4L)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.CONFLICT);
+        verify(entitlements).reserve(11L, 41L);
+        verify(entitlements).release(11L, 41L);
+        verify(bookings, never()).save(any(Booking.class));
     }
 
     @Test
@@ -198,7 +220,7 @@ class BookingServiceTest {
         when(bookings.findByTenantIdAndMemberIdAndCourseId(11L, 41L, 4L)).thenReturn(Optional.of(existing));
         when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(course));
         when(bookings.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courses.reserveCapacity(11L, 4L)).thenReturn(true);
 
         BookingService service = new DefaultBookingService(
                 courses, bookings, entitlements, mock(AuditRecorder.class), CLOCK);
@@ -206,7 +228,7 @@ class BookingServiceTest {
         BookingView view = service.book(admin(11L), new BookCourseCommand(null, 41L, 4L));
 
         assertThat(view.status()).isEqualTo(BookingStatus.CONFIRMED);
-        assertThat(course.getReservedCount()).isEqualTo(1);
+        verify(courses).reserveCapacity(11L, 4L);
         verify(entitlements).reserve(11L, 41L);
         verify(bookings).save(existing);
     }
@@ -223,7 +245,7 @@ class BookingServiceTest {
         when(bookings.findByTenantIdAndId(11L, 99L)).thenReturn(Optional.of(booking));
         when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(course));
         when(bookings.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courses.releaseCapacity(11L, 4L)).thenReturn(true);
 
         BookingService service = new DefaultBookingService(
                 courses, bookings, entitlements, mock(AuditRecorder.class), CLOCK);
@@ -231,7 +253,7 @@ class BookingServiceTest {
 
         assertThat(view.status()).isEqualTo(BookingStatus.CANCELLED);
         verify(entitlements).release(11L, 41L);
-        assertThat(course.getReservedCount()).isZero();
+        verify(courses).releaseCapacity(11L, 4L);
     }
 
     @Test

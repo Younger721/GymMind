@@ -16,7 +16,6 @@ import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
-import jakarta.persistence.OptimisticLockException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,8 +27,6 @@ import java.util.Map;
 
 @Service
 public class DefaultBookingService implements BookingService {
-
-    private static final int CAPACITY_RETRY_ATTEMPTS = 3;
 
     private final CourseRepository courses;
     private final BookingRepository bookings;
@@ -154,9 +151,10 @@ public class DefaultBookingService implements BookingService {
             throw new BusinessException(ErrorCode.CONFLICT);
         }
 
+        if (!courses.releaseCapacity(tenantId, booking.getCourseId())) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
         booking.cancel();
-        course.release();
-        courses.save(course);
         entitlements.release(tenantId, booking.getMemberId());
         Booking saved = bookings.save(booking);
         audit.record(new AuditEvent("BOOKING_CANCELLED", "BOOKING", saved.getId(),
@@ -185,18 +183,8 @@ public class DefaultBookingService implements BookingService {
     }
 
     private void reserveCourseCapacity(Long tenantId, Long courseId) {
-        for (int attempt = 0; attempt < CAPACITY_RETRY_ATTEMPTS; attempt++) {
-            Course course = courses.findByTenantIdAndId(tenantId, courseId)
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-            try {
-                course.reserve();
-                courses.save(course);
-                return;
-            } catch (OptimisticLockException | IllegalStateException ex) {
-                if (attempt == CAPACITY_RETRY_ATTEMPTS - 1) {
-                    throw new BusinessException(ErrorCode.CONFLICT);
-                }
-            }
+        if (!courses.reserveCapacity(tenantId, courseId)) {
+            throw new BusinessException(ErrorCode.CONFLICT);
         }
     }
 

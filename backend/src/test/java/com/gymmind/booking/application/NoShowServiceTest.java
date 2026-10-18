@@ -29,7 +29,7 @@ class NoShowServiceTest {
         when(courses.findByTenantIdAndId(11L, 5L)).thenReturn(Optional.of(courseAt(11L, 5L, 3600)));
         when(bookings.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(courses.releaseCapacity(11L, 4L)).thenReturn(true);
         new DefaultNoShowService(bookings, courses, mock(com.gymmind.booking.application.port.MembershipEntitlementPort.class), mock(AuditRecorder.class))
                 .markTenantNoShows(11L, Instant.now());
 
@@ -46,6 +46,24 @@ class NoShowServiceTest {
 
         assertThatThrownBy(() -> service.markTenantNoShows(null, Instant.now()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void doesNotMarkNoShowWhenCapacityCannotBeReleased() {
+        BookingRepository bookings = mock(BookingRepository.class);
+        CourseRepository courses = mock(CourseRepository.class);
+        Booking booking = Booking.create(11L, 41L, 4L);
+        when(bookings.findAllByTenantIdAndStatus(11L, BookingStatus.CONFIRMED)).thenReturn(List.of(booking));
+        when(courses.findByTenantIdAndId(11L, 4L)).thenReturn(Optional.of(courseAt(11L, 4L, -3600)));
+        when(courses.releaseCapacity(11L, 4L)).thenReturn(false);
+
+        int changed = new DefaultNoShowService(bookings, courses,
+                mock(com.gymmind.booking.application.port.MembershipEntitlementPort.class), mock(AuditRecorder.class))
+                .markTenantNoShows(11L, Instant.now());
+
+        assertThat(changed).isZero();
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
+        verify(bookings, never()).save(any(Booking.class));
     }
 
     private static Course courseAt(long tenantId, long courseId, long endOffsetSeconds) {

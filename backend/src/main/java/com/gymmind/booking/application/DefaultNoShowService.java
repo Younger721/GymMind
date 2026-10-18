@@ -43,9 +43,10 @@ public class DefaultNoShowService implements NoShowService {
         for (var booking : bookings.findAllByTenantIdAndStatus(tenantId, BookingStatus.CONFIRMED)) {
             Course course = courses.findByTenantIdAndId(tenantId, booking.getCourseId()).orElse(null);
             if (course != null && !course.getEndsAt().isAfter(now)) {
+                if (!courses.releaseCapacity(tenantId, booking.getCourseId())) {
+                    continue;
+                }
                 booking.markNoShow();
-                course.release();
-                courses.save(course);
                 entitlements.release(tenantId, booking.getMemberId());
                 bookings.save(booking);
                 audit.record(new AuditEvent("BOOKING_NO_SHOW", "BOOKING", booking.getCourseId(),
