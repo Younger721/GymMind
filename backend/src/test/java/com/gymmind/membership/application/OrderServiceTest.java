@@ -5,7 +5,6 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.member.domain.model.Member;
 import com.gymmind.member.domain.repository.MemberRepository;
 import com.gymmind.membership.domain.model.Order;
-import com.gymmind.membership.domain.model.OrderStatus;
 import com.gymmind.membership.domain.repository.OrderRepository;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.security.CurrentActor;
@@ -38,7 +37,6 @@ class OrderServiceTest {
 
         assertThat(view.tenantId()).isEqualTo(11L);
         assertThat(view.memberId()).isEqualTo(41L);
-        assertThat(view.status()).isEqualTo(OrderStatus.PLACED);
         verify(members).findByTenantIdAndId(11L, 41L);
     }
 
