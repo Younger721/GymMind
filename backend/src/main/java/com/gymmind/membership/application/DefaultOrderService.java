@@ -3,6 +3,7 @@ package com.gymmind.membership.application;
 import com.gymmind.audit.application.AuditRecorder;
 import com.gymmind.audit.domain.AuditEvent;
 import com.gymmind.audit.domain.AuditResult;
+import com.gymmind.member.domain.repository.MemberRepository;
 import com.gymmind.membership.domain.model.Order;
 import com.gymmind.membership.domain.repository.OrderRepository;
 import com.gymmind.shared.error.BusinessException;
@@ -18,10 +19,12 @@ import java.util.Map;
 public class DefaultOrderService {
 
     private final OrderRepository orders;
+    private final MemberRepository members;
     private final AuditRecorder audit;
 
-    public DefaultOrderService(OrderRepository orders, AuditRecorder audit) {
+    public DefaultOrderService(OrderRepository orders, MemberRepository members, AuditRecorder audit) {
         this.orders = orders;
+        this.members = members;
         this.audit = audit;
     }
 
@@ -32,6 +35,8 @@ public class DefaultOrderService {
         if (command == null || command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+        members.findByTenantIdAndId(tenantId, command.memberId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         Order order = orders.save(Order.create(tenantId, command.memberId(), command.total(), command.currency()));
         audit.record(new AuditEvent("ORDER_CREATED", "ORDER", order.getId(),
                 AuditResult.SUCCESS, "order-service", Map.of()));
