@@ -1,7 +1,7 @@
 <template>
   <div>
-    <h2 class="simple-page-title">会籍与费用记录</h2>
-    <p class="simple-page-desc">会员卡套餐、发卡、订单与缴费记录</p>
+    <h2 class="simple-page-title">会籍与支付</h2>
+    <p class="simple-page-desc">会员卡套餐、发卡、订单与收款</p>
 
     <el-tabs v-model="tab">
       <el-tab-pane label="套餐" name="packages">
@@ -20,8 +20,8 @@
       <el-tab-pane label="订单" name="orders">
         <BizCrudPanel title="创建订单" :create-fields="orderFields" :loader="emptyLoader" :creator="createOrder" create-permission="order:write" />
       </el-tab-pane>
-      <el-tab-pane label="缴费记录" name="payments">
-        <BizCrudPanel title="新增缴费记录" :create-fields="paymentFields" :loader="emptyLoader" :creator="recordPayment" create-permission="payment:write" />
+      <el-tab-pane label="收款" name="payments">
+        <BizCrudPanel title="记录支付" :create-fields="paymentFields" :loader="emptyLoader" :creator="recordPayment" create-permission="payment:write" />
       </el-tab-pane>
     </el-tabs>
   </div>

@@ -4,6 +4,7 @@ import com.gymmind.audit.application.AuditRecorder;
 import com.gymmind.audit.domain.AuditEvent;
 import com.gymmind.audit.domain.AuditResult;
 import com.gymmind.membership.domain.model.Order;
+import com.gymmind.membership.domain.model.OrderStatus;
 import com.gymmind.membership.domain.model.PaymentRecord;
 import com.gymmind.membership.domain.repository.OrderRepository;
 import com.gymmind.membership.domain.repository.PaymentRecordRepository;
@@ -49,6 +50,16 @@ public class DefaultPaymentRecordService {
 
         Order order = orders.findByTenantIdAndId(tenantId, command.orderId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (command.amount() == null || command.amount().compareTo(order.getTotal()) != 0
+                || !normalizeCurrency(command.currency()).equals(order.getCurrency())) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+        if (order.getStatus() != OrderStatus.PLACED) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+
+        order.markPaid();
+        orders.save(order);
         PaymentRecord payment = payments.save(PaymentRecord.create(
                 tenantId, command.orderId(), command.amount(), command.currency(),
                 command.reference(), command.paymentMethod()));
