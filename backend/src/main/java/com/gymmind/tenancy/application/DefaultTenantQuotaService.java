@@ -82,6 +82,9 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
         if (countAiCallsThisMonth(tenantId) >= quota.getMaxAiCallsPerMonth()) {
             throw quotaExceeded("本月 AI 调用次数已达上限");
         }
+        if (countAiTokensThisMonth(tenantId) >= quota.getMaxAiTokensPerMonth()) {
+            throw quotaExceeded("本月 AI Token 已达上限");
+        }
     }
 
     @Override
