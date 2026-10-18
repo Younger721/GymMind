@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 class PaymentRecordServiceTest {
 
     @Test
-    void offlinePaymentMarksPlacedOrderPaidAndIsIdempotentByReference() {
+    void recordingPaymentDoesNotChangeOrderStatusAndIsIdempotentByReference() {
         PaymentRecordRepository payments = mock(PaymentRecordRepository.class);
         OrderRepository orders = mock(OrderRepository.class);
         AuditRecorder audit = mock(AuditRecorder.class);
@@ -41,8 +41,8 @@ class PaymentRecordServiceTest {
         PaymentRecordView result = service.recordOfflinePayment(admin(11L), payment("99.00", "CNY"));
 
         assertThat(result.reference()).isEqualTo("R-1");
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
-        verify(orders).save(order);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PLACED);
+        verify(orders, never()).save(any(Order.class));
         verify(payments).save(any(PaymentRecord.class));
 
         PaymentRecord existing = PaymentRecord.create(11L, 8L,
@@ -55,23 +55,22 @@ class PaymentRecordServiceTest {
     }
 
     @Test
-    void rejectsAmountMismatchWithoutSavingOrderOrPayment() {
+    void recordsAmountThatDiffersFromOrderTotalWithoutChangingOrder() {
         PaymentRecordRepository payments = mock(PaymentRecordRepository.class);
         OrderRepository orders = mock(OrderRepository.class);
         Order order = placedOrder(11L, 8L, "99.00", "CNY");
         when(payments.findByTenantIdAndReference(11L, "R-1")).thenReturn(Optional.empty());
         when(orders.findByTenantIdAndId(11L, 8L)).thenReturn(Optional.of(order));
+        when(payments.save(any(PaymentRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
         DefaultPaymentRecordService service = new DefaultPaymentRecordService(
                 payments, orders, mock(AuditRecorder.class));
 
-        assertThatThrownBy(() -> service.recordOfflinePayment(admin(11L), payment("98.00", "CNY")))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.CONFLICT);
+        PaymentRecordView result = service.recordOfflinePayment(admin(11L), payment("98.00", "CNY"));
 
+        assertThat(result.amount()).isEqualByComparingTo("98.00");
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PLACED);
         verify(orders, never()).save(any(Order.class));
-        verify(payments, never()).save(any(PaymentRecord.class));
+        verify(payments).save(any(PaymentRecord.class));
     }
 
     private static Order placedOrder(long tenantId, long memberId, String amount, String currency) {
