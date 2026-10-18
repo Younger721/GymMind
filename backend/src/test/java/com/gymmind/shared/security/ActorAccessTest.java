@@ -35,10 +35,32 @@ class ActorAccessTest {
     }
 
     @Test
+    void requireExplicitGymAdminRejectsPlatformAdmin() {
+        CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "t");
+        TenantContextHolder.set(7L);
+        try {
+            assertThatThrownBy(() -> ActorAccess.requireExplicitGymAdmin(platform, "coach:assign"))
+                    .isInstanceOf(BusinessException.class);
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
+
+    @Test
     void requireGymAdminApprovalRejectsPlatformAdmin() {
         CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
                 Set.of("membership:change:approve"), 0L, "t");
         assertThatThrownBy(() -> ActorAccess.requireGymAdminApproval(platform, "membership:change:approve"))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void requireGymAdminAllowsPlatformReadButRejectsTenantBusinessWrite() {
+        CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "t");
+        TenantContextHolder.set(7L);
+        assertThatCode(() -> ActorAccess.requireGymAdmin(platform, "member:read")).doesNotThrowAnyException();
+        assertThatThrownBy(() -> ActorAccess.requireGymAdmin(platform, "member:write"))
+                .isInstanceOf(BusinessException.class);
+        TenantContextHolder.clear();
     }
 }

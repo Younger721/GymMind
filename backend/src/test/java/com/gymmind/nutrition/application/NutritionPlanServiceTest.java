@@ -36,18 +36,14 @@ class NutritionPlanServiceTest {
     }
 
     @Test
-    void platformAdminCreatesPlanInsideSelectedTenant() {
+    void platformAdminCannotCreatePlanInsideSelectedTenant() {
         NutritionPlanRepository plans = mock(NutritionPlanRepository.class);
-        MemberRepository members = mock(MemberRepository.class);
-        var member = mock(com.gymmind.member.domain.model.Member.class);
-        when(members.findByTenantIdAndId(11L, 41L)).thenReturn(Optional.of(member));
-        when(plans.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         TenantContextHolder.set(11L);
         try {
-            NutritionPlanView view = new DefaultNutritionPlanService(plans, members, mock(AuditRecorder.class)).create(platform(),
-                    new CreateNutritionPlanCommand(null, 41L, 2200, 165, 220, 73.3, "gain"));
-            assertThat(view.tenantId()).isEqualTo(11L);
-            assertThat(view.memberId()).isEqualTo(41L);
+            assertThatThrownBy(() -> new DefaultNutritionPlanService(plans, mock(MemberRepository.class), mock(AuditRecorder.class)).create(platform(),
+                    new CreateNutritionPlanCommand(null, 41L, 2200, 165, 220, 73.3, "gain")))
+                    .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+            verify(plans, never()).save(any());
         } finally {
             TenantContextHolder.clear();
         }

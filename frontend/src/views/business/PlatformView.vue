@@ -32,14 +32,38 @@
             </el-form-item>
           </el-form>
           <el-form v-if="selectedTenantId && settingsReady" label-width="120px" style="max-width: 560px">
-            <el-form-item label="预约功能"><el-switch v-model="settingsForm.reservationEnabled" /></el-form-item>
-            <el-form-item label="签到功能"><el-switch v-model="settingsForm.checkInEnabled" /></el-form-item>
-            <el-form-item label="时区"><el-input v-model="settingsForm.timezone" /></el-form-item>
-            <el-button type="primary" :loading="settingsLoading" :disabled="!settingsReady" @click="saveTenantSettings">保存设置</el-button>
+            <el-form-item label="预约功能">{{ settingsForm.reservationEnabled ? '启用' : '停用' }}</el-form-item>
+            <el-form-item label="签到功能">{{ settingsForm.checkInEnabled ? '启用' : '停用' }}</el-form-item>
+            <el-form-item label="时区">{{ settingsForm.timezone }}</el-form-item>
           </el-form>
           <el-empty v-if="!selectedTenantId" description="请选择门店后管理设置" />
           <el-empty v-else-if="settingsLoading" description="正在加载门店设置" />
           <el-empty v-else-if="!settingsReady" description="门店设置加载失败，请切换门店后重试" />
+        </div>
+      </el-tab-pane>
+      <el-tab-pane label="管理员账号" name="admins">
+        <div class="simple-card">
+          <el-form inline>
+            <el-form-item label="选择租户">
+              <el-select v-model="selectedTenantId" placeholder="请选择租户" style="width: 280px">
+                <el-option v-for="tenant in tenants" :key="tenant.id" :label="`${tenant.name}（ID: ${tenant.id}）`" :value="Number(tenant.id)" />
+              </el-select>
+            </el-form-item>
+            <el-button :disabled="!selectedTenantId" :loading="adminsLoading" @click="loadAdministrators">刷新</el-button>
+          </el-form>
+          <el-table v-if="selectedTenantId" :data="administrators" v-loading="adminsLoading" row-key="id">
+            <el-table-column prop="displayName" label="姓名" />
+            <el-table-column prop="username" label="用户名" />
+            <el-table-column prop="email" label="邮箱" />
+            <el-table-column label="状态"><template #default="{ row }">{{ row.status === 'ACTIVE' ? '启用' : '停用' }}</template></el-table-column>
+            <el-table-column label="操作" width="210">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="resetAdministratorPassword(row)">重置密码</el-button>
+                <el-button link :type="row.status === 'ACTIVE' ? 'danger' : 'success'" @click="toggleAdministrator(row)">{{ row.status === 'ACTIVE' ? '停用' : '启用' }}</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty v-if="!selectedTenantId" description="请选择租户" />
         </div>
       </el-tab-pane>
       <el-tab-pane label="平台 AI 服务" name="harness">
@@ -71,7 +95,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import BizCrudPanel, { type FieldDef, type RowAction } from '@/components/business/BizCrudPanel.vue'
 import HarnessConfigPanel from '@/components/business/HarnessConfigPanel.vue'
 import JsonBlock from '@/components/business/JsonBlock.vue'
@@ -106,6 +130,8 @@ let settingsRequestVersion = 0
 const settingsReady = computed(() => selectedTenantId.value != null
   && settingsLoadedForTenantId.value === selectedTenantId.value
   && !settingsLoading.value)
+const administrators = ref<Record<string, any>[]>([])
+const adminsLoading = ref(false)
 
 const tenantFields: FieldDef[] = [
   { key: 'tenantName', label: '租户名称', required: true },
@@ -172,7 +198,50 @@ async function saveTenantSettings() {
 
 watch(() => selectedTenantId.value, tenantId => {
   void loadTenantSettings(tenantId)
+  if (tenantId) void loadAdministrators()
 }, { immediate: true })
+
+async function loadAdministrators() {
+  const tenantId = selectedTenantId.value
+  if (!tenantId) return
+  adminsLoading.value = true
+  try {
+    const response = await tenancyApi.listTenantAdministrators(tenantId)
+    administrators.value = (response as any)?.data?.content ?? []
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '管理员列表加载失败')
+  } finally {
+    adminsLoading.value = false
+  }
+}
+
+async function resetAdministratorPassword(row: Record<string, any>) {
+  const tenantId = selectedTenantId.value
+  if (!tenantId) return
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新密码（至少 6 位）', {
+      title: '重置管理员密码',
+      inputType: 'password', inputPattern: /^.{6,72}$/, inputErrorMessage: '密码长度须为 6 至 72 位'
+    })
+    await tenancyApi.resetTenantAdministratorPassword(tenantId, Number(row.id), value)
+    ElMessage.success('密码已重置，原有会话已失效')
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error?.response?.data?.message || '密码重置失败')
+  }
+}
+
+async function toggleAdministrator(row: Record<string, any>) {
+  const tenantId = selectedTenantId.value
+  if (!tenantId) return
+  const status = row.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'
+  try {
+    await tenancyApi.changeTenantAdministratorStatus(tenantId, Number(row.id), status)
+    row.status = status
+    ElMessage.success(status === 'ACTIVE' ? '账号已启用' : '账号已停用')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '账号状态更新失败')
+  }
+}
 
 async function createTenant(p: Record<string, string>) {
   if (!isTenantCreateFormValid(p)) {

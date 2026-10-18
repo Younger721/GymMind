@@ -55,6 +55,7 @@ public class DefaultMembershipChangeRequestService implements MembershipChangeRe
     @Override
     @Transactional
     public MembershipChangeRequestView create(CurrentActor actor, CreateMembershipChangeCommand command) {
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         requireRequestPermission(actor);
         if (command == null || command.type() == null || command.membershipId() == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
@@ -129,6 +130,7 @@ public class DefaultMembershipChangeRequestService implements MembershipChangeRe
     @Override
     @Transactional
     public MembershipChangeRequestView cancel(CurrentActor actor, Long id) {
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         requireCancelPermission(actor);
         Long tenantId = ActorAccess.requireTenantId(actor);
         MembershipChangeRequest request = loadRequest(tenantId, id);

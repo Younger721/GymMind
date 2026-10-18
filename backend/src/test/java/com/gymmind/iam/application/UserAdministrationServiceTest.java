@@ -83,24 +83,23 @@ class UserAdministrationServiceTest {
     }
 
     @Test
-    void platformAdminCanCreateGymAdminInSelectedTenant() {
+    void platformAdminCannotCreateTenantUserThroughGenericUserAdministration() {
         TenantContextHolder.set(10L);
-        UserAccount saved = UserAccount.tenantUser(10L, "admin@example.com", "gym-admin",
-                "$2a$10$hash", "Gym Admin", RoleCode.GYM_ADMIN);
-        ReflectionTestUtils.setField(saved, "id", 22L);
-        Role gymAdmin = role(2L, RoleCode.GYM_ADMIN);
-        when(users.findByNormalizedEmail(any())).thenReturn(Optional.empty());
-        when(users.findByNormalizedUsername(any())).thenReturn(Optional.empty());
-        when(users.save(any())).thenReturn(saved);
-        when(roles.findByCode(RoleCode.GYM_ADMIN)).thenReturn(Optional.of(gymAdmin));
-
-        UserAdministrationService.UserView result = service.create(platformAdmin(),
+        assertThatThrownBy(() -> service.create(platformAdmin(),
                 new CreateUserCommand("gym-admin", "admin@example.com", "password123", "Gym Admin",
-                        RoleCode.GYM_ADMIN));
+                        RoleCode.GYM_ADMIN)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        verify(users, never()).save(any());
+    }
 
-        assertThat(result.tenantId()).isEqualTo(10L);
-        assertThat(result.roles()).containsExactly(RoleCode.GYM_ADMIN);
-        verify(userRoles).save(any());
+    @Test
+    void platformAdminCannotReplaceTenantRolesThroughGenericUserAdministration() {
+        TenantContextHolder.set(10L);
+        assertThatThrownBy(() -> service.replaceRoles(platformAdmin(), 21L, Set.of(RoleCode.COACH)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        verify(users, never()).findByTenantIdAndId(any(), any());
     }
 
     @Test
@@ -161,7 +160,7 @@ class UserAdministrationServiceTest {
     }
 
     @Test
-    void platformAdminCanDisableGymAdminInSelectedTenant() {
+    void platformAdminCannotChangeStatusThroughGenericUserAdministration() {
         TenantContextHolder.set(10L);
         UserAccount gymAdmin = UserAccount.tenantUser(10L, "gymadmin@example.com", "hash", "Admin", RoleCode.GYM_ADMIN);
         ReflectionTestUtils.setField(gymAdmin, "id", 21L);
@@ -169,10 +168,10 @@ class UserAdministrationServiceTest {
         when(userRoles.findRoleCodesByUserId(21L)).thenReturn(Set.of(RoleCode.GYM_ADMIN));
         when(users.save(gymAdmin)).thenReturn(gymAdmin);
 
-        service.changeStatus(platformAdmin(), 21L, UserStatus.DISABLED);
-
-        assertThat(gymAdmin.getStatus()).isEqualTo(UserStatus.DISABLED);
-        verify(users).save(gymAdmin);
+        assertThatThrownBy(() -> service.changeStatus(platformAdmin(), 21L, UserStatus.DISABLED))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        verify(users, never()).save(any());
     }
 
     @Test
@@ -196,14 +195,14 @@ class UserAdministrationServiceTest {
     @Test
     void platformAdminListsTheSelectedTenantUsers() {
         TenantContextHolder.set(10L);
-        when(users.findAllByTenantId(10L, PageRequest.of(0, 20)))
+        when(users.findAllByTenantIdAndRoleCode(10L, RoleCode.GYM_ADMIN, PageRequest.of(0, 20)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         PageResponse<UserAdministrationService.UserSummary> page =
                 service.list(platformAdmin(), PageRequest.of(0, 20));
 
         assertThat(page.totalElements()).isZero();
-        verify(users).findAllByTenantId(10L, PageRequest.of(0, 20));
+        verify(users).findAllByTenantIdAndRoleCode(10L, RoleCode.GYM_ADMIN, PageRequest.of(0, 20));
         verify(users, never()).findByTenantIdOrTenantIdIsNullOrderByIdAsc(any(), any());
     }
 

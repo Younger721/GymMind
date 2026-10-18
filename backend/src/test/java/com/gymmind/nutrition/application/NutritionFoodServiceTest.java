@@ -35,14 +35,14 @@ class NutritionFoodServiceTest {
     }
 
     @Test
-    void platformAdminCreatesFoodInsideSelectedTenant() {
+    void platformAdminCannotCreateFoodInsideSelectedTenant() {
         NutritionFoodRepository foods = mock(NutritionFoodRepository.class);
-        when(foods.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         TenantContextHolder.set(11L);
         try {
-            NutritionFoodView view = new DefaultNutritionFoodService(foods, mock(AuditRecorder.class)).create(platform(),
-                    new CreateNutritionFoodCommand(null, "Oats", 389, 16.9, 66.3, 6.9, "100g"));
-            assertThat(view.tenantId()).isEqualTo(11L);
+            assertThatThrownBy(() -> new DefaultNutritionFoodService(foods, mock(AuditRecorder.class)).create(platform(),
+                    new CreateNutritionFoodCommand(null, "Oats", 389, 16.9, 66.3, 6.9, "100g")))
+                    .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+            verify(foods, never()).save(any());
         } finally {
             TenantContextHolder.clear();
         }

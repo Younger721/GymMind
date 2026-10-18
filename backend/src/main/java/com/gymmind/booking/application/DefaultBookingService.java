@@ -131,6 +131,7 @@ public class DefaultBookingService implements BookingService {
     @Transactional
     public BookingView cancel(CurrentActor actor, Long bookingId) {
         requireAuthenticated(actor);
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long tenantId = ActorAccess.requireTenantId(actor);
         Booking booking = bookings.findByTenantIdAndId(tenantId, bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
@@ -166,6 +167,7 @@ public class DefaultBookingService implements BookingService {
     @Override
     @Transactional
     public BookingView confirm(CurrentActor actor, Long bookingId) {
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (!ActorAccess.canManageTenant(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         Booking booking = bookings.findByTenantIdAndId(ActorAccess.tenantId(actor), bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
@@ -274,6 +276,7 @@ public class DefaultBookingService implements BookingService {
 
     private static void requireBook(CurrentActor actor, Long commandTenantId) {
         requireAuthenticated(actor);
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (!actor.roles().contains(RoleCode.MEMBER) && !ActorAccess.canManageTenant(actor)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }

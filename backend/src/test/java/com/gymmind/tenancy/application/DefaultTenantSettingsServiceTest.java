@@ -40,21 +40,20 @@ class DefaultTenantSettingsServiceTest {
     }
 
     @Test
-    void platformAdminReadsAndUpdatesOnlyTheSelectedTenantSettings() {
+    void platformAdminReadsSelectedTenantSettingsButCannotUpdateBusinessSettings() {
         TenantSettings current = TenantSettings.create(10L);
         when(settingsRepository.findByTenantId(10L)).thenReturn(Optional.of(current));
         when(settingsRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         TenantContextHolder.set(10L);
 
         var read = service.getCurrent(platformAdmin());
-        var updated = service.updateCurrent(platformAdmin(),
-                new UpdateTenantSettingsCommand(false, true, "Asia/Shanghai"));
 
         assertThat(read.tenantId()).isEqualTo(10L);
-        assertThat(updated.tenantId()).isEqualTo(10L);
-        assertThat(updated.reservationEnabled()).isFalse();
-        assertThat(updated.timezone()).isEqualTo("Asia/Shanghai");
-        verify(settingsRepository, times(2)).findByTenantId(10L);
+        assertThatThrownBy(() -> service.updateForPlatform(10L, platformAdmin(),
+                new UpdateTenantSettingsCommand(false, true, "Asia/Shanghai")))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        verify(settingsRepository, times(1)).findByTenantId(10L);
     }
 
     @Test
@@ -63,5 +62,19 @@ class DefaultTenantSettingsServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(ErrorCode.TENANT_CONTEXT_REQUIRED);
         verify(settingsRepository, never()).findByTenantId(any());
+    }
+
+    @Test
+    void platformReadOfMissingSettingsDoesNotPersistBusinessConfiguration() {
+        when(settingsRepository.findByTenantId(10L)).thenReturn(Optional.empty());
+
+        var read = service.getForPlatform(10L, platformAdmin());
+
+        assertThat(read.tenantId()).isEqualTo(10L);
+        assertThat(read.reservationEnabled()).isTrue();
+        assertThat(read.checkInEnabled()).isTrue();
+        assertThat(read.timezone()).isEqualTo("UTC");
+        verify(settingsRepository).findByTenantId(10L);
+        verify(settingsRepository, never()).save(any());
     }
 }

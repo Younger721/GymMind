@@ -98,7 +98,7 @@ public class DefaultExerciseService implements ExerciseService {
     }
 
     private static void requireCreate(CurrentActor actor) {
-        if (actor == null || ActorAccess.tenantId(actor) == null || !actor.hasPermission("exercise:write")
+        if (actor == null || ActorAccess.isSuperAdmin(actor) || ActorAccess.tenantId(actor) == null || !actor.hasPermission("exercise:write")
                 || (!ActorAccess.canManageTenant(actor) && !actor.roles().contains(RoleCode.COACH))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }

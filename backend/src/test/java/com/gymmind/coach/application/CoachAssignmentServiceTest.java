@@ -8,6 +8,7 @@ import com.gymmind.coach.domain.repository.CoachRepository;
 import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -90,6 +91,23 @@ class CoachAssignmentServiceTest {
         CoachAssignmentService service = new DefaultCoachAssignmentService(mock(CoachRepository.class), mock(CoachAssignmentRepository.class), mock(AuditRecorder.class));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.request(coachActor(11L, 31L), 3L))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void platformAdminCannotCancelTenantCoachRequest() {
+        CoachAssignmentRepository assignments = mock(CoachAssignmentRepository.class);
+        CoachAssignmentService service = new DefaultCoachAssignmentService(
+                mock(CoachRepository.class), assignments, mock(AuditRecorder.class));
+        CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "platform-token");
+        TenantContextHolder.set(11L);
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancel(platform, 9L))
+                    .isInstanceOf(BusinessException.class);
+            verify(assignments, never()).findByIdAndTenantId(anyLong(), anyLong());
+            verify(assignments, never()).save(any());
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 
     private static CurrentActor admin(long tenantId) { return new CurrentActor(1L, tenantId, Set.of(RoleCode.GYM_ADMIN), Set.of("coach:assign"), 0L, "token"); }

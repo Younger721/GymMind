@@ -73,16 +73,15 @@ class ExerciseServiceTest {
     }
 
     @Test
-    void platformAdminCreatesExerciseInsideSelectedTenant() {
+    void platformAdminCannotCreateExerciseInsideSelectedTenant() {
         ExerciseRepository exercises = mock(ExerciseRepository.class);
-        when(exercises.existsByTenantIdAndName(11L, "Barbell squat")).thenReturn(false);
-        when(exercises.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         TenantContextHolder.set(11L);
         try {
-            ExerciseView view = new DefaultExerciseService(exercises, mock(AuditRecorder.class)).create(platform(),
+            assertThatThrownBy(() -> new DefaultExerciseService(exercises, mock(AuditRecorder.class)).create(platform(),
                     new CreateExerciseCommand(null, "Barbell squat", "LEGS", "QUADRICEPS", "INTERMEDIATE",
-                            "BARBELL", "Squat down", "Brace core", "Knees track toes", "Stop if pain", "legs,squat"));
-            assertThat(view.tenantId()).isEqualTo(11L);
+                            "BARBELL", "Squat down", "Brace core", "Knees track toes", "Stop if pain", "legs,squat")))
+                    .isInstanceOf(com.gymmind.shared.error.BusinessException.class);
+            verify(exercises, never()).save(any());
         } finally {
             TenantContextHolder.clear();
         }

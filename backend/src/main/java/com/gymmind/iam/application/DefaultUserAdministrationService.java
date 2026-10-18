@@ -106,9 +106,10 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     @Override
     @Transactional
     public UserView create(CurrentActor actor, CreateUserCommand command) {
-        Long tenantId = ActorAccess.isSuperAdmin(actor)
-                ? commandTenant(actor, command == null ? null : command.tenantId())
-                : requireGymAdmin(actor, "user:write");
+        if (ActorAccess.isSuperAdmin(actor)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        Long tenantId = requireGymAdmin(actor, "user:write");
         Objects.requireNonNull(command, "command");
         RoleCode roleCode = requireTenantRole(actor, command.role());
         String email = UserAccount.normalizeEmail(command.email());
@@ -159,7 +160,7 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
             if (tenantId == null) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
-            Page<UserAccount> page = users.findAllByTenantId(tenantId, effective);
+            Page<UserAccount> page = users.findAllByTenantIdAndRoleCode(tenantId, RoleCode.GYM_ADMIN, effective);
             return new PageResponse<>(page.map(this::summary).getContent(), page.getNumber(), page.getSize(),
                     page.getTotalElements(), page.getTotalPages());
         }
@@ -173,6 +174,7 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     @Override
     @Transactional
     public void changeStatus(CurrentActor actor, Long userId, UserStatus status) {
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long tenantId = requireGymAdmin(actor, "user:write");
         if (status == null || userId == null || userId <= 0) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
@@ -190,6 +192,7 @@ public class DefaultUserAdministrationService implements UserAdministrationServi
     @Override
     @Transactional
     public void replaceRoles(CurrentActor actor, Long userId, Set<RoleCode> roleCodes) {
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long tenantId = requireGymAdmin(actor, "role:assign");
         boolean superAdmin = ActorAccess.isSuperAdmin(actor);
         if (userId == null || userId <= 0 || roleCodes == null || roleCodes.isEmpty()

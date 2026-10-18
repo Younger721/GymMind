@@ -49,31 +49,19 @@ public class DefaultTenantSettingsService implements TenantSettingsService {
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public TenantSettingsView getForPlatform(Long tenantId, CurrentActor actor) {
         requirePlatform(actor, "platform:tenant:read");
         Long id = requireTenantId(tenantId);
         TenantSettings settings = settingsRepository.findByTenantId(id)
-                .orElseGet(() -> settingsRepository.save(TenantSettings.create(id)));
+                .orElseGet(() -> TenantSettings.create(id));
         return TenantSettingsView.from(settings);
     }
 
     @Override
     @Transactional
     public TenantSettingsView updateForPlatform(Long tenantId, CurrentActor actor, UpdateTenantSettingsCommand command) {
-        requirePlatform(actor, "platform:tenant:write");
-        Objects.requireNonNull(command, "command");
-        if (command.reservationEnabled() == null || command.checkInEnabled() == null
-                || command.timezone() == null || command.timezone().isBlank()) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
-        }
-        Long id = requireTenantId(tenantId);
-        TenantSettings settings = settingsRepository.findByTenantId(id)
-                .orElseGet(() -> TenantSettings.create(id));
-        settings.setReservationEnabled(command.reservationEnabled());
-        settings.setCheckInEnabled(command.checkInEnabled());
-        settings.setTimezone(command.timezone());
-        return TenantSettingsView.from(settingsRepository.save(settings));
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     private static void requirePlatform(CurrentActor actor, String permission) {

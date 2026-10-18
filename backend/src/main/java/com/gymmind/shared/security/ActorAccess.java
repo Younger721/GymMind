@@ -47,6 +47,9 @@ public final class ActorAccess {
         }
         if (isSuperAdmin(actor)) {
             requireTenantId(actor);
+            if (!permission.endsWith(":read")) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
             return;
         }
         if (actor.tenantId() == null
@@ -67,10 +70,7 @@ public final class ActorAccess {
         if (actor == null) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (isSuperAdmin(actor)) {
-            requireTenantId(actor);
-            return;
-        }
+        if (isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (actor.tenantId() == null
                 || !actor.roles().contains(RoleCode.GYM_ADMIN)
                 || permission == null

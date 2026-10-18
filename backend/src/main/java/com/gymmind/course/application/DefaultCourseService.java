@@ -207,6 +207,7 @@ public class DefaultCourseService implements CourseService {
     }
 
     private void ensureCanManage(CurrentActor actor, Course course) {
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         if (ActorAccess.canManageTenant(actor)) return;
         if (!actor.roles().contains(RoleCode.COACH)
                 || coaches.findByTenantIdAndUserId(course.getTenantId(), actor.userId())

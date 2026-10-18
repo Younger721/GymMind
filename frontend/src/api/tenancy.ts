@@ -21,6 +21,15 @@ export const tenancyApi = {
   disableTenant(id: number) {
     return apiClient.patch(`/v1/platform/tenants/${id}/disable`)
   },
+  listTenantAdministrators(tenantId: number, page = 0, size = 20) {
+    return apiClient.get<any, ApiResponse<PageResponse<any>>>(`/v1/platform/tenants/${tenantId}/administrators`, { params: { page, size } })
+  },
+  resetTenantAdministratorPassword(tenantId: number, userId: number, password: string) {
+    return apiClient.put(`/v1/platform/tenants/${tenantId}/administrators/${userId}/password`, { password })
+  },
+  changeTenantAdministratorStatus(tenantId: number, userId: number, status: 'ACTIVE' | 'DISABLED') {
+    return apiClient.patch(`/v1/platform/tenants/${tenantId}/administrators/${userId}/status`, { status })
+  },
   getTenantSettings(tenantId: number) {
     return apiClient.get<any, ApiResponse<unknown>>(`/v1/platform/tenants/${tenantId}/settings`)
   },

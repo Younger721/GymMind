@@ -72,6 +72,7 @@ public class DefaultCoachAssignmentService implements CoachAssignmentService {
     @Override @Transactional public void cancel(CurrentActor actor, Long relationId) { transition(actor, relationId, CoachAssignmentStatus.PENDING, false, true); }
     @Override @Transactional public void end(CurrentActor actor, Long relationId) { transition(actor, relationId, CoachAssignmentStatus.ACTIVE, false, true); }
     private void transition(CurrentActor actor, Long relationId, CoachAssignmentStatus expected, boolean accept, boolean memberOrEnd) {
+        if (ActorAccess.isSuperAdmin(actor)) throw new BusinessException(ErrorCode.FORBIDDEN);
         Long tenantId = ActorAccess.tenantId(actor); if (tenantId == null || relationId == null) throw new BusinessException(ErrorCode.FORBIDDEN);
         CoachAssignment relation = assignments.findByIdAndTenantId(relationId, tenantId).orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         boolean coachOwner = actor.roles().contains(RoleCode.COACH) && coaches.findByTenantIdAndUserId(tenantId, actor.userId()).map(c -> Objects.equals(c.getId(), relation.getCoachId())).orElse(false);

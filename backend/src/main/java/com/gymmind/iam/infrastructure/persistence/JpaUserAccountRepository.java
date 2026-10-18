@@ -1,6 +1,8 @@
 package com.gymmind.iam.infrastructure.persistence;
 
 import com.gymmind.iam.domain.model.UserAccount;
+import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.iam.domain.model.RoleStatus;
 import com.gymmind.iam.domain.repository.UserAccountRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +19,9 @@ class JpaUserAccountRepository implements UserAccountRepository {
     public Optional<UserAccount> findByNormalizedUsername(String username) { return delegate.findByNormalizedUsername(username); }
     public Optional<UserAccount> findByTenantIdAndId(Long tenantId, Long id) { return delegate.findByTenantIdAndId(tenantId, id); }
     public Page<UserAccount> findAllByTenantId(Long tenantId, Pageable pageable) { return delegate.findAllByTenantId(tenantId, pageable); }
+    public Page<UserAccount> findAllByTenantIdAndRoleCode(Long tenantId, RoleCode roleCode, Pageable pageable) {
+        return delegate.findAllByTenantIdAndRoleCode(tenantId, roleCode, RoleStatus.ACTIVE, pageable);
+    }
     public long countByTenantId(Long tenantId) { return delegate.countByTenantId(tenantId); }
     public Page<UserAccount> findAll(Pageable pageable) { return delegate.findAll(pageable); }
     public Page<UserAccount> findByTenantIdOrTenantIdIsNullOrderByIdAsc(Long tenantId, Pageable pageable) {
