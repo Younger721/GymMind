@@ -274,10 +274,9 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
     }
 
     private void write(CurrentActor actor) {
-        if (actor == null) {
+        if (actor == null || ActorAccess.isSuperAdmin(actor)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        if (ActorAccess.isSuperAdmin(actor)) return;
         ActorAccess.requireTenantId(actor);
         if (!actor.roles().contains(RoleCode.GYM_ADMIN)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);

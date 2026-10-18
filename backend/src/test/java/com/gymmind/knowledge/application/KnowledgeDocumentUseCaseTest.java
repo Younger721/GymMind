@@ -146,15 +146,51 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
-    void platformAdminCanManageTenantDocumentWithoutTenantContext() {
+    void platformAdminListsOnlyContextTenantAndPlatformDocuments() {
+        useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
+        useCase.upload(otherTenant, new UploadKnowledgeDocumentCommand("other.md", "text/markdown", "# other".getBytes(), DocumentVisibility.TENANT));
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
+        useCase.upload(platformAdmin, new UploadKnowledgeDocumentCommand("platform.md", "text/markdown", "# platform".getBytes(), DocumentVisibility.TENANT));
+
+        TenantContextHolder.set(7L);
+        try {
+            assertThat(useCase.list(platformAdmin))
+                    .extracting(KnowledgeDocumentView::fileName)
+                    .containsExactlyInAnyOrder("guide.md", "platform.md");
+        } finally {
+            TenantContextHolder.clear();
+        }
+    }
+
+    @Test
+    void platformAdminCannotModifyTenantDocument() {
         var document = useCase.upload(admin,
                 new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
         var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
 
-        assertThat(useCase.update(platformAdmin, document.id(),
-                new UpdateKnowledgeDocumentCommand(DocumentVisibility.TENANT)).id()).isEqualTo(document.id());
-        assertThat(useCase.publish(platformAdmin, document.id(), false).published()).isFalse();
-        assertThat(useCase.delete(platformAdmin, document.id()).status()).isEqualTo(DocumentStatus.DELETED);
+        assertThatThrownBy(() -> useCase.update(platformAdmin, document.id(),
+                new UpdateKnowledgeDocumentCommand(DocumentVisibility.TENANT)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        assertThatThrownBy(() -> useCase.publish(platformAdmin, document.id(), false))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        assertThatThrownBy(() -> useCase.delete(platformAdmin, document.id()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void platformAdminCannotReplaceTenantDocumentContent() {
+        KnowledgeDocumentView document = useCase.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.docx",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "docx".getBytes(), DocumentVisibility.TENANT));
+        var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
+
+        assertThatThrownBy(() -> useCase.replaceBinaryContent(platformAdmin, document.id(), "changed".getBytes()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
     }
 
     @Test
