@@ -3,6 +3,8 @@ package com.gymmind.membership.application;
 import com.gymmind.audit.application.AuditRecorder;
 import com.gymmind.audit.domain.AuditEvent;
 import com.gymmind.audit.domain.AuditResult;
+import com.gymmind.membership.domain.model.Order;
+import com.gymmind.membership.domain.model.OrderStatus;
 import com.gymmind.membership.domain.model.PaymentRecord;
 import com.gymmind.membership.domain.repository.OrderRepository;
 import com.gymmind.membership.domain.repository.PaymentRecordRepository;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.Locale;
 
 @Service
 public class DefaultPaymentRecordService {
@@ -36,15 +39,44 @@ public class DefaultPaymentRecordService {
         if (command == null || command.tenantId() != null && !tenantId.equals(command.tenantId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return payments.findByTenantIdAndReference(tenantId, command.reference())
-                .map(PaymentRecordView::from)
-                .orElseGet(() -> {
-                    PaymentRecord payment = payments.save(PaymentRecord.create(
-                            tenantId, command.orderId(), command.amount(), command.currency(),
-                            command.reference(), command.paymentMethod()));
-                    audit.record(new AuditEvent("PAYMENT_RECORDED", "PAYMENT", payment.getId(),
-                            AuditResult.SUCCESS, "payment-service", Map.of()));
-                    return PaymentRecordView.from(payment);
-                });
+        PaymentRecord existing = payments.findByTenantIdAndReference(tenantId, command.reference())
+                .orElse(null);
+        if (existing != null) {
+            if (!matches(existing, command)) {
+                throw new BusinessException(ErrorCode.CONFLICT);
+            }
+            return PaymentRecordView.from(existing);
+        }
+
+        Order order = orders.findByTenantIdAndId(tenantId, command.orderId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (command.amount() == null || command.amount().compareTo(order.getTotal()) != 0
+                || !normalizeCurrency(command.currency()).equals(order.getCurrency())) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+        if (order.getStatus() != OrderStatus.PLACED) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+
+        order.markPaid();
+        orders.save(order);
+        PaymentRecord payment = payments.save(PaymentRecord.create(
+                tenantId, command.orderId(), command.amount(), command.currency(),
+                command.reference(), command.paymentMethod()));
+        audit.record(new AuditEvent("PAYMENT_RECORDED", "PAYMENT", payment.getId(),
+                AuditResult.SUCCESS, "payment-service", Map.of()));
+        return PaymentRecordView.from(payment);
+    }
+
+    private static boolean matches(PaymentRecord existing, RecordOfflinePaymentCommand command) {
+        return existing.getOrderId().equals(command.orderId())
+                && command.amount() != null
+                && existing.getAmount().compareTo(command.amount()) == 0
+                && existing.getCurrency().equals(normalizeCurrency(command.currency()))
+                && existing.getPaymentMethod().equals(command.paymentMethod());
+    }
+
+    private static String normalizeCurrency(String currency) {
+        return currency == null ? "" : currency.trim().toUpperCase(Locale.ROOT);
     }
 }
