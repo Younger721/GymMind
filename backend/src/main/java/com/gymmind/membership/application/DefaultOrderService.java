@@ -37,7 +37,9 @@ public class DefaultOrderService {
         }
         members.findByTenantIdAndId(tenantId, command.memberId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
-        Order order = orders.save(Order.create(tenantId, command.memberId(), command.total(), command.currency()));
+        Order order = Order.create(tenantId, command.memberId(), command.total(), command.currency());
+        order.place();
+        order = orders.save(order);
         audit.record(new AuditEvent("ORDER_CREATED", "ORDER", order.getId(),
                 AuditResult.SUCCESS, "order-service", Map.of()));
         return OrderView.from(order);
