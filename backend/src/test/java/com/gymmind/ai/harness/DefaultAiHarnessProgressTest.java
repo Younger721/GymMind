@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doAnswer;
 import org.mockito.ArgumentCaptor;
 
 class DefaultAiHarnessProgressTest {
@@ -99,9 +100,41 @@ class DefaultAiHarnessProgressTest {
                 ignored -> { }, events::add);
 
         assertThat(events).extracting(AiProgressEvent::stage)
-                .containsExactly("plugin_start", "plugin_complete");
-        assertThat(events.get(0).status()).isEqualTo(AiProgressEvent.Status.STARTED);
-        assertThat(events.get(1).status()).isEqualTo(AiProgressEvent.Status.COMPLETED);
+                .containsSubsequence("plugin_start", "plugin_complete", "answer_generation");
+        assertThat(events).filteredOn(event -> "knowledge_search".equals(event.pluginId()))
+                .extracting(AiProgressEvent::status)
+                .containsExactly(AiProgressEvent.Status.STARTED, AiProgressEvent.Status.COMPLETED);
+    }
+
+    @Test
+    void reportsAnswerGenerationUntilModelFinishesStreaming() {
+        var tenants = mock(TenantHarnessConfigRepository.class);
+        when(tenants.findByTenantId(7L)).thenReturn(Optional.of(TenantHarnessConfig.defaults(
+                7L, "basic_chat", "助手")));
+        var model = mock(ChatModelGateway.class);
+        var events = new ArrayList<AiProgressEvent>();
+        var service = new DefaultAiHarnessService(
+                new AiHarnessPluginRegistry(List.of()), tenants,
+                mock(com.gymmind.ai.harness.domain.PlatformHarnessConfigRepository.class),
+                new AiHarnessProperties(), model, null, null);
+        doAnswer(invocation -> {
+            assertThat(events).anySatisfy(event -> {
+                assertThat(event.pluginId()).isEqualTo("answer_generator");
+                assertThat(event.status()).isEqualTo(AiProgressEvent.Status.STARTED);
+            });
+            invocation.<java.util.function.Consumer<String>>getArgument(2).accept("回答");
+            return com.gymmind.ai.application.ChatModelCallResult.unavailable("回答", 10, "OK");
+        }).when(model).streamWithUsage(org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.any());
+
+        service.chat(new CurrentActor(1L, 7L, Set.of(RoleCode.GYM_ADMIN), Set.of("ai:chat"), 0, "t"),
+                "session", "问题", List.of("basic_chat"), List.of(), ignored -> { }, events::add);
+
+        assertThat(events).extracting(AiProgressEvent::stage)
+                .contains("answer_generation");
+        assertThat(events).filteredOn(event -> "answer_generator".equals(event.pluginId()))
+                .extracting(AiProgressEvent::status)
+                .containsExactly(AiProgressEvent.Status.STARTED, AiProgressEvent.Status.COMPLETED);
     }
 
     @Test

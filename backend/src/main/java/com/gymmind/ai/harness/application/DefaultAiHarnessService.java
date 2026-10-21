@@ -343,6 +343,8 @@ public class DefaultAiHarnessService implements AiHarnessService {
             }
         }
         com.gymmind.ai.application.ChatModelCallResult call;
+        progress.accept(new AiProgressEvent("answer_generator", "answer_generation", AiProgressEvent.Status.STARTED,
+                "\u6b63\u5728\u751f\u6210\u56de\u7b54", null));
         if (authoritativeAnswer != null) {
             String directAnswer = emitAnswer(authoritativeAnswer, onToken);
             call = com.gymmind.ai.application.ChatModelCallResult.unavailable(directAnswer,
@@ -359,6 +361,8 @@ public class DefaultAiHarnessService implements AiHarnessService {
             }
         }
         if (call == null || !"OK".equalsIgnoreCase(call.status())) {
+            progress.accept(new AiProgressEvent("answer_generator", "answer_generation", AiProgressEvent.Status.FAILED,
+                    "\u56de\u7b54\u751f\u6210\u5931\u8d25", null));
             if (call != null) {
                 recordUsage(actor, call, "harness");
             } else {
@@ -368,9 +372,13 @@ public class DefaultAiHarnessService implements AiHarnessService {
         }
         String answer = call.content();
         if (answer == null || answer.isBlank()) {
+            progress.accept(new AiProgressEvent("answer_generator", "answer_generation", AiProgressEvent.Status.FAILED,
+                    "\u56de\u7b54\u751f\u6210\u5931\u8d25", null));
             recordUsage(actor, started, "EMPTY_RESPONSE");
             throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE);
         }
+        progress.accept(new AiProgressEvent("answer_generator", "answer_generation", AiProgressEvent.Status.COMPLETED,
+                "\u56de\u7b54\u751f\u6210\u5b8c\u6210", null));
         if (chatHistory != null) {
             chatHistory.append(actor, sessionId, AiChatMessageRole.ASSISTANT, answer);
         }
