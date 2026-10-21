@@ -521,15 +521,15 @@ onMounted(async () => {
 .process-header-state { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-dim); }
 .process-toggle { color:var(--text-muted); white-space:nowrap; }
 .process-graph-viewport { max-width:100%; max-height:clamp(360px, 62vh, 680px); overflow-x:hidden; overflow-y:auto; border-top:1px solid var(--border); scrollbar-color:var(--border-strong) transparent; }
-.process-graph-surface { width:100%; min-height:100%; padding:22px 16px; background-color:var(--surface-muted); background-image:radial-gradient(rgba(148,163,184,.2) 1px, transparent 1px); background-size:16px 16px; }
+.process-graph-surface { width:100%; min-height:100%; padding:22px 16px; background-color:#0c121c; background-image:radial-gradient(rgba(135,153,179,.14) 1px, transparent 1px); background-size:18px 18px; }
 .process-graph { display:flex; width:100%; flex-direction:column; align-items:center; gap:0; }
-.process-node { width:min(100%, 420px); min-height:118px; overflow:hidden; border:1px solid var(--border-strong); border-radius:7px; background:#f8fafc; color:#1e293b; box-shadow:0 5px 14px rgba(0,0,0,.18); animation:process-node-enter .34s cubic-bezier(.2,.75,.25,1) both; transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease; }
+.process-node { width:min(100%, 420px); min-height:118px; overflow:hidden; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc; color:#1e293b; box-shadow:0 8px 22px rgba(0,0,0,.32); animation:process-node-enter .4s cubic-bezier(.22,1,.36,1) both; transition:border-color .38s ease, box-shadow .38s ease, transform .38s cubic-bezier(.22,1,.36,1), background-color .38s ease; }
 @keyframes process-node-enter { from { opacity:0; transform:translateY(8px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
 .process-node-main { display:flex; width:100%; min-height:116px; flex-direction:column; align-items:flex-start; gap:10px; padding:12px; border:0; background:transparent; color:inherit; text-align:left; }
 .process-node-action { cursor:pointer; }
 .process-node-action:hover { background:var(--surface-hover); }
 .process-node-topline { display:flex; width:100%; align-items:center; gap:7px; }
-.process-node-message { display:-webkit-box; width:100%; overflow:hidden; color:var(--text); font-size:12px; font-weight:650; line-height:1.45; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+.process-node-message { display:-webkit-box; width:100%; overflow:hidden; color:#172235; font-size:12px; font-weight:650; line-height:1.45; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
 .process-graph-edge { display:block; flex:none; width:22px; height:38px; overflow:visible; }
 .process-edge-base, .process-edge-flow { fill:none; stroke-linecap:round; vector-effect:non-scaling-stroke; }
 .process-edge-base { stroke:var(--border-strong); stroke-width:1.6px; stroke-dasharray:100; stroke-dashoffset:100; transition:stroke-dashoffset .7s cubic-bezier(.4,0,.2,1), stroke .4s; }
@@ -538,12 +538,12 @@ onMounted(async () => {
 .process-edge-flow { stroke:#7dd3fc; stroke-width:2.4px; stroke-dasharray:3 11; animation:process-edge-flow 1.1s linear infinite; }
 @keyframes process-edge-flow { to { stroke-dashoffset:-28px; } }
 .process-step-icon { display:inline-grid; place-items:center; width:16px; height:16px; border-radius:50%; background:var(--surface-hover); color:var(--text-muted); font-size:11px; font-weight:700; transition:background-color .18s ease, color .18s ease, box-shadow .18s ease; }
-.process-step-count, .process-step-status { color:var(--text-dim); white-space:nowrap; }
-.process-node.process-started { border-color:#38bdf8; box-shadow:0 5px 14px rgba(56,189,248,.1); }
-.process-node.process-started, .process-node.process-running { border-color:#38bdf8; background:#0b3b68; color:#e0f2fe; box-shadow:0 0 0 2px rgba(56,189,248,.14), 0 6px 18px rgba(56,189,248,.16); }
+.process-step-count, .process-step-status { color:#64748b; white-space:nowrap; }
+.process-node.process-started, .process-node.process-running { border-color:#65a9ff; background:#112744; color:#eaf3ff; box-shadow:0 0 0 1px rgba(101,169,255,.34), 0 12px 34px rgba(50,120,220,.2); }
 .process-node.process-running .process-node-message, .process-node.process-started .process-node-message { color:#e0f2fe; }
-.process-node.process-running .process-step-icon, .process-node.process-started .process-step-icon { background:rgba(56,189,248,.14); color:#38bdf8; }
-.process-node.process-completed { border-color:#93c5fd; background:#dbeafe; color:#1e293b; }
+.process-node.process-running .process-step-icon, .process-node.process-started .process-step-icon { background:rgba(101,169,255,.16); color:#8cc2ff; }
+.process-node.process-running .process-step-status, .process-node.process-started .process-step-status { color:#9ac7ff; }
+.process-node.process-completed { border-color:rgba(101,169,255,.52); background:#dbeafe; color:#1e293b; box-shadow:0 0 0 1px rgba(101,169,255,.12), 0 8px 24px rgba(0,0,0,.22); }
 .process-node.process-completed .process-node-message { color:#1e293b; }
 .process-node.process-completed .process-step-icon { background:var(--primary-soft); color:var(--primary); }
 .process-node.process-failed { border-color:var(--danger); }
