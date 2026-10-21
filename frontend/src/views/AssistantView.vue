@@ -18,10 +18,6 @@
       <div class="plugin-bar">
         <div class="assistant-avatar">AI</div>
         <div class="assistant-meta"><strong>{{ assistantName }}</strong><span>{{ capabilityHint }}</span></div>
-        <div class="plugin-bar-actions">
-          <router-link v-if="canConfigure" :to="configLink" class="config-link">AI 配置</router-link>
-          <div class="status-pill"><span class="status-dot"></span>助手在线</div>
-        </div>
       </div>
 
       <div ref="boxRef" class="messages">
@@ -118,9 +114,7 @@ import { harnessApi, type HarnessConfigView, type HarnessPluginDescriptor, type 
 import { aiChatHistoryApi, type ChatSession } from '@/api/aiChatHistory'
 import { marked } from 'marked'
 import { useAuthStore } from '@/stores/auth'
-import { hasPermission } from '@/utils/permissions'
-import { MENU_CODES } from '@/utils/menuPermissions'
-import { mergeExecutionHistory, projectExecutionGraph, upsertExecutionStep } from '@/utils/aiExecutionGraph'
+import { executionStepId, mergeExecutionHistory, projectExecutionGraph, upsertExecutionStep } from '@/utils/aiExecutionGraph'
 interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean; processStepExpanded?: Record<string, boolean>; failed?: boolean }
 
 const authStore = useAuthStore()
@@ -145,10 +139,6 @@ const sessionStorageKey = computed(() => authStore.isPlatformAdmin
   : `gymmind-ai-chat:${authStore.tenantId ?? 'none'}:${authStore.userId ?? 'anonymous'}`)
 const sessionId = ref(localStorage.getItem(sessionStorageKey.value + ':session') || `web-${Date.now()}`)
 
-const canConfigure = computed(() => authStore.roles.includes('GYM_ADMIN')
-  && !authStore.isPlatformAdmin
-  && hasPermission(MENU_CODES.AI_CONFIG))
-const configLink = '/agents/manage'
 const platformSamples = [
   '全平台本月 AI 调用了多少次？',
   '有多少租户启用了 AI？',
@@ -383,7 +373,7 @@ const processStatusLabel = (status: HarnessProgressEvent['status']) => ({
 const processStatusIcon = (status: HarnessProgressEvent['status']) => ({
   STARTED: '○', RUNNING: '…', COMPLETED: '✓', FAILED: '!'
 }[status] || '·')
-const processStepKey = (step: HarnessProgressEvent) => `${step.pluginId}-${step.stage}`
+const processStepKey = (step: HarnessProgressEvent) => executionStepId(step)
 const isProcessStepExpanded = (message: UiMessage, step: HarnessProgressEvent) => Boolean(message.processStepExpanded?.[processStepKey(step)])
 const toggleProcessStep = (message: UiMessage, step: HarnessProgressEvent, event?: Event) => {
   if (!message.processStepExpanded) message.processStepExpanded = {}
@@ -398,7 +388,7 @@ const processSummary = (steps: HarnessProgressEvent[]) => {
   const current = [...steps].reverse().find(step => step.status === 'RUNNING')
   if (current) return current.message
   if (steps.some(step => step.status === 'FAILED')) return '执行失败'
-  if ([...steps].reverse().find(step => step.status === 'STARTED')) return '步骤已启动'
+  if (steps[steps.length - 1]?.status === 'STARTED') return '步骤已启动'
   return '已完成'
 }
 
@@ -466,8 +456,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.status-pill { display:flex; align-items:center; gap:7px; color:var(--primary); background:var(--primary-soft); border:1px solid rgba(34,197,94,.35); border-radius:999px; padding:7px 12px; font-size:12px; font-weight:600; flex:none; }
-.status-dot { width:7px; height:7px; border-radius:50%; background:var(--primary); box-shadow:0 0 8px var(--primary-glow); }
 .chat-layout { display:grid; grid-template-columns:220px minmax(0,1fr); gap:12px; align-items:stretch; }
 .history-panel { display:flex; flex-direction:column; height:calc(100vh - 132px); min-height:470px; padding:12px; overflow:hidden; }
 .history-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; font-size:13px; flex:none; }
@@ -483,8 +471,6 @@ onMounted(async () => {
 .assistant-avatar.small { width:26px; height:26px; border-radius:8px; font-size:10px; margin:5px 8px 0 0; }
 .assistant-meta { display:flex; flex-direction:column; gap:3px; font-size:13px; }
 .assistant-meta span { color:var(--text-muted); font-size:11px; }
-.plugin-bar-actions { margin-left: auto; display:flex; align-items:center; gap:12px; flex:none; }
-.config-link { font-size: 12px; }
 .messages { flex: 1; overflow-y: auto; padding: 28px clamp(18px,5vw,58px); background:linear-gradient(180deg,var(--bg-elevated) 0%,var(--surface-muted) 100%); }
 .empty { text-align: center; color: var(--text-muted); padding-top: clamp(20px,7vh,70px); max-width:720px; margin:auto; }
 .welcome-mark { width:52px; height:52px; display:grid; place-items:center; margin:0 auto 15px; border-radius:16px; color:#052e16; font-size:25px; background:linear-gradient(145deg,var(--primary),#16a34a); box-shadow:0 10px 28px var(--primary-glow); }
@@ -564,5 +550,5 @@ onMounted(async () => {
 .process-detail-excerpt { color:var(--text-muted); white-space:pre-wrap; overflow-wrap:anywhere; }
 .input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background:var(--surface-muted); }
 @media (max-width: 850px) { .chat-layout { grid-template-columns:1fr; } .history-panel { height:auto; max-height:220px; min-height:0; } .history-list { display:flex; gap:6px; overflow:auto; } .history-heading { flex-direction:column; align-items:flex-start; } .history-item { min-width:150px; width:auto; flex:none; } }
-@media (max-width: 700px) { .chat-box { height: calc(100vh - 150px); } .status-pill { padding:6px 9px; } .sample-grid { grid-template-columns:1fr; } }
+@media (max-width: 700px) { .chat-box { height: calc(100vh - 150px); } .sample-grid { grid-template-columns:1fr; } }
 </style>

@@ -16,11 +16,26 @@ test('updates a stage in place and marks the incoming edge to a running step', (
 
   assert.deepEqual(graph.nodes.map(node => node.message), ['检索完成', '正在查询'])
   assert.deepEqual(graph.edges, [{
-    id: 'knowledge_search:recall->gym_operations_metrics:tool_start',
+    id: 'knowledge_search:recall->gym_operations_metrics:tool_execution',
     source: 'knowledge_search:recall',
-    target: 'gym_operations_metrics:tool_start',
+    target: 'gym_operations_metrics:tool_execution',
     active: true
   }])
+})
+
+test('merges tool_start and tool_result into one completed query node', () => {
+  const steps = upsertExecutionStep([], {
+    pluginId: 'gym_operations_metrics', stage: 'tool_start', status: 'STARTED', message: '正在查询门店运营数据'
+  })
+  const updated = upsertExecutionStep(steps, {
+    pluginId: 'gym_operations_metrics', stage: 'tool_result', status: 'COMPLETED', message: '查询完成', resultCount: 1
+  })
+  const graph = projectExecutionGraph(updated)
+
+  assert.equal(graph.nodes.length, 1)
+  assert.equal(graph.nodes[0].status, 'COMPLETED')
+  assert.equal(graph.nodes[0].message, '查询完成')
+  assert.equal(graph.nodes[0].resultCount, 1)
 })
 
 test('does not animate edges after all steps have settled', () => {

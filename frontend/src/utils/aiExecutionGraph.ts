@@ -12,7 +12,10 @@ export interface ExecutionGraphEdge {
 }
 
 export function executionStepId(step: HarnessProgressEvent): string {
-  return `${step.pluginId}:${step.stage}`
+  const stageId = step.stage === 'tool_start' || step.stage === 'tool_result'
+    ? 'tool_execution'
+    : step.stage
+  return `${step.pluginId}:${stageId}`
 }
 
 export function upsertExecutionStep(steps: HarnessProgressEvent[], event: HarnessProgressEvent) {
