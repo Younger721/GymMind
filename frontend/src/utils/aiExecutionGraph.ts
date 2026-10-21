@@ -56,7 +56,7 @@ export function projectExecutionGraph(steps: HarnessProgressEvent[] = []) {
     id: `${nodes[index].id}->${target.id}`,
     source: nodes[index].id,
     target: target.id,
-    active: target.status === 'RUNNING'
+    active: target.status === 'STARTED' || target.status === 'RUNNING'
   }))
 
   return { nodes, edges }

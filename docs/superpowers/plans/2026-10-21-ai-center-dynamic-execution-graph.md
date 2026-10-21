@@ -29,7 +29,7 @@
 - `projectExecutionGraph(steps)` 维持现有返回类型；对每条边，目标节点状态为 `STARTED` 或 `RUNNING` 时 `active: true`，终态时 `active: false`。
 - `upsertExecutionStep` 继续用归一化后的 `executionStepId` 合并工具开始与结果事件。
 
-- [ ] **Step 1: 写开始态活动边测试**
+- [x] **Step 1: 写开始态活动边测试**
 
 ```js
 test('marks the incoming edge active while a tool has started but not finished', () => {
@@ -42,18 +42,18 @@ test('marks the incoming edge active while a tool has started but not finished',
 })
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 运行：`node --test frontend/tests/aiExecutionGraph.test.mjs`
 预期：新增断言失败，因为现有投影只把 `RUNNING` 作为活动状态。
 
-- [ ] **Step 3: 最小修改投影函数**
+- [x] **Step 3: 最小修改投影函数**
 
 ```ts
 active: target.status === 'STARTED' || target.status === 'RUNNING'
 ```
 
-- [ ] **Step 4: 重跑投影测试**
+- [x] **Step 4: 重跑投影测试**
 
 运行：`node --test frontend/tests/aiExecutionGraph.test.mjs`
 预期：全部通过；工具 `tool_start` / `tool_result` 仍只投影一个最终节点。
@@ -68,7 +68,7 @@ active: target.status === 'STARTED' || target.status === 'RUNNING'
 - 继续从 `projectExecutionGraph(msg.processSteps)` 读取图数据，详情键由 `executionStepId` 生成。
 - 不新增演示计时器；状态只由实际 SSE 回调更新。
 
-- [ ] **Step 1: 写视图动效契约测试**
+- [x] **Step 1: 写视图动效契约测试**
 
 在现有 AI 中心模板契约测试中增加以下断言：
 
@@ -78,12 +78,12 @@ assert.match(source, /process-edge-particle/)
 assert.match(source, /prefers-reduced-motion: reduce/)
 ```
 
-- [ ] **Step 2: 运行测试确认视觉契约失败**
+- [x] **Step 2: 运行测试确认视觉契约失败**
 
 运行：`node --test frontend/tests/aiExecutionGraph.test.mjs`
 预期：缺少 `process-node-enter` 与 `process-edge-particle` 时测试失败。
 
-- [ ] **Step 3: 更新流程图 CSS 动效**
+- [x] **Step 3: 更新流程图 CSS 动效**
 
 - 保留现有深色点阵背景，并提高微弱点阵在深色主题下的可见度。
 - 给新建 `.process-node` 添加短暂淡入和轻微缩放；保留节点尺寸，避免入场改变滚动宽度。
@@ -92,12 +92,12 @@ assert.match(source, /prefers-reduced-motion: reduce/)
 - 在 `@media (prefers-reduced-motion: reduce)` 下停用节点入场与光点动画，并立即呈现终态样式。
 - 不更改节点顺序、文案、服务端协议、权限逻辑或对话缓存格式。
 
-- [ ] **Step 4: 重跑定向测试**
+- [x] **Step 4: 重跑定向测试**
 
 运行：`node --test frontend/tests/aiExecutionGraph.test.mjs frontend/tests/sseStream.test.mjs`
 预期：所有流程图与 SSE 测试通过。
 
-- [ ] **Step 5: 构建前端资源并检查页面服务**
+- [x] **Step 5: 构建前端资源并检查页面服务（Vite 构建通过；HTTP 200；完整类型检查已知被知识库编辑器错误阻断）**
 
 运行：`npx vite build`（工作目录 `frontend`）。
 预期：Vite 构建成功。另运行 `Invoke-WebRequest http://127.0.0.1:5173/` 确认开发页可访问。
@@ -111,7 +111,7 @@ assert.match(source, /prefers-reduced-motion: reduce/)
 - Commit only: `frontend/tests/aiExecutionGraph.test.mjs`
 - Commit only: `docs/superpowers/plans/2026-10-21-ai-center-dynamic-execution-graph.md`
 
-- [ ] **Step 1: 检查本次指定文件差异**
+- [x] **Step 1: 检查本次指定文件差异**
 
 运行：`git diff --check` 和 `git diff -- frontend/src/utils/aiExecutionGraph.ts frontend/src/views/AssistantView.vue frontend/tests/aiExecutionGraph.test.mjs docs/superpowers/plans/2026-10-21-ai-center-dynamic-execution-graph.md`。
 确认没有修改后端、添加依赖或夹带其他对话改动。

@@ -47,6 +47,15 @@ test('does not animate edges after all steps have settled', () => {
   assert.equal(graph.edges[0].active, false)
 })
 
+test('marks the incoming edge active while a tool has started but not finished', () => {
+  const graph = projectExecutionGraph([
+    { pluginId: 'answer_router', stage: 'route_decision', status: 'COMPLETED', message: '路由完成' },
+    { pluginId: 'gym_operations_metrics', stage: 'tool_start', status: 'STARTED', message: '正在查询' }
+  ])
+
+  assert.equal(graph.edges[0].active, true)
+})
+
 test('merges graph state onto matching server history in order, including repeated messages', () => {
   const steps = [{ pluginId: 'knowledge_search', stage: 'plugin_complete', status: 'COMPLETED', message: '检索完成' }]
   const messages = mergeExecutionHistory(
@@ -67,6 +76,9 @@ test('AI center renders the graph while retaining SSE step details', () => {
   const source = fs.readFileSync(path.join(root, 'src/views/AssistantView.vue'), 'utf8')
 
   assert.match(source, /class="process-graph"/)
+  assert.match(source, /process-node-enter/)
+  assert.match(source, /process-edge-particle/)
+  assert.match(source, /prefers-reduced-motion: reduce/)
   assert.match(source, /projectExecutionGraph\(msg\.processSteps\)/)
   assert.match(source, /upsertExecutionStep\(message\.processSteps, progress\)/)
   assert.match(source, /const isNewStep = !message\.processSteps\.some/)
