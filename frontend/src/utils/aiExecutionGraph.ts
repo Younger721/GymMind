@@ -8,6 +8,7 @@ export interface ExecutionGraphEdge {
   id: string
   source: string
   target: string
+  reached: boolean
   active: boolean
 }
 
@@ -66,12 +67,18 @@ export function projectExecutionGraph(
 
     return { ...step, status, message, id: executionStepId(step) }
   })
-  const edges: ExecutionGraphEdge[] = nodes.slice(1).map((target, index) => ({
-    id: `${nodes[index].id}->${target.id}`,
-    source: nodes[index].id,
-    target: target.id,
-    active: isProcessing && (target.status === 'STARTED' || target.status === 'RUNNING')
-  }))
+  const edges: ExecutionGraphEdge[] = nodes.slice(1).map((target, index) => {
+    const source = nodes[index]
+    const active = isProcessing && (target.status === 'STARTED' || target.status === 'RUNNING')
+
+    return {
+      id: `${source.id}->${target.id}`,
+      source: source.id,
+      target: target.id,
+      reached: active || source.status === 'COMPLETED' || target.status === 'COMPLETED',
+      active
+    }
+  })
 
   return { nodes, edges }
 }

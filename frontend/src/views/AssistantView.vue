@@ -74,7 +74,10 @@
                             </div>
                           </div>
                         </div>
-                        <span v-if="graph.edges[nodeIndex]" class="process-graph-edge" :class="{ active: graph.edges[nodeIndex].active }" aria-hidden="true"></span>
+                        <svg v-if="graph.edges[nodeIndex]" class="process-graph-edge" :class="{ 'is-on': graph.edges[nodeIndex].reached, active: graph.edges[nodeIndex].active }" viewBox="0 0 18 34" preserveAspectRatio="none" aria-hidden="true">
+                          <path d="M9 0 C9 10 3 10 3 17 C3 24 15 24 9 34" pathLength="100" class="process-edge-base"></path>
+                          <path v-if="graph.edges[nodeIndex].active" d="M9 0 C9 10 3 10 3 17 C3 24 15 24 9 34" class="process-edge-flow"></path>
+                        </svg>
                       </template>
                     </template>
                   </div>
@@ -527,10 +530,13 @@ onMounted(async () => {
 .process-node-action:hover { background:var(--surface-hover); }
 .process-node-topline { display:flex; width:100%; align-items:center; gap:7px; }
 .process-node-message { display:-webkit-box; width:100%; overflow:hidden; color:var(--text); font-size:12px; font-weight:650; line-height:1.45; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
-.process-graph-edge { position:relative; flex:none; width:2px; height:34px; background:var(--border-strong); transition:background-color .2s ease, box-shadow .2s ease; }
-.process-graph-edge.active { background:rgba(56,189,248,.72); box-shadow:0 0 7px rgba(56,189,248,.28); }
-.process-graph-edge.active::before { position:absolute; top:0; left:-2px; width:6px; height:6px; border-radius:50%; background:#38bdf8; box-shadow:0 0 8px rgba(56,189,248,.78), 0 0 3px #38bdf8; content:''; animation:process-edge-particle 1.35s ease-in-out infinite; }
-@keyframes process-edge-particle { 0% { top:0; opacity:0; } 18% { opacity:1; } 82% { opacity:1; } 100% { top:calc(100% - 6px); opacity:0; } }
+.process-graph-edge { display:block; flex:none; width:22px; height:38px; overflow:visible; }
+.process-edge-base, .process-edge-flow { fill:none; stroke-linecap:round; vector-effect:non-scaling-stroke; }
+.process-edge-base { stroke:var(--border-strong); stroke-width:1.6px; stroke-dasharray:100; stroke-dashoffset:100; transition:stroke-dashoffset .7s cubic-bezier(.4,0,.2,1), stroke .4s; }
+.process-graph-edge.is-on .process-edge-base { stroke-dashoffset:0; }
+.process-graph-edge.active .process-edge-base { stroke:rgba(56,189,248,.42); }
+.process-edge-flow { stroke:#7dd3fc; stroke-width:2.4px; stroke-dasharray:3 11; animation:process-edge-flow 1.1s linear infinite; }
+@keyframes process-edge-flow { to { stroke-dashoffset:-28px; } }
 .process-step-icon { display:inline-grid; place-items:center; width:16px; height:16px; border-radius:50%; background:var(--surface-hover); color:var(--text-muted); font-size:11px; font-weight:700; transition:background-color .18s ease, color .18s ease, box-shadow .18s ease; }
 .process-step-count, .process-step-status { color:var(--text-dim); white-space:nowrap; }
 .process-node.process-started { border-color:#38bdf8; box-shadow:0 5px 14px rgba(56,189,248,.1); }
@@ -553,6 +559,6 @@ onMounted(async () => {
 .process-detail-excerpt { color:var(--text-muted); white-space:pre-wrap; overflow-wrap:anywhere; }
 .input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background:var(--surface-muted); }
 @media (max-width: 850px) { .chat-layout { grid-template-columns:1fr; } .history-panel { height:auto; max-height:220px; min-height:0; } .history-list { display:flex; gap:6px; overflow:auto; } .history-heading { flex-direction:column; align-items:flex-start; } .history-item { min-width:150px; width:auto; flex:none; } }
-@media (prefers-reduced-motion: reduce) { .process-node { animation:none; } .process-graph-edge.active::before { animation:none; } }
+@media (prefers-reduced-motion: reduce) { .process-node { animation:none; } .process-edge-base { transition:none; } .process-edge-flow { animation:none; } }
 @media (max-width: 700px) { .chat-box { height: calc(100vh - 150px); } .sample-grid { grid-template-columns:1fr; } }
 </style>

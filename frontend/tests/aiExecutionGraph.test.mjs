@@ -19,6 +19,7 @@ test('updates a stage in place and marks the incoming edge to a running step', (
     id: 'knowledge_search:recall->gym_operations_metrics:tool_execution',
     source: 'knowledge_search:recall',
     target: 'gym_operations_metrics:tool_execution',
+    reached: true,
     active: true
   }])
 })
@@ -66,6 +67,7 @@ test('settles stale active steps after a successful response so the graph cannot
   assert.equal(graph.nodes[1].status, 'COMPLETED')
   assert.equal(graph.nodes[1].message, '查询平台 AI 管理数据')
   assert.equal(graph.edges.some(edge => edge.active), false)
+  assert.equal(graph.edges[0].reached, true)
 })
 
 test('settles a step that was still active when the response failed', () => {
@@ -98,9 +100,12 @@ test('AI center renders the graph while retaining SSE step details', () => {
 
   assert.match(source, /class="process-graph"/)
   assert.match(source, /process-node-enter/)
-  assert.match(source, /process-edge-particle/)
-  assert.match(source, /:class="\{ active: graph\.edges\[nodeIndex\]\.active \}"/)
-  assert.match(source, /100% \{ top:calc\(100% - 6px\); opacity:0; \}/)
+  assert.match(source, /process-edge-flow/)
+  assert.match(source, /<svg[^>]*class="process-graph-edge/)
+  assert.match(source, /class="process-edge-base/)
+  assert.match(source, /class="process-edge-flow/)
+  assert.match(source, /:class="\{ 'is-on': graph\.edges\[nodeIndex\]\.reached, active: graph\.edges\[nodeIndex\]\.active \}"/)
+  assert.match(source, /stroke-dashoffset:-28px/)
   assert.match(source, /prefers-reduced-motion: reduce/)
   assert.match(source, /\.process-graph \{[^}]*flex-direction:column/)
   assert.doesNotMatch(source, /\.process-graph-edge::after/)
