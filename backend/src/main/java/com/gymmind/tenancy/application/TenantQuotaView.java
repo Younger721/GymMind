@@ -18,7 +18,7 @@ public record TenantQuotaView(
     public static TenantQuotaView of(TenantQuota quota, long usedAgents, long usedAiCalls, long usedAiTokens, long usedDocs) {
         return new TenantQuotaView(
                 quota.getTenantId(),
-                quota.getMaxAgents(),
+                1,
                 (int) usedAgents,
                 quota.getMaxAiCallsPerMonth(),
                 usedAiCalls,

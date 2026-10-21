@@ -19,6 +19,8 @@ import java.time.ZoneOffset;
 @Service
 public class DefaultTenantQuotaService implements TenantQuotaService {
 
+    private static final int MAX_AGENTS_PER_TENANT = 1;
+
     private final TenantQuotaRepository quotas;
     private final TenantAgentRepository agents;
     private final KnowledgeDocumentRepository documents;
@@ -56,6 +58,9 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
         if (command == null) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
+        if (command.maxAgents() != MAX_AGENTS_PER_TENANT) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
         TenantQuota quota = requireQuota(tenantId);
         quota.update(command.maxAgents(), command.maxAiCallsPerMonth(), command.maxAiTokensPerMonth(), command.maxKnowledgeDocuments(),
                 command.aiModuleEnabled(), command.knowledgeModuleEnabled());
@@ -69,7 +74,7 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
         if (!quota.isAiModuleEnabled()) {
             throw quotaExceeded("AI 模块未开通");
         }
-        if (agents.countByTenantId(tenantId) >= quota.getMaxAgents()) {
+        if (agents.countByTenantId(tenantId) >= MAX_AGENTS_PER_TENANT) {
             throw quotaExceeded("Agent 数量已达上限");
         }
     }

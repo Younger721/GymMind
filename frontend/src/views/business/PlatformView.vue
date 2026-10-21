@@ -79,7 +79,7 @@
             <el-button type="primary" :loading="loading" @click="saveQuota">更新配额</el-button>
           </el-form>
           <el-form label-width="140px" style="margin-top: 12px">
-            <el-form-item label="最大 Agent"><el-input v-model="quotaForm.maxAgents" /></el-form-item>
+            <el-form-item label="最大 Agent"><el-input :model-value="'1'" disabled /></el-form-item>
             <el-form-item label="月 AI 调用上限"><el-input v-model="quotaForm.maxAiCallsPerMonth" /></el-form-item>
             <el-form-item label="月 token 配额"><el-input v-model="quotaForm.maxAiTokensPerMonth" /></el-form-item>
             <el-form-item label="知识库文档上限"><el-input v-model="quotaForm.maxKnowledgeDocuments" /></el-form-item>
@@ -111,7 +111,7 @@ const stats = ref<unknown>(null)
 const quotaTenantId = ref('')
 const quotaResult = ref<unknown>(null)
 const quotaForm = reactive({
-  maxAgents: '5',
+  maxAgents: '1',
   maxAiCallsPerMonth: '1000',
   maxAiTokensPerMonth: '1000000',
   maxKnowledgeDocuments: '100',
@@ -259,7 +259,7 @@ async function loadQuota() {
     quotaResult.value = response
     const data = (response as { data?: Record<string, unknown> }).data
     if (data) {
-      quotaForm.maxAgents = String(data.maxAgents ?? quotaForm.maxAgents)
+      quotaForm.maxAgents = '1'
       quotaForm.maxAiCallsPerMonth = String(data.maxAiCallsPerMonth ?? quotaForm.maxAiCallsPerMonth)
       quotaForm.maxAiTokensPerMonth = String(data.maxAiTokensPerMonth ?? quotaForm.maxAiTokensPerMonth)
       quotaForm.maxKnowledgeDocuments = String(data.maxKnowledgeDocuments ?? quotaForm.maxKnowledgeDocuments)
@@ -276,7 +276,7 @@ async function saveQuota() {
   loading.value = true
   try {
     quotaResult.value = await tenancyApi.updateTenantQuota(Number(quotaTenantId.value), {
-      maxAgents: Number(quotaForm.maxAgents),
+      maxAgents: 1,
       maxAiCallsPerMonth: Number(quotaForm.maxAiCallsPerMonth),
       maxAiTokensPerMonth: Number(quotaForm.maxAiTokensPerMonth),
       maxKnowledgeDocuments: Number(quotaForm.maxKnowledgeDocuments),

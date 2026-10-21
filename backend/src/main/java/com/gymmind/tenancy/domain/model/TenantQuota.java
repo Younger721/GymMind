@@ -14,7 +14,7 @@ public class TenantQuota {
     private Long tenantId;
 
     @Column(name = "max_agents", nullable = false)
-    private int maxAgents = 5;
+    private int maxAgents = 1;
 
     @Column(name = "max_ai_calls_per_month", nullable = false)
     private int maxAiCallsPerMonth = 1000;
