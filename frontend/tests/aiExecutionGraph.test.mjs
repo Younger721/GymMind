@@ -56,6 +56,27 @@ test('marks the incoming edge active while a tool has started but not finished',
   assert.equal(graph.edges[0].active, true)
 })
 
+test('settles stale active steps after a successful response so the graph cannot look busy', () => {
+  const graph = projectExecutionGraph([
+    { pluginId: 'answer_router', stage: 'route_decision', status: 'COMPLETED', message: '路由完成' },
+    { pluginId: 'platform_ai_admin', stage: 'tool_start', status: 'STARTED', message: '正在查询平台 AI 管理数据' },
+    { pluginId: 'platform_ai_admin', stage: 'plugin_complete', status: 'COMPLETED', message: '查询完成' }
+  ], false)
+
+  assert.equal(graph.nodes[1].status, 'COMPLETED')
+  assert.equal(graph.nodes[1].message, '查询平台 AI 管理数据')
+  assert.equal(graph.edges.some(edge => edge.active), false)
+})
+
+test('settles a step that was still active when the response failed', () => {
+  const graph = projectExecutionGraph([
+    { pluginId: 'knowledge_search', stage: 'recall', status: 'RUNNING', message: '正在检索知识库' }
+  ], false, true)
+
+  assert.equal(graph.nodes[0].status, 'FAILED')
+  assert.equal(graph.nodes[0].message, '正在检索知识库')
+})
+
 test('merges graph state onto matching server history in order, including repeated messages', () => {
   const steps = [{ pluginId: 'knowledge_search', stage: 'plugin_complete', status: 'COMPLETED', message: '检索完成' }]
   const messages = mergeExecutionHistory(
@@ -83,9 +104,11 @@ test('AI center renders the graph while retaining SSE step details', () => {
   assert.match(source, /prefers-reduced-motion: reduce/)
   assert.match(source, /\.process-graph \{[^}]*flex-direction:column/)
   assert.doesNotMatch(source, /\.process-graph-edge::after/)
-  assert.match(source, /\.process-node\.process-completed \{[^}]*background:#f8fafc/)
+  assert.match(source, /\.process-node \{[^}]*background:#f8fafc/)
+  assert.match(source, /\.process-node\.process-completed \{[^}]*background:#dbeafe/)
   assert.match(source, /\.process-node\.process-running \{[^}]*background:#0b3b68/)
-  assert.match(source, /projectExecutionGraph\(msg\.processSteps\)/)
+  assert.match(source, /const processSummary = \(steps: HarnessProgressEvent\[\], isProcessing = false\)/)
+  assert.match(source, /projectExecutionGraph\(msg\.processSteps, msg\.processActive === true, msg\.failed\)/)
   assert.match(source, /upsertExecutionStep\(message\.processSteps, progress\)/)
   assert.match(source, /const isNewStep = !message\.processSteps\.some/)
   assert.match(source, /sessionMessagesKey\(sessionId\.value\)/)

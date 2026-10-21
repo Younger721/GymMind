@@ -50,13 +50,27 @@ export function mergeExecutionHistory<T extends { role: string; content: string 
   })
 }
 
-export function projectExecutionGraph(steps: HarnessProgressEvent[] = []) {
-  const nodes: ExecutionGraphNode[] = steps.map(step => ({ ...step, id: executionStepId(step) }))
+export function projectExecutionGraph(
+  steps: HarnessProgressEvent[] = [],
+  isProcessing = true,
+  failed = false
+) {
+  const nodes: ExecutionGraphNode[] = steps.map(step => {
+    const stillActive = step.status === 'STARTED' || step.status === 'RUNNING'
+    const status = !isProcessing && stillActive
+      ? failed ? 'FAILED' : 'COMPLETED'
+      : step.status
+    const message = !isProcessing && stillActive && !failed
+      ? step.message.replace(/^(正在|开始|已启动)\s*/, '')
+      : step.message
+
+    return { ...step, status, message, id: executionStepId(step) }
+  })
   const edges: ExecutionGraphEdge[] = nodes.slice(1).map((target, index) => ({
     id: `${nodes[index].id}->${target.id}`,
     source: nodes[index].id,
     target: target.id,
-    active: target.status === 'STARTED' || target.status === 'RUNNING'
+    active: isProcessing && (target.status === 'STARTED' || target.status === 'RUNNING')
   }))
 
   return { nodes, edges }

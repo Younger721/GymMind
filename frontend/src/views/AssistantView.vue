@@ -34,13 +34,13 @@
             <div v-if="msg.processSteps?.length" class="process-card" :class="{ collapsed: msg.processExpanded === false }">
               <button type="button" class="process-header" @click="toggleProcessGraph(msg)">
                 <span class="process-title"><span class="process-title-mark">⚙</span>执行过程</span>
-                <span class="process-header-state">系统状态 · {{ processSummary(msg.processSteps) }}</span>
+                <span class="process-header-state">系统状态 · {{ processSummary(msg.processSteps, msg.processActive === true) }}</span>
                 <span class="process-toggle">{{ msg.processExpanded === false ? '展开' : '收起' }}</span>
               </button>
               <div v-show="msg.processExpanded !== false" class="process-graph-viewport" role="region" aria-label="执行流程图" tabindex="0">
                 <div class="process-graph-surface">
                   <div class="process-graph" role="list" aria-label="执行步骤">
-                    <template v-for="graph in [projectExecutionGraph(msg.processSteps)]" :key="i">
+                    <template v-for="graph in [projectExecutionGraph(msg.processSteps, msg.processActive === true, msg.failed)]" :key="i">
                       <template v-for="(node, nodeIndex) in graph.nodes" :key="node.id">
                         <div class="process-node" role="listitem" :class="`process-${node.status.toLowerCase()}`">
                           <button v-if="node.details?.length" type="button" class="process-node-main process-node-action" :aria-expanded="isProcessStepExpanded(msg, node)" :aria-label="`${node.message}，${processStatusLabel(node.status)}，${isProcessStepExpanded(msg, node) ? '收起详情' : '展开详情'}`" @click="toggleProcessStep(msg, node, $event)">
@@ -115,7 +115,7 @@ import { aiChatHistoryApi, type ChatSession } from '@/api/aiChatHistory'
 import { marked } from 'marked'
 import { useAuthStore } from '@/stores/auth'
 import { executionStepId, mergeExecutionHistory, projectExecutionGraph, upsertExecutionStep } from '@/utils/aiExecutionGraph'
-interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processExpanded?: boolean; processStepExpanded?: Record<string, boolean>; failed?: boolean }
+interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processActive?: boolean; processExpanded?: boolean; processStepExpanded?: Record<string, boolean>; failed?: boolean }
 
 const authStore = useAuthStore()
 const availablePlugins = ref<HarnessPluginDescriptor[]>([])
@@ -384,11 +384,11 @@ const toggleProcessStep = (message: UiMessage, step: HarnessProgressEvent, event
   persistConversation()
 }
 const detailKindLabel = (kind: string) => ({ ACTOR: '身份', SCOPE: '范围', CHUNK: '片段', DOCUMENT: '文档' }[kind] || '明细')
-const processSummary = (steps: HarnessProgressEvent[]) => {
-  const current = [...steps].reverse().find(step => step.status === 'RUNNING')
+const processSummary = (steps: HarnessProgressEvent[], isProcessing = false) => {
+  const current = isProcessing ? [...steps].reverse().find(step => step.status === 'RUNNING') : undefined
   if (current) return current.message
   if (steps.some(step => step.status === 'FAILED')) return '执行失败'
-  if (steps[steps.length - 1]?.status === 'STARTED') return '步骤已启动'
+  if (isProcessing && steps[steps.length - 1]?.status === 'STARTED') return '步骤已启动'
   return '已完成'
 }
 
@@ -399,7 +399,7 @@ const send = async () => {
   messages.value.push({ role: 'user', content: text }); input.value = ''; loading.value = true; scrollBottom()
   persistConversation()
   try {
-    const message = reactive<UiMessage>({ role: 'assistant', content: '', sources: [], processSteps: [], processExpanded: true, processStepExpanded: {} })
+    const message = reactive<UiMessage>({ role: 'assistant', content: '', sources: [], processSteps: [], processActive: true, processExpanded: true, processStepExpanded: {} })
     messages.value.push(message)
     await harnessApi.stream(
       { sessionId: sessionId.value, question: text, plugins: sessionPlugins.value,
@@ -426,10 +426,13 @@ const send = async () => {
         scrollBottom()
       }
     )
+    message.processActive = false
+    persistConversation()
   } catch (error: any) {
     const messageText = error?.message || '发送失败，请稍后重试'
     const last = messages.value[messages.value.length - 1]
     if (last?.role === 'assistant') {
+      last.processActive = false
       if (!last.content) last.content = messageText
       else if (!last.content.includes(messageText)) last.content = `${last.content}\n\n**错误：** ${messageText}`
       last.failed = true
@@ -517,7 +520,7 @@ onMounted(async () => {
 .process-graph-viewport { max-width:100%; max-height:clamp(360px, 62vh, 680px); overflow-x:hidden; overflow-y:auto; border-top:1px solid var(--border); scrollbar-color:var(--border-strong) transparent; }
 .process-graph-surface { width:100%; min-height:100%; padding:22px 16px; background-color:var(--surface-muted); background-image:radial-gradient(rgba(148,163,184,.2) 1px, transparent 1px); background-size:16px 16px; }
 .process-graph { display:flex; width:100%; flex-direction:column; align-items:center; gap:0; }
-.process-node { width:min(100%, 420px); min-height:118px; overflow:hidden; border:1px solid var(--border-strong); border-radius:7px; background:var(--surface); color:var(--text); box-shadow:0 5px 14px rgba(0,0,0,.18); animation:process-node-enter .34s cubic-bezier(.2,.75,.25,1) both; transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease; }
+.process-node { width:min(100%, 420px); min-height:118px; overflow:hidden; border:1px solid var(--border-strong); border-radius:7px; background:#f8fafc; color:#1e293b; box-shadow:0 5px 14px rgba(0,0,0,.18); animation:process-node-enter .34s cubic-bezier(.2,.75,.25,1) both; transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease; }
 @keyframes process-node-enter { from { opacity:0; transform:translateY(8px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
 .process-node-main { display:flex; width:100%; min-height:116px; flex-direction:column; align-items:flex-start; gap:10px; padding:12px; border:0; background:transparent; color:inherit; text-align:left; }
 .process-node-action { cursor:pointer; }
@@ -531,10 +534,10 @@ onMounted(async () => {
 .process-step-icon { display:inline-grid; place-items:center; width:16px; height:16px; border-radius:50%; background:var(--surface-hover); color:var(--text-muted); font-size:11px; font-weight:700; transition:background-color .18s ease, color .18s ease, box-shadow .18s ease; }
 .process-step-count, .process-step-status { color:var(--text-dim); white-space:nowrap; }
 .process-node.process-started { border-color:#38bdf8; box-shadow:0 5px 14px rgba(56,189,248,.1); }
-.process-node.process-running { border-color:#38bdf8; background:#0b3b68; color:#e0f2fe; box-shadow:0 0 0 2px rgba(56,189,248,.14), 0 6px 18px rgba(56,189,248,.16); }
-.process-node.process-running .process-node-message { color:#e0f2fe; }
+.process-node.process-started, .process-node.process-running { border-color:#38bdf8; background:#0b3b68; color:#e0f2fe; box-shadow:0 0 0 2px rgba(56,189,248,.14), 0 6px 18px rgba(56,189,248,.16); }
+.process-node.process-running .process-node-message, .process-node.process-started .process-node-message { color:#e0f2fe; }
 .process-node.process-running .process-step-icon, .process-node.process-started .process-step-icon { background:rgba(56,189,248,.14); color:#38bdf8; }
-.process-node.process-completed { border-color:rgba(34,197,94,.55); background:#f8fafc; color:#1e293b; }
+.process-node.process-completed { border-color:#93c5fd; background:#dbeafe; color:#1e293b; }
 .process-node.process-completed .process-node-message { color:#1e293b; }
 .process-node.process-completed .process-step-icon { background:var(--primary-soft); color:var(--primary); }
 .process-node.process-failed { border-color:var(--danger); }
