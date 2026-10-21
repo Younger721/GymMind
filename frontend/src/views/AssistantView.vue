@@ -39,12 +39,17 @@
               </button>
               <div v-show="msg.processExpanded !== false" class="process-graph-viewport" role="region" aria-label="执行流程图" tabindex="0">
                 <div class="process-graph-surface">
+                  <div class="process-graph-toolbar">
+                    <span class="process-graph-caption"><i></i>单 Agent · 任务链路</span>
+                    <span class="process-graph-step-count">{{ msg.processSteps.length }} 个任务步骤</span>
+                  </div>
                   <div class="process-graph" role="list" aria-label="执行步骤">
                     <template v-for="graph in [projectExecutionGraph(msg.processSteps, msg.processActive === true, msg.failed)]" :key="i">
                       <template v-for="(node, nodeIndex) in graph.nodes" :key="node.id">
                         <div class="process-node" role="listitem" :class="`process-${node.status.toLowerCase()}`">
                           <button v-if="node.details?.length" type="button" class="process-node-main process-node-action" :aria-expanded="isProcessStepExpanded(msg, node)" :aria-label="`${node.message}，${processStatusLabel(node.status)}，${isProcessStepExpanded(msg, node) ? '收起详情' : '展开详情'}`" @click="toggleProcessStep(msg, node, $event)">
                             <span class="process-node-topline">
+                              <span class="process-node-sequence">任务 {{ String(nodeIndex + 1).padStart(2, '0') }}</span>
                               <span class="process-step-icon">{{ processStatusIcon(node.status) }}</span>
                               <span class="process-step-status">{{ processStatusLabel(node.status) }}</span>
                             </span>
@@ -53,6 +58,7 @@
                           </button>
                           <div v-else class="process-node-main">
                             <span class="process-node-topline">
+                              <span class="process-node-sequence">任务 {{ String(nodeIndex + 1).padStart(2, '0') }}</span>
                               <span class="process-step-icon">{{ processStatusIcon(node.status) }}</span>
                               <span class="process-step-status">{{ processStatusLabel(node.status) }}</span>
                             </span>
@@ -74,9 +80,9 @@
                             </div>
                           </div>
                         </div>
-                        <svg v-if="graph.edges[nodeIndex]" class="process-graph-edge" :class="{ 'is-on': graph.edges[nodeIndex].reached, active: graph.edges[nodeIndex].active }" viewBox="0 0 18 34" preserveAspectRatio="none" aria-hidden="true">
-                          <path d="M9 0 C9 10 3 10 3 17 C3 24 15 24 9 34" pathLength="100" class="process-edge-base"></path>
-                          <path v-if="graph.edges[nodeIndex].active" d="M9 0 C9 10 3 10 3 17 C3 24 15 24 9 34" class="process-edge-flow"></path>
+                        <svg v-if="graph.edges[nodeIndex]" class="process-graph-edge" :class="{ 'is-on': graph.edges[nodeIndex].reached, active: graph.edges[nodeIndex].active }" viewBox="0 0 32 48" preserveAspectRatio="none" aria-hidden="true">
+                          <path d="M16 0 C16 14 5 14 5 24 C5 35 27 34 16 48" pathLength="100" class="process-edge-base"></path>
+                          <path v-if="graph.edges[nodeIndex].active" d="M16 0 C16 14 5 14 5 24 C5 35 27 34 16 48" class="process-edge-flow"></path>
                         </svg>
                       </template>
                     </template>
@@ -521,16 +527,21 @@ onMounted(async () => {
 .process-header-state { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-dim); }
 .process-toggle { color:var(--text-muted); white-space:nowrap; }
 .process-graph-viewport { max-width:100%; max-height:clamp(360px, 62vh, 680px); overflow-x:hidden; overflow-y:auto; border-top:1px solid var(--border); scrollbar-color:var(--border-strong) transparent; }
-.process-graph-surface { width:100%; min-height:100%; padding:22px 16px; background-color:#0c121c; background-image:radial-gradient(rgba(135,153,179,.14) 1px, transparent 1px); background-size:18px 18px; }
+.process-graph-surface { position:relative; width:100%; min-height:100%; overflow:hidden; padding:20px 16px 26px; border:1px solid #283242; border-radius:10px; background-color:#0b111b; background-image:radial-gradient(rgba(135,153,179,.14) 1px, transparent 1px), radial-gradient(ellipse at 50% 0%, rgba(52,91,145,.16), transparent 58%); background-size:18px 18px, 100% 100%; }
+.process-graph-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; width:min(100%, 720px); margin:0 auto 14px; color:#8b9ab0; font-size:10px; letter-spacing:.06em; }
+.process-graph-caption { display:flex; align-items:center; gap:8px; color:#b9c7da; font-size:11px; font-weight:650; letter-spacing:0; }
+.process-graph-caption i { width:7px; height:7px; border-radius:50%; background:#65a9ff; box-shadow:0 0 10px rgba(101,169,255,.7); }
+.process-graph-step-count { color:#73839a; white-space:nowrap; }
 .process-graph { display:flex; width:100%; flex-direction:column; align-items:center; gap:0; }
-.process-node { width:min(100%, 420px); min-height:118px; overflow:hidden; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc; color:#1e293b; box-shadow:0 8px 22px rgba(0,0,0,.32); animation:process-node-enter .4s cubic-bezier(.22,1,.36,1) both; transition:border-color .38s ease, box-shadow .38s ease, transform .38s cubic-bezier(.22,1,.36,1), background-color .38s ease; }
+.process-node { width:min(82%, 640px); min-height:108px; overflow:hidden; border:1px solid #cbd5e1; border-radius:10px; background:#f8fafc; color:#1e293b; box-shadow:0 8px 22px rgba(0,0,0,.32); animation:process-node-enter .4s cubic-bezier(.22,1,.36,1) both; transition:border-color .38s ease, box-shadow .38s ease, transform .38s cubic-bezier(.22,1,.36,1), background-color .38s ease; }
 @keyframes process-node-enter { from { opacity:0; transform:translateY(8px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
 .process-node-main { display:flex; width:100%; min-height:116px; flex-direction:column; align-items:flex-start; gap:10px; padding:12px; border:0; background:transparent; color:inherit; text-align:left; }
 .process-node-action { cursor:pointer; }
 .process-node-action:hover { background:var(--surface-hover); }
-.process-node-topline { display:flex; width:100%; align-items:center; gap:7px; }
+.process-node-topline { display:flex; width:100%; align-items:center; gap:8px; }
+.process-node-sequence { margin-right:auto; color:#8290a4; font-size:10px; font-weight:700; letter-spacing:.08em; }
 .process-node-message { display:-webkit-box; width:100%; overflow:hidden; color:#172235; font-size:12px; font-weight:650; line-height:1.45; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
-.process-graph-edge { display:block; flex:none; width:22px; height:38px; overflow:visible; }
+.process-graph-edge { display:block; flex:none; width:32px; height:48px; overflow:visible; }
 .process-edge-base, .process-edge-flow { fill:none; stroke-linecap:round; vector-effect:non-scaling-stroke; }
 .process-edge-base { stroke:var(--border-strong); stroke-width:1.6px; stroke-dasharray:100; stroke-dashoffset:100; transition:stroke-dashoffset .7s cubic-bezier(.4,0,.2,1), stroke .4s; }
 .process-graph-edge.is-on .process-edge-base { stroke-dashoffset:0; }
@@ -541,10 +552,12 @@ onMounted(async () => {
 .process-step-count, .process-step-status { color:#64748b; white-space:nowrap; }
 .process-node.process-started, .process-node.process-running { border-color:#65a9ff; background:#112744; color:#eaf3ff; box-shadow:0 0 0 1px rgba(101,169,255,.34), 0 12px 34px rgba(50,120,220,.2); }
 .process-node.process-running .process-node-message, .process-node.process-started .process-node-message { color:#e0f2fe; }
+.process-node.process-started .process-node-sequence, .process-node.process-running .process-node-sequence { color:#9ac7ff; }
 .process-node.process-running .process-step-icon, .process-node.process-started .process-step-icon { background:rgba(101,169,255,.16); color:#8cc2ff; }
 .process-node.process-running .process-step-status, .process-node.process-started .process-step-status { color:#9ac7ff; }
 .process-node.process-completed { border-color:rgba(101,169,255,.52); background:#dbeafe; color:#1e293b; box-shadow:0 0 0 1px rgba(101,169,255,.12), 0 8px 24px rgba(0,0,0,.22); }
 .process-node.process-completed .process-node-message { color:#1e293b; }
+.process-node.process-completed .process-node-sequence { color:#4e6e98; }
 .process-node.process-completed .process-step-icon { background:var(--primary-soft); color:var(--primary); }
 .process-node.process-failed { border-color:var(--danger); }
 .process-node.process-failed .process-step-icon { background:rgba(248,113,113,.15); color:var(--danger); }
@@ -560,5 +573,5 @@ onMounted(async () => {
 .input-row { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); background:var(--surface-muted); }
 @media (max-width: 850px) { .chat-layout { grid-template-columns:1fr; } .history-panel { height:auto; max-height:220px; min-height:0; } .history-list { display:flex; gap:6px; overflow:auto; } .history-heading { flex-direction:column; align-items:flex-start; } .history-item { min-width:150px; width:auto; flex:none; } }
 @media (prefers-reduced-motion: reduce) { .process-node { animation:none; } .process-edge-base { transition:none; } .process-edge-flow { animation:none; } }
-@media (max-width: 700px) { .chat-box { height: calc(100vh - 150px); } .sample-grid { grid-template-columns:1fr; } }
+@media (max-width: 700px) { .chat-box { height: calc(100vh - 150px); } .sample-grid { grid-template-columns:1fr; } .process-graph-surface { padding:16px 10px 20px; } .process-node { width:96%; } .process-graph-toolbar { margin-bottom:12px; } }
 </style>
