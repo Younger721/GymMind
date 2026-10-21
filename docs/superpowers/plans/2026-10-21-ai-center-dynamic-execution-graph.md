@@ -116,13 +116,13 @@ assert.match(source, /prefers-reduced-motion: reduce/)
 运行：`git diff --check` 和 `git diff -- frontend/src/utils/aiExecutionGraph.ts frontend/src/views/AssistantView.vue frontend/tests/aiExecutionGraph.test.mjs docs/superpowers/plans/2026-10-21-ai-center-dynamic-execution-graph.md`。
 确认没有修改后端、添加依赖或夹带其他对话改动。
 
-- [ ] **Step 2: 提交本计划涉及的实现文件**
+- [x] **Step 2: 提交本计划涉及的实现文件**（提交 `b036989`）
 
 ```bash
 git add frontend/src/utils/aiExecutionGraph.ts frontend/src/views/AssistantView.vue frontend/tests/aiExecutionGraph.test.mjs docs/superpowers/plans/2026-10-21-ai-center-dynamic-execution-graph.md
 git commit -m "feat: 增强 AI 流程图动态效果"
 ```
 
-- [ ] **Step 3: 核对提交和工作区**
+- [x] **Step 3: 核对提交和工作区**
 
 运行：`git show --stat --oneline HEAD` 和 `git status --short`。确认提交只含当前流程图任务文件，并记录其他已有未提交内容仍在原处。
