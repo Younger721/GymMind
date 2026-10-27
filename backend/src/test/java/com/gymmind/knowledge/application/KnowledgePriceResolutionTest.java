@@ -3,6 +3,7 @@ package com.gymmind.knowledge.application;
 import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.ai.domain.EmbeddingGateway;
 import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
 import com.gymmind.knowledge.domain.model.KnowledgeType;
@@ -69,6 +70,71 @@ class KnowledgePriceResolutionTest {
     }
 
     @Test
+    void tenantPriceAndPromotionOverridePlatformDefaultsForTheSameProduct() {
+        var storeBase = price(501L, "store-month", 1, "门店月卡", "90");
+        var storeSale = promotion(502L, "store-sale", "门店活动", "0.90", 10);
+        var platformBase = platformPrice(503L, "platform-month", "平台月卡默认价", "100");
+        var platformSale = platformPromotion(504L, "platform-sale", "平台活动", "0.50", 99);
+
+        var result = scopedService(List.of(storeBase, storeSale), List.of(platformBase, platformSale))
+                .search(ADMIN, "月卡多少钱？");
+
+        assertThat(result).filteredOn(ContextSegment::authoritativeAnswer).singleElement()
+                .satisfies(answer -> assertThat(answer.text()).contains("81元"));
+        assertThat(result).extracting(ContextSegment::documentId)
+                .contains("501", "502").doesNotContain("503", "504");
+    }
+
+    @Test
+    void fallsBackToPlatformPriceAndPromotionWhenTenantHasNoMatchingCardType() {
+        var tenantYear = price(601L, "store-year", 1, "门店年卡", "900");
+        var platformMonth = platformPrice(602L, "platform-month-fallback", "平台月卡默认价", "100");
+        var platformSale = platformPromotion(603L, "platform-sale-fallback", "平台活动", "0.90", 10);
+
+        var result = scopedService(List.of(tenantYear), List.of(platformMonth, platformSale))
+                .search(ADMIN, "月卡多少钱？");
+
+        assertThat(result).filteredOn(ContextSegment::authoritativeAnswer).singleElement()
+                .satisfies(answer -> assertThat(answer.text()).contains("90元"));
+        assertThat(result).extracting(ContextSegment::documentId)
+                .contains("602", "603").doesNotContain("601");
+    }
+
+    @Test
+    void expiredTenantPromotionDoesNotBlockPlatformPromotionFallback() {
+        var storeBase = price(701L, "store-month-expired-sale", 1, "门店月卡", "110");
+        LocalDateTime now = LocalDateTime.now();
+        var expiredStoreSale = promotion(702L, "store-expired-sale", "门店过期活动", "0.50", 10,
+                now.minusDays(10), now.minusDays(1));
+        var platformBase = platformPrice(703L, "platform-month-expired-sale", "平台月卡默认价", "100");
+        var platformSale = platformPromotion(704L, "platform-sale-expired-fallback", "平台活动", "0.90", 10);
+
+        var result = scopedService(List.of(storeBase, expiredStoreSale), List.of(platformBase, platformSale))
+                .search(ADMIN, "月卡多少钱？");
+
+        assertThat(result).filteredOn(ContextSegment::authoritativeAnswer).singleElement()
+                .satisfies(answer -> assertThat(answer.text()).contains("99元"));
+        assertThat(result).extracting(ContextSegment::documentId)
+                .contains("701", "704").doesNotContain("702", "703");
+    }
+
+    @Test
+    void incompleteTenantPromotionBlocksPlatformPromotionFallback() {
+        var storeBase = price(801L, "store-month-incomplete-sale", 1, "门店月卡", "90");
+        var incompleteStoreSale = incompletePromotion(802L, "store-incomplete-sale", "门店未注明期限活动");
+        var platformBase = platformPrice(803L, "platform-month-incomplete-sale", "平台月卡默认价", "100");
+        var platformSale = platformPromotion(804L, "platform-sale-incomplete-fallback", "平台活动", "0.50", 99);
+
+        var result = scopedService(List.of(storeBase, incompleteStoreSale), List.of(platformBase, platformSale))
+                .search(ADMIN, "月卡多少钱？");
+
+        assertThat(result).filteredOn(ContextSegment::authoritativeAnswer).singleElement()
+                .satisfies(answer -> assertThat(answer.text()).contains("需人工确认"));
+        assertThat(result).extracting(ContextSegment::documentId)
+                .contains("801", "802").doesNotContain("803", "804");
+    }
+
+    @Test
     void staleIndexedVersionIsExcludedWhenLatestVersionWasNotRecalled() {
         var old = price(401L, "price-topic", 1, "旧价格", "100");
         var current = price(402L, "price-topic", 2, "当前价格", "90");
@@ -105,6 +171,23 @@ class KnowledgePriceResolutionTest {
                 mock(TenantQuotaService.class), documents);
     }
 
+    private static DefaultKnowledgeSearchService scopedService(List<KnowledgeDocument> tenantRules,
+                                                               List<KnowledgeDocument> platformRules) {
+        var keyword = mock(KeywordIndexPort.class);
+        var vector = mock(VectorIndexPort.class);
+        var embedding = mock(EmbeddingGateway.class);
+        var documents = mock(KnowledgeDocumentRepository.class);
+        when(embedding.embed(any())).thenReturn(List.of(new float[1024]));
+        when(keyword.search(any(), eq(7L), eq(11L))).thenReturn(List.of());
+        when(vector.search(any(), eq(7L), eq(11L))).thenReturn(List.of());
+        when(documents.findByTenantIdAndIdIn(eq(7L), any())).thenReturn(List.of());
+        when(documents.findPriceRules(7L)).thenReturn(tenantRules);
+        when(documents.findPriceRules(null)).thenReturn(platformRules);
+        when(documents.findPlatformDocuments()).thenReturn(List.of());
+        return new DefaultKnowledgeSearchService(keyword, vector, embedding, null,
+                mock(TenantQuotaService.class), documents);
+    }
+
     private static KnowledgeDocument price(long id, String key, int version, String name, String amount) {
         var document = KnowledgeDocument.create(7L, null, name, "text/plain", DocumentVisibility.TENANT, "test");
         document.assignId(id);
@@ -117,6 +200,61 @@ class KnowledgePriceResolutionTest {
 
     private static KnowledgeDocument promotion(long id, String key, String name, String multiplier, int priority) {
         var document = KnowledgeDocument.create(7L, null, name, "text/plain", DocumentVisibility.TENANT, "test");
+        document.assignId(id);
+        document.assignVersion(key, 1);
+        LocalDateTime now = LocalDateTime.now();
+        return promotion(document, "月卡", multiplier, now.minusDays(1), now.plusDays(10), priority);
+    }
+
+    private static KnowledgeDocument promotion(long id, String key, String name, String multiplier,
+                                               int priority, LocalDateTime from, LocalDateTime to) {
+        var document = KnowledgeDocument.create(7L, null, name, "text/plain", DocumentVisibility.TENANT, "test");
+        document.assignId(id);
+        document.assignVersion(key, 1);
+        return promotion(document, "月卡", multiplier, from, to, priority);
+    }
+
+    private static KnowledgeDocument promotion(KnowledgeDocument document, String product, String multiplier,
+                                                LocalDateTime from, LocalDateTime to, int priority) {
+        document.configureKnowledge(KnowledgeType.PROMOTION_RULE, product, null, "PERCENT",
+                new BigDecimal(multiplier), from, to, null, priority);
+        document.markParsing(); document.markReady(); document.publish();
+        return document;
+    }
+
+    private static KnowledgeDocument incompletePromotion(long id, String key, String name) {
+        KnowledgeDocument document = mock(KnowledgeDocument.class);
+        when(document.id()).thenReturn(id);
+        when(document.tenantId()).thenReturn(7L);
+        when(document.knowledgeKey()).thenReturn(key);
+        when(document.knowledgeVersion()).thenReturn(1);
+        when(document.status()).thenReturn(DocumentStatus.READY);
+        when(document.published()).thenReturn(true);
+        when(document.visibility()).thenReturn(DocumentVisibility.TENANT);
+        when(document.effectiveAudienceRoles()).thenReturn(Set.of(RoleCode.GYM_ADMIN));
+        when(document.fileName()).thenReturn(name);
+        when(document.knowledgeType()).thenReturn(KnowledgeType.PROMOTION_RULE);
+        when(document.applicableProduct()).thenReturn("月卡");
+        when(document.discountType()).thenReturn("PERCENT");
+        when(document.discountValue()).thenReturn(new BigDecimal("0.90"));
+        when(document.effectiveFrom()).thenReturn(null);
+        when(document.effectiveTo()).thenReturn(LocalDateTime.now().plusDays(10));
+        return document;
+    }
+
+    private static KnowledgeDocument platformPrice(long id, String key, String name, String amount) {
+        var document = KnowledgeDocument.create(null, null, name, "text/plain", DocumentVisibility.TENANT, "test");
+        document.assignId(id);
+        document.assignVersion(key, 1);
+        document.configureKnowledge(KnowledgeType.BASE_PRICE, "月卡", new BigDecimal(amount),
+                null, null, null, null, null, 0);
+        document.markParsing(); document.markReady(); document.publish();
+        return document;
+    }
+
+    private static KnowledgeDocument platformPromotion(long id, String key, String name,
+                                                        String multiplier, int priority) {
+        var document = KnowledgeDocument.create(null, null, name, "text/plain", DocumentVisibility.TENANT, "test");
         document.assignId(id);
         document.assignVersion(key, 1);
         LocalDateTime now = LocalDateTime.now();

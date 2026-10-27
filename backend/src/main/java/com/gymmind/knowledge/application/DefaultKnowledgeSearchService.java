@@ -174,17 +174,10 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         emit(reporter, "rerank", AiProgressEvent.Status.RUNNING, "重排序中", fused.size());
         if (rerank != null && !fused.isEmpty()) {
             try {
-                Map<String, ContextSegment> byId = new HashMap<>();
-                fused.forEach(segment -> byId.put(segment.id(), segment));
                 List<RankedChunk> reranked = rerankWithRetry(query, fused);
                 if (reranked != null && !reranked.isEmpty()) {
-                    fused = reranked.stream()
-                            .map(entry -> byId.get(entry.id()))
-                            .filter(Objects::nonNull)
-                            .toList();
-                    // A tenant document always outranks the platform default,
-                    // even when the external reranker scores the default higher.
-                    fused = prioritizeTenant(fused, result.chunksById(), tenantId);
+                    // 外部 rerank 常只返回少量 top_n；用其排序全量候选，避免 20 路融合被压成 1 条误选 FAQ。
+                    fused = applyExternalRerankOrder(query, fused, reranked);
                 } else {
                     fused = localRerank(query, fused);
                 }
@@ -250,19 +243,30 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                     d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE).toList());
         } else {
             String product = matchedProducts.get(0);
-            List<KnowledgeDocument> prices = accessible.stream()
+            List<KnowledgeDocument> productPrices = accessible.stream()
                     .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.BASE_PRICE)
                     .filter(d -> product.equalsIgnoreCase(d.applicableProduct())).toList();
-            List<KnowledgeDocument> activePromotions = accessible.stream()
+            List<KnowledgeDocument> tenantPrices = tenantId == null ? List.of() : productPrices.stream()
+                    .filter(d -> tenantId.equals(d.tenantId())).toList();
+            List<KnowledgeDocument> prices = tenantPrices.isEmpty()
+                    ? productPrices.stream().filter(d -> d.tenantId() == null).toList()
+                    : tenantPrices;
+            List<KnowledgeDocument> productPromotions = accessible.stream()
                     .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
-                    .filter(d -> product.equalsIgnoreCase(d.applicableProduct()))
-                    .filter(d -> d.effectiveFrom() != null && d.effectiveTo() != null
-                            && !now.isBefore(d.effectiveFrom()) && now.isBefore(d.effectiveTo()))
+                    .filter(d -> product.equalsIgnoreCase(d.applicableProduct())).toList();
+            List<KnowledgeDocument> tenantPromotions = tenantId == null ? List.of() : productPromotions.stream()
+                    .filter(d -> tenantId.equals(d.tenantId()))
+                    .filter(d -> isActiveOrUndatedPromotion(d, now)).toList();
+            List<KnowledgeDocument> selectedPromotions = tenantPromotions.isEmpty()
+                    ? productPromotions.stream()
+                            .filter(d -> d.tenantId() == null)
+                            .filter(d -> isActiveOrUndatedPromotion(d, now)).toList()
+                    : tenantPromotions;
+            List<KnowledgeDocument> activePromotions = selectedPromotions.stream()
+                    .filter(d -> isActivePromotion(d, now))
                     .sorted(Comparator.comparingInt(KnowledgeDocument::promotionPriority).reversed()).toList();
-            List<KnowledgeDocument> undatedPromotions = accessible.stream()
-                    .filter(d -> d.knowledgeType() == com.gymmind.knowledge.domain.model.KnowledgeType.PROMOTION_RULE)
-                    .filter(d -> product.equalsIgnoreCase(d.applicableProduct()))
-                    .filter(d -> d.effectiveFrom() == null || d.effectiveTo() == null).toList();
+            List<KnowledgeDocument> undatedPromotions = selectedPromotions.stream()
+                    .filter(d -> !hasCompletePromotionPeriod(d)).toList();
             relevant.addAll(prices);
             relevant.addAll(activePromotions);
             relevant.addAll(undatedPromotions);
@@ -317,6 +321,20 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                         structuredSummary(d), d.fileName(), d.knowledgeVersion(), d.knowledgeType().name(),
                         d.knowledgeKey(), d.effectiveFrom(), d.effectiveTo(), false)));
         return result;
+    }
+
+    private static boolean isActiveOrUndatedPromotion(KnowledgeDocument document, java.time.LocalDateTime now) {
+        return !hasCompletePromotionPeriod(document) || isActivePromotion(document, now);
+    }
+
+    private static boolean hasCompletePromotionPeriod(KnowledgeDocument document) {
+        return document.effectiveFrom() != null && document.effectiveTo() != null;
+    }
+
+    private static boolean isActivePromotion(KnowledgeDocument document, java.time.LocalDateTime now) {
+        return hasCompletePromotionPeriod(document)
+                && !now.isBefore(document.effectiveFrom())
+                && now.isBefore(document.effectiveTo());
     }
 
     private static boolean isPriceQuery(String query) {
@@ -388,8 +406,49 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         throw lastFailure == null ? new IllegalStateException("rerank failed") : lastFailure;
     }
 
+    /** 用 DashScope rerank 的相对顺序重排全量候选，未出现在 results 里的片段排在后面而非丢弃。 */
+    private List<ContextSegment> applyExternalRerankOrder(String query, List<ContextSegment> candidates,
+                                                          List<RankedChunk> reranked) {
+        Map<String, Integer> rankById = new HashMap<>();
+        for (int i = 0; i < reranked.size(); i++) {
+            rankById.putIfAbsent(reranked.get(i).id(), i);
+        }
+        int tailBase = reranked.size();
+        List<String> terms = queryTerms(query);
+        return candidates.stream()
+                .sorted(Comparator
+                        .comparingInt((ContextSegment segment) -> faqMismatchForHowToQuery(query, segment.text()) ? 1 : 0)
+                        .thenComparingInt(segment -> rankById.getOrDefault(segment.id(), tailBase + 1000))
+                        .thenComparing(Comparator.comparingInt(
+                                (ContextSegment segment) -> rerankTieBreakScore(query, segment, terms)).reversed()))
+                .toList();
+    }
+
+    private int rerankTieBreakScore(String query, ContextSegment segment, List<String> terms) {
+        String text = segment.text();
+        if (faqMismatchForHowToQuery(query, text)) {
+            return -10_000;
+        }
+        if (isQuestionList(text) || isFaqSegment(text)) {
+            return -500;
+        }
+        String lowered = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        int score = lexicalScore(lowered, terms);
+        if (text != null && (text.contains("动作要点") || text.contains("起始姿势") || text.contains("动作规范"))) {
+            score += 8;
+        }
+        for (String intent : primaryIntentTerms(query)) {
+            if (text != null && text.contains(intent)) {
+                score += intent.length() * 2;
+            }
+        }
+        return score;
+    }
+
     private List<ContextSegment> localRerank(String query, List<ContextSegment> candidates) {
-        if (candidates == null || candidates.size() < 2) return candidates == null ? List.of() : candidates;
+        if (candidates == null || candidates.isEmpty()) {
+            return List.of();
+        }
         List<String> terms = queryTerms(query);
         if (terms.isEmpty()) return candidates;
 
@@ -397,21 +456,34 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         boolean hasEvidence = false;
         for (int i = 0; i < candidates.size(); i++) {
             ContextSegment candidate = candidates.get(i);
+            if (faqMismatchForHowToQuery(query, candidate.text())) {
+                scored.add(new ScoredSegment(candidate, -10_000, i, 0));
+                continue;
+            }
             String text = candidate.text() == null ? "" : candidate.text().toLowerCase(Locale.ROOT);
-            int score = isQuestionList(candidate.text()) ? 0 : lexicalScore(text, terms);
-            int matchedTerms = isQuestionList(candidate.text()) ? 0 : matchedTermCount(text, terms);
+            int score = isQuestionList(candidate.text()) || isFaqSegment(candidate.text()) ? 0 : lexicalScore(text, terms);
+            int matchedTerms = isQuestionList(candidate.text()) || isFaqSegment(candidate.text()) ? 0 : matchedTermCount(text, terms);
             hasEvidence |= score > 0;
             scored.add(new ScoredSegment(candidate, score, i, matchedTerms));
         }
         boolean evidence = hasEvidence;
         int minimumScore = searchProperties.lexicalMinimumScore(terms.size());
         int minimumMatches = searchProperties.lexicalMinimumMatches(terms.size());
-        return scored.stream()
+        List<ContextSegment> ranked = scored.stream()
                 .filter(item -> !evidence || (item.score >= minimumScore && item.matchedTerms >= minimumMatches))
                 .sorted(Comparator.comparingInt(ScoredSegment::score).reversed()
                         .thenComparingInt(ScoredSegment::originalOrder))
                 .map(ScoredSegment::segment)
                 .toList();
+        // 长问句阈值过高时不能把融合候选全部滤空，否则 RAG 会误报「无依据」。
+        if (evidence && ranked.isEmpty()) {
+            return scored.stream()
+                    .sorted(Comparator.comparingInt(ScoredSegment::score).reversed()
+                            .thenComparingInt(ScoredSegment::originalOrder))
+                    .map(ScoredSegment::segment)
+                    .toList();
+        }
+        return ranked;
     }
 
     private List<ContextSegment> filterLexicalEvidence(String query, List<ContextSegment> candidates) {
@@ -420,21 +492,34 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         if (terms.isEmpty()) return candidates;
         List<ScoredSegment> scored = candidates.stream()
                 .map(candidate -> new ScoredSegment(candidate,
-                        isQuestionList(candidate.text()) ? 0 : lexicalScore(candidate.text(), terms), 0,
-                        isQuestionList(candidate.text()) ? 0 : matchedTermCount(candidate.text(), terms)))
+                        faqMismatchForHowToQuery(query, candidate.text()) || isQuestionList(candidate.text())
+                                || isFaqSegment(candidate.text()) ? 0 : lexicalScore(candidate.text(), terms),
+                        0,
+                        faqMismatchForHowToQuery(query, candidate.text()) || isQuestionList(candidate.text())
+                                || isFaqSegment(candidate.text()) ? 0 : matchedTermCount(candidate.text(), terms)))
                 .toList();
         boolean hasEvidence = scored.stream().anyMatch(item -> item.score > 0);
         if (!hasEvidence) return candidates;
         int minimumScore = searchProperties.lexicalMinimumScore(terms.size());
         int minimumMatches = searchProperties.lexicalMinimumMatches(terms.size());
         List<ContextSegment> filtered = scored.stream()
+                .filter(item -> !faqMismatchForHowToQuery(query, item.segment.text()))
                 .filter(item -> item.score >= minimumScore && item.matchedTerms >= minimumMatches)
                 .map(ScoredSegment::segment)
                 .toList();
         // Keep semantic/vector candidates when lexical evidence cannot identify
         // a strong match; otherwise a synonym-only query would incorrectly look
         // like an empty knowledge base.
-        return filtered.isEmpty() ? candidates : filtered;
+        if (filtered.isEmpty()) {
+            return candidates;
+        }
+        if (filtered.size() == 1 && candidates.size() > 1 && isHowToQuery(query)
+                && isFaqSegment(filtered.get(0).text())) {
+            return candidates.stream()
+                    .filter(segment -> !faqMismatchForHowToQuery(query, segment.text()))
+                    .toList();
+        }
+        return filtered;
     }
 
     private static int lexicalScore(String text, List<String> terms) {
@@ -453,6 +538,49 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         if (questions < 2) return false;
         long declarative = text.chars().filter(ch -> ch == '。' || ch == ';' || ch == '；').count();
         return declarative == 0;
+    }
+
+    private static boolean isFaqSegment(String text) {
+        return text != null && text.contains("问：") && text.contains("答：");
+    }
+
+    private static boolean isHowToQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return false;
+        }
+        return query.contains("怎么") || query.contains("如何");
+    }
+
+    /** 「深蹲怎么做」类问句不应引用 FAQ 里另一道题（仅答案里顺带提到深蹲）。 */
+    private static boolean faqMismatchForHowToQuery(String query, String text) {
+        if (!isHowToQuery(query) || !isFaqSegment(text)) {
+            return false;
+        }
+        List<String> intents = primaryIntentTerms(query);
+        if (intents.isEmpty()) {
+            return false;
+        }
+        int answerStart = text.indexOf("答：");
+        String faqQuestion = answerStart > 0 ? text.substring(0, answerStart) : text;
+        return intents.stream().noneMatch(faqQuestion::contains);
+    }
+
+    private static List<String> primaryIntentTerms(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        String normalized = query.replaceAll("[？?。，,.!！\\s]+", "");
+        normalized = normalized.replaceAll("(应该|怎么|如何|哪些|什么|吗|呢|怎样|做)", "");
+        Set<String> terms = new LinkedHashSet<>();
+        for (String part : QUERY_PARTS.split(normalized.toLowerCase(Locale.ROOT))) {
+            if (part.isBlank()) {
+                continue;
+            }
+            if (part.length() >= 2 && part.codePoints().allMatch(value -> value >= 0x4E00 && value <= 0x9FFF)) {
+                terms.add(part);
+            }
+        }
+        return List.copyOf(terms);
     }
 
     private static List<String> queryTerms(String query) {
@@ -676,16 +804,4 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         return limited;
     }
 
-    private static List<ContextSegment> prioritizeTenant(List<ContextSegment> segments,
-                                                          Map<String, com.gymmind.knowledge.infrastructure.search.IndexedChunk> chunks,
-                                                          Long tenantId) {
-        if (tenantId == null) return segments;
-        return segments.stream().sorted((left, right) -> {
-            var l = chunks.get(left.id());
-            var r = chunks.get(right.id());
-            boolean lTenant = l != null && tenantId.equals(l.tenantId());
-            boolean rTenant = r != null && tenantId.equals(r.tenantId());
-            return Boolean.compare(rTenant, lTenant);
-        }).toList();
-    }
 }
