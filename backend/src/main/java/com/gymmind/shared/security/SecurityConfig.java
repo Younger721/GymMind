@@ -47,6 +47,8 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/knowledge/documents/*/content").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/knowledge/documents/*/onlyoffice/callback").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(platformTenantContextFilter, JwtAuthenticationFilter.class)

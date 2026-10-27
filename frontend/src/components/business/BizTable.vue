@@ -29,6 +29,11 @@ import {
   formatRoleList,
   formatUserStatus
 } from '@/utils/displayLabels'
+import {
+  formatAuditAction,
+  formatAuditResourceType,
+  formatAuditResult
+} from '@/utils/auditLogDisplay'
 
 const props = defineProps<{
   rows: Record<string, unknown>[]
@@ -44,6 +49,9 @@ function columnLabel(key: string) {
 const compactColumnWidths: Record<string, number> = {
   id: 56,
   tenantId: 76,
+  actorId: 88,
+  resourceId: 88,
+  result: 76,
   status: 76,
   role: 88,
   roles: 108
@@ -65,6 +73,9 @@ function columnMinWidth(key: string) {
 
 function formatCell(key: string, value: unknown) {
   if (value == null) return '—'
+  if (key === 'result' || key === 'auditResult') return formatAuditResult(value)
+  if (key === 'action') return formatAuditAction(value)
+  if (key === 'resourceType') return formatAuditResourceType(value)
   if (key === 'status') return formatUserStatus(value)
   if (key === 'roles') return formatRoleList(value)
   if (typeof value === 'object') return JSON.stringify(value)

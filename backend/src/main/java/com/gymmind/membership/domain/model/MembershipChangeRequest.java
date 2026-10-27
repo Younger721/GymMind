@@ -97,9 +97,6 @@ public class MembershipChangeRequest extends TenantScopedEntity {
         if (reviewerId == null) {
             throw new IllegalArgumentException("Reviewer is required");
         }
-        if (reviewerId.equals(applicantUserId)) {
-            throw new IllegalArgumentException("Applicant cannot approve own request");
-        }
         this.reviewerId = reviewerId;
         this.reviewedAt = Instant.now();
         this.reviewComment = normalize(comment);
@@ -110,9 +107,6 @@ public class MembershipChangeRequest extends TenantScopedEntity {
         ensurePending();
         if (reviewerId == null) {
             throw new IllegalArgumentException("Reviewer is required");
-        }
-        if (reviewerId.equals(applicantUserId)) {
-            throw new IllegalArgumentException("Applicant cannot reject own request");
         }
         this.reviewerId = reviewerId;
         this.reviewedAt = Instant.now();

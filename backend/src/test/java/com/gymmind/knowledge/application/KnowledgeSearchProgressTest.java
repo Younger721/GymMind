@@ -67,6 +67,43 @@ class KnowledgeSearchProgressTest {
     }
 
     @Test
+    void fusionKeepsAuthorizedChunksWhenIndexStillReturnsDeletedDocumentNoise() {
+        var keyword = mock(KeywordIndexPort.class);
+        var vector = mock(VectorIndexPort.class);
+        var embedding = mock(EmbeddingGateway.class);
+        var quotas = mock(com.gymmind.tenancy.application.TenantQuotaService.class);
+        var documents = mock(KnowledgeDocumentRepository.class);
+        KnowledgeDocument handbook = readyDocument(1L, 50L, "健身房知识汇总手册.docx");
+        handbook.assignIndexGeneration("gen-50");
+        when(documents.findByTenantIdAndIdIn(eq(1L), any())).thenReturn(List.of(handbook));
+        when(documents.findPlatformDocuments()).thenReturn(List.of());
+        String query = "深蹲应该怎么做";
+        when(embedding.embed(any())).thenReturn(List.of(new float[1024]));
+        IndexedChunk good = new IndexedChunk("good-squat", 1L, 50L, null,
+                "深蹲动作规范：两脚与肩同宽，背挺直，膝盖与脚尖方向一致。", new float[1024])
+                .withIndexGeneration("gen-50");
+        List<IndexedChunk> staleVectorHits = new ArrayList<>();
+        for (int i = 0; i < 30; i++) {
+            staleVectorHits.add(new IndexedChunk("stale-" + i, 1L, 99L, null,
+                    "已删除文档里的深蹲噪声片段 " + i, new float[1024]).withIndexGeneration("gen-deleted"));
+        }
+        when(keyword.search(eq(query), eq(1L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class)))
+                .thenReturn(List.of(good));
+        when(vector.search(any(), eq(1L), any(com.gymmind.knowledge.infrastructure.search.KnowledgeRecallFilter.class)))
+                .thenReturn(staleVectorHits);
+        var events = new ArrayList<AiProgressEvent>();
+
+        var segments = new DefaultKnowledgeSearchService(keyword, vector, embedding, null, quotas, documents)
+                .search(new CurrentActor(2L, 1L, Set.of(RoleCode.GYM_ADMIN), Set.of(), 0, "t"), query, events::add);
+
+        AiProgressEvent fusion = events.stream()
+                .filter(event -> "fusion".equals(event.stage()) && event.status() == AiProgressEvent.Status.COMPLETED)
+                .findFirst().orElseThrow();
+        assertThat(fusion.resultCount()).isGreaterThan(0);
+        assertThat(segments).extracting(com.gymmind.ai.domain.ContextSegment::id).contains("good-squat");
+    }
+
+    @Test
     void reportsPermissionRerankAndCitationStagesAroundHybridRecall() {
         var keyword = mock(KeywordIndexPort.class);
         var vector = mock(VectorIndexPort.class);

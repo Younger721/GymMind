@@ -33,7 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 开发环境注入 8 类健身 RAG 演示文档，便于毕设/演示问答闭环。
+ * 开发环境注入门店健身知识汇总 Word（原多份 MD 已合并），便于毕设/演示问答闭环。
  */
 @Component
 @Profile("dev")
@@ -46,14 +46,12 @@ public class FitnessKnowledgeDemoInitializer implements ApplicationRunner {
     private record DemoDoc(KnowledgeCategory category, String resourcePath, String fileName) {
     }
 
+    /** 门店演示资料：单份 Word 汇总（原 7 份 MD 已合并，避免重复 seed） */
     private static final List<DemoDoc> DOCS = List.of(
-            new DemoDoc(KnowledgeCategory.ACTION_STANDARD, "demo-knowledge/action-standard.md", "深蹲动作规范.md"),
-            new DemoDoc(KnowledgeCategory.TRAINING_BASICS, "demo-knowledge/training-basics.md", "训练基础知识.md"),
-            new DemoDoc(KnowledgeCategory.EQUIPMENT_GUIDE, "demo-knowledge/equipment-guide.md", "史密斯机使用说明.md"),
-            new DemoDoc(KnowledgeCategory.COURSE_INTRO, "demo-knowledge/course-intro.md", "团体课程介绍.md"),
-            new DemoDoc(KnowledgeCategory.NUTRITION_BASICS, "demo-knowledge/nutrition-basics.md", "饮食基础知识.md"),
-            new DemoDoc(KnowledgeCategory.GYM_RULES, "demo-knowledge/gym-rules.md", "健身房规章制度.md"),
-            new DemoDoc(KnowledgeCategory.FAQ, "demo-knowledge/faq.md", "常见健身问题.md"));
+            new DemoDoc(
+                    KnowledgeCategory.GENERAL,
+                    "demo-knowledge/健身房知识汇总手册.docx",
+                    "健身房知识汇总手册.docx"));
 
     private final DatabaseInitializationLock initializationLock;
     private final KnowledgeDocumentUseCase knowledge;
@@ -111,9 +109,12 @@ public class FitnessKnowledgeDemoInitializer implements ApplicationRunner {
                 }
                 byte[] content = readResource(doc.resourcePath());
                 // 首次上传不传 knowledgeKey（由文档服务在替换版本时再维护 key）
+                String contentType = doc.fileName().endsWith(".docx")
+                        ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        : "text/markdown";
                 knowledge.upload(actor, new UploadKnowledgeDocumentCommand(
                         doc.fileName(),
-                        "text/markdown",
+                        contentType,
                         content,
                         DocumentVisibility.TENANT,
                         doc.category().code(),

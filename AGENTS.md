@@ -1,5 +1,15 @@
 # GymMind 协作规范
 
+## 本地后端启动（AI 助手）
+
+在仓库根目录启动后端时**优先**使用固定脚本（会先加载根 `.env` 再 `spring-boot:run`）：
+
+```bat
+start-backend-dev.bat
+```
+
+不要裸跑 `mvn spring-boot:run`（除非已 `call scripts\load-root-env.bat`）。全栈含前端时用 `start-all.bat`。IDEA 用户使用共享运行配置 **GymMindApplication (dev)**（见 `.run/GymMindApplication_dev.run.xml`）。
+
 ## 数据库删除操作确认
 
 凡是可能删除数据库数据、数据表、数据库，或执行清空、重置、重建等会导致已有数据丢失的操作，必须先向用户说明具体操作、影响范围和目标环境，并获得用户明确同意后才能执行。未获得明确同意时，只允许进行只读查询、备份和风险分析，不得执行相关修改或删除操作。

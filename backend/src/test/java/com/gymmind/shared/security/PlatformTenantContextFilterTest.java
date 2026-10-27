@@ -32,11 +32,8 @@ class PlatformTenantContextFilterTest {
     }
 
     @Test
-    void platformRequestWithoutTenantHeaderUsesFirstActiveTenant() throws Exception {
+    void platformRequestWithoutTenantHeaderDoesNotSelectATenant() throws Exception {
         TenantRepository tenants = mock(TenantRepository.class);
-        Tenant tenant = Tenant.create("gym-east", "Gym East");
-        ReflectionTestUtils.setField(tenant, "id", 7L);
-        when(tenants.findAll(any())).thenReturn(new PageImpl<>(java.util.List.of(tenant), PageRequest.of(0, 1), 1));
         PlatformTenantContextFilter filter = new PlatformTenantContextFilter(tenants);
         installPlatformAuthentication();
 
@@ -44,13 +41,14 @@ class PlatformTenantContextFilterTest {
             @Override
             public void doFilter(jakarta.servlet.ServletRequest request,
                                  jakarta.servlet.ServletResponse response) {
-                assertThat(TenantContextHolder.get()).isEqualTo(7L);
+                assertThat(TenantContextHolder.get()).isNull();
             }
         };
         filter.doFilter(new MockHttpServletRequest("GET", "/api/v1/users"),
                 new MockHttpServletResponse(), chain);
 
         assertThat(TenantContextHolder.get()).isNull();
+        verifyNoInteractions(tenants);
     }
 
     @Test

@@ -7,5 +7,5 @@
 </script>
 
 <style>
-@import './styles/simple.css';
+/* 全局主题见 main.ts：simple.css + element-plus.css */
 </style>

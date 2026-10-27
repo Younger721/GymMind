@@ -20,6 +20,8 @@ import java.time.ZoneOffset;
 public class DefaultTenantQuotaService implements TenantQuotaService {
 
     private static final int MAX_AGENTS_PER_TENANT = 1;
+    private static final int PLATFORM_MAX_AI_CALLS_PER_MONTH = 1000;
+    private static final long PLATFORM_MAX_AI_TOKENS_PER_MONTH = 1_000_000L;
 
     private final TenantQuotaRepository quotas;
     private final TenantAgentRepository agents;
@@ -94,6 +96,20 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
 
     @Override
     @Transactional(readOnly = true)
+    public void ensureAiChatAllowed(CurrentActor actor) {
+        if (actor == null || !actor.isPlatformAdmin()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (countUserAiCallsThisMonth(actor.userId()) >= PLATFORM_MAX_AI_CALLS_PER_MONTH) {
+            throw quotaExceeded("本月平台 AI 调用次数已达上限");
+        }
+        if (countUserAiTokensThisMonth(actor.userId()) >= PLATFORM_MAX_AI_TOKENS_PER_MONTH) {
+            throw quotaExceeded("本月平台 AI Token 已达上限");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public void ensureAiModuleEnabled(Long tenantId) {
         ensureAiModuleEnabled(requireQuota(tenantId));
     }
@@ -162,6 +178,26 @@ public class DefaultTenantQuotaService implements TenantQuotaService {
         Long total = jdbc.queryForObject(
                 "SELECT COALESCE(SUM(total_tokens), 0) FROM ai_usage_record WHERE tenant_id = ? AND created_at >= ? AND created_at < ?",
                 Long.class, tenantId, start, end);
+        return total == null ? 0L : total;
+    }
+
+    private long countUserAiCallsThisMonth(Long userId) {
+        YearMonth month = YearMonth.now(ZoneOffset.UTC);
+        Instant start = month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant end = month.plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Long count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM ai_usage_record WHERE user_id = ? AND created_at >= ? AND created_at < ?",
+                Long.class, userId, start, end);
+        return count == null ? 0L : count;
+    }
+
+    private long countUserAiTokensThisMonth(Long userId) {
+        YearMonth month = YearMonth.now(ZoneOffset.UTC);
+        Instant start = month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant end = month.plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Long total = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(total_tokens), 0) FROM ai_usage_record WHERE user_id = ? AND created_at >= ? AND created_at < ?",
+                Long.class, userId, start, end);
         return total == null ? 0L : total;
     }
 

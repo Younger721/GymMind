@@ -47,12 +47,30 @@ public class AiToolOrchestrator {
                                              List<ContextSegment> context,
                                              Collection<String> enabledIds,
                                              Consumer<AiProgressEvent> progress) {
+        return decide(actor, question, context, enabledIds, List.of(), progress);
+    }
+
+    public AiToolOrchestrationResult decide(CurrentActor actor, String question,
+                                             List<ContextSegment> context,
+                                             Collection<String> enabledIds,
+                                             Collection<String> preferredToolIds,
+                                             Consumer<AiProgressEvent> progress) {
         List<AiCapability> capabilities = registry.listFor(actor, enabledIds);
         capabilities = capabilities.stream()
                 .filter(capability -> !"basic_chat".equals(capability.descriptor().id()))
                 .filter(capability -> !"knowledge_search".equals(capability.descriptor().id()))
                 .filter(capability -> "READ".equalsIgnoreCase(capability.descriptor().type()))
                 .toList();
+        if (preferredToolIds != null && !preferredToolIds.isEmpty()) {
+            List<AiCapability> narrowed = capabilities.stream()
+                    .filter(capability -> preferredToolIds.contains(capability.descriptor().id()))
+                    .toList();
+            if (!narrowed.isEmpty()) {
+                capabilities = narrowed;
+            } else {
+                log.warn("preferredToolIds {} 与可用工具无交集，回退全量只读工具", preferredToolIds);
+            }
+        }
         List<ChatToolDefinition> definitions = capabilities.stream()
                 .map(c -> new ChatToolDefinition(c.descriptor().id(), c.descriptor().description(), c.descriptor().parameterSchema()))
                 .toList();

@@ -7,6 +7,7 @@ import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -29,9 +30,13 @@ public class DefaultMemberChurnRiskService implements MemberChurnRiskService {
 
     @Override
     public List<MemberChurnRiskView> list(CurrentActor actor) {
-        Long tenant = ActorAccess.tenantId(actor);
-        if (tenant == null || !actor.hasPermission("analytics:read")
-                || !actor.roles().contains(RoleCode.GYM_ADMIN)) {
+        Long tenant = resolveTenantScope(actor);
+        if (tenant == null || !actor.hasPermission("analytics:read")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        boolean gymAdmin = actor.roles().contains(RoleCode.GYM_ADMIN);
+        boolean platformScoped = actor.isPlatformAdmin() && TenantContextHolder.get() != null;
+        if (!gymAdmin && !platformScoped) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         Instant now = Instant.now();
@@ -81,6 +86,18 @@ public class DefaultMemberChurnRiskService implements MemberChurnRiskService {
                     risk.reasons()));
         }
         return out.stream().sorted(Comparator.comparing(MemberChurnRiskView::score).reversed()).toList();
+    }
+
+    /** 门店管理员用 actor.tenantId；平台管理员代管门店时用请求头建立的 TenantContext。 */
+    private static Long resolveTenantScope(CurrentActor actor) {
+        Long tenant = ActorAccess.tenantId(actor);
+        if (tenant != null) {
+            return tenant;
+        }
+        if (actor != null && actor.isPlatformAdmin()) {
+            return TenantContextHolder.get();
+        }
+        return null;
     }
 
     private int countCheckIns(Long tenantId, Long memberId, Instant from, Instant toExclusive) {

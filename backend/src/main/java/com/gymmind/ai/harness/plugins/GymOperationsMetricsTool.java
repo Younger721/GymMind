@@ -45,8 +45,10 @@ public class GymOperationsMetricsTool implements AiHarnessPlugin {
     @Override public AiHarnessPluginDescriptor descriptor() { return DESCRIPTOR; }
 
     @Override public boolean supports(CurrentActor actor) {
-        return actor != null && actor.roles().contains(RoleCode.GYM_ADMIN)
-                && ActorAccess.tenantId(actor) != null && actor.hasPermission("analytics:read");
+        if (actor == null || !actor.hasPermission("analytics:read") || ActorAccess.tenantId(actor) == null) {
+            return false;
+        }
+        return actor.roles().contains(RoleCode.GYM_ADMIN);
     }
 
     @Override public void contribute(CurrentActor actor, String input, List<ContextSegment> context) {

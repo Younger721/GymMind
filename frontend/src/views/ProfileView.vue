@@ -1,11 +1,11 @@
 <template>
   <div class="profile">
     <h2 class="simple-page-title">个人中心</h2>
-    <p class="simple-page-desc">查看账户、套餐和签到信息</p>
+    <p class="simple-page-desc">{{ overview?.member ? '查看账户、套餐和出勤' : '查看账户信息' }}</p>
 
     <el-alert v-if="error" type="error" :title="error" show-icon closable @close="error = ''" />
 
-    <div class="overview-grid">
+    <div class="overview-grid" :class="{ 'with-attendance': showAttendance }">
       <div class="simple-card account-card">
         <h3>账户信息</h3>
         <div class="row"><span class="label">用户名</span><span>{{ overview?.username || authStore.username || '—' }}</span></div>
@@ -14,7 +14,7 @@
         <el-button type="danger" plain class="logout-btn" @click="logout">退出登录</el-button>
       </div>
 
-      <div class="simple-card checkin-card">
+      <div v-if="showAttendance" class="simple-card checkin-card">
         <div class="card-head">
           <div><h3>签到统计</h3><span class="muted">选择月份查看出勤记录</span></div>
           <div class="month-picker">
@@ -41,18 +41,12 @@
       </div>
     </div>
 
-    <div v-if="overview?.member" class="overview-grid member-grid">
-      <div class="simple-card qr-card">
-        <h3>会员签到二维码</h3>
-        <div v-if="qrDataUrl" class="qr-wrap"><img :src="qrDataUrl" alt="会员签到二维码" /></div>
-        <div class="muted member-number">会员编号：{{ overview.member.memberNumber || '—' }}</div>
-      </div>
-      <div class="simple-card membership-card">
-        <h3>当前套餐</h3>
-        <div class="membership-type">{{ overview.membership?.membershipType || '暂无有效套餐' }}</div>
-        <div class="row"><span class="label">套餐名称</span><span>{{ overview.membership?.packageName || '—' }}</span></div>
-        <div class="row"><span class="label">有效期</span><span>{{ formatDate(overview.membership?.startsAt) }} 至 {{ formatDate(overview.membership?.expiresAt) }}</span></div>
-      </div>
+    <div v-if="overview?.member" class="simple-card membership-card">
+      <h3>当前套餐</h3>
+      <div class="row"><span class="label">会员编号</span><span>{{ overview.member.memberNumber || '—' }}</span></div>
+      <div class="membership-type">{{ overview.membership?.membershipType || '暂无有效套餐' }}</div>
+      <div class="row"><span class="label">套餐名称</span><span>{{ overview.membership?.packageName || '—' }}</span></div>
+      <div class="row"><span class="label">有效期</span><span>{{ formatDate(overview.membership?.startsAt) }} 至 {{ formatDate(overview.membership?.expiresAt) }}</span></div>
     </div>
 
     <div v-if="overview?.membership?.id" class="simple-card change-card">
@@ -82,7 +76,6 @@
       </el-table>
     </div>
 
-    <div v-if="!overview?.member" class="simple-card empty-card">当前账号不是会员，暂无签到二维码和套餐信息。</div>
   </div>
 </template>
 
@@ -92,7 +85,6 @@ import { computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { membershipChangeRequestsApi, type MembershipChangeRequest } from '@/api/membershipChangeRequests'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import QRCode from 'qrcode'
 import { useAuthStore } from '@/stores/auth'
 import { profileApi, type ProfileOverview } from '@/api/profile'
 
@@ -100,13 +92,16 @@ const authStore = useAuthStore()
 const overview = ref<ProfileOverview | null>(null)
 const previousOverview = ref<ProfileOverview | null>(null)
 const selectedMonth = ref(monthKey(new Date()))
-const qrDataUrl = ref('')
 const error = ref('')
 const freezeRange = ref<[string, string] | null>(null)
 const freezeReason = ref('')
 const freezeSubmitting = ref(false)
 const myRequests = ref<MembershipChangeRequest[]>([])
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
+const showAttendance = computed(() => !!overview.value?.member
+  && !authStore.isPlatformAdmin
+  && !authStore.roles.includes('GYM_ADMIN')
+  && !authStore.roles.includes('COACH'))
 
 interface CalendarCell { date: string; day: number }
 
@@ -142,9 +137,6 @@ async function loadOverview() {
     ])
     overview.value = response.data
     previousOverview.value = previousResponse.data
-    qrDataUrl.value = response.data?.member?.checkInToken
-      ? await QRCode.toDataURL(response.data.member.checkInToken, { width: 220, margin: 2 })
-      : ''
     if (response.data?.membership?.id) {
       await loadMyRequests()
     } else {
@@ -256,7 +248,8 @@ onMounted(loadOverview)
   border-bottom: none;
 }
 
-.overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.overview-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+.overview-grid.with-attendance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .simple-card h3 { margin: 0 0 14px; font-size: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .month-picker { display: flex; align-items: center; gap: 2px; }
@@ -275,15 +268,10 @@ onMounted(loadOverview)
 .calendar-cell.attended { background: #effaf4; color: #0e805d; font-weight: 700; }
 .calendar-blank { background: transparent; }
 .attendance-dot { width: 5px; height: 5px; border-radius: 50%; background: #19b477; }
-.member-grid { align-items: stretch; }
-.qr-card { text-align: center; }
-.qr-wrap { display: flex; justify-content: center; margin: 12px 0; }
-.qr-wrap img { width: 220px; height: 220px; image-rendering: pixelated; }
-.member-number { text-align: center; }
-.membership-type { font-size: 30px; font-weight: 700; color: var(--primary); margin: 18px 0 24px; }
-.empty-card { color: var(--text-muted); }
+.membership-card { margin-bottom: 16px; }
+.membership-type { font-size: 30px; font-weight: 700; color: var(--primary); margin: 18px 0 8px; }
 
-@media (max-width: 720px) { .overview-grid { grid-template-columns: 1fr; } .card-head { align-items: stretch; } .month-picker { justify-content: space-between; } }
+@media (max-width: 720px) { .overview-grid, .overview-grid.with-attendance { grid-template-columns: 1fr; } .card-head { align-items: stretch; } .month-picker { justify-content: space-between; } }
 
 .label {
   color: var(--text-muted);

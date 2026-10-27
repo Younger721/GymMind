@@ -14,6 +14,6 @@ class BailianChatAdapterConfigurationTest {
         BailianChatAdapter adapter = new BailianChatAdapter(RestClient.builder(), new DashScopeProperties());
         Field model = BailianChatAdapter.class.getDeclaredField("model");
         model.setAccessible(true);
-        assertThat(model.get(adapter)).isEqualTo("qwen3.7-plus");
+        assertThat(model.get(adapter)).isEqualTo("qwen3.8-flash");
     }
 }

@@ -98,13 +98,11 @@ public class DefaultCourseService implements CourseService {
     public List<CourseView> list(CurrentActor actor, String scope, Instant from, Instant to, String type, Long coachId,
                                  boolean availableOnly) {
         requireListActor(actor);
-        Long tenantId = ActorAccess.tenantId(actor);
+        Long tenantId = ActorAccess.requireTenantId(actor);
         Long visibleCoachId = coachId;
         Instant now = Instant.now();
         final Long filterCoachId = visibleCoachId;
-        List<Course> source = ActorAccess.isSuperAdmin(actor)
-                ? courses.findAll()
-                : courses.findAllByTenantId(tenantId);
+        List<Course> source = courses.findAllByTenantId(tenantId);
         if ("mine".equalsIgnoreCase(scope) && bookings != null && tenantId != null) {
             var ids = bookings.findAllByTenantId(tenantId).stream()
                     .filter(b -> !b.getStatus().equals(BookingStatus.CANCELLED))
@@ -143,6 +141,7 @@ public class DefaultCourseService implements CourseService {
     public void update(CurrentActor actor, Long id, String title, String type, Instant startsAt, Instant endsAt,
                        int capacity, String location, String description) {
         requireAuthenticated(actor);
+        rejectPlatformWrite(actor);
         Course course = findCourse(actor, id);
         ensureCanManage(actor, course);
         try {
@@ -160,6 +159,7 @@ public class DefaultCourseService implements CourseService {
     @Transactional
     public void cancel(CurrentActor actor, Long id) {
         requireAuthenticated(actor);
+        rejectPlatformWrite(actor);
         Course course = findCourse(actor, id);
         ensureCanManage(actor, course);
         course.cancel();
@@ -181,9 +181,8 @@ public class DefaultCourseService implements CourseService {
 
     private Course findCourseForRead(CurrentActor actor, Long id) {
         if (ActorAccess.isSuperAdmin(actor)) {
-            return courses.findById(id).orElseGet(() -> courses.findAll().stream()
-                    .filter(course -> id.equals(course.getId())).findFirst()
-                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND)));
+            return courses.findByTenantIdAndId(ActorAccess.requireTenantId(actor), id)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
         if (actor.roles().contains(RoleCode.COACH) && !ActorAccess.canManageTenant(actor)) {
             return courses.findByTenantIdAndId(ActorAccess.requireTenantId(actor), id)
@@ -213,6 +212,12 @@ public class DefaultCourseService implements CourseService {
                 || coaches.findByTenantIdAndUserId(course.getTenantId(), actor.userId())
                 .map(coach -> !coach.getId().equals(course.getCoachId()))
                 .orElse(true)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private static void rejectPlatformWrite(CurrentActor actor) {
+        if (ActorAccess.isSuperAdmin(actor)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

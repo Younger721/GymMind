@@ -1,13 +1,11 @@
 package com.gymmind.shared.security;
 
-import com.gymmind.tenancy.domain.model.Tenant;
 import com.gymmind.tenancy.domain.repository.TenantRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -17,10 +15,9 @@ import java.util.Objects;
 /**
  * Establishes an explicit tenant context for platform-admin requests.
  *
- * A platform request without a tenant header uses the first active tenant.
- * A supplied header is accepted only for an active tenant and only for a
- * platform administrator. Non-platform requests do not receive an implicit
- * tenant context from this filter.
+ * A platform request must explicitly select an active tenant with a header.
+ * Non-platform requests do not receive an implicit tenant context from this
+ * filter.
  */
 @Component
 public class PlatformTenantContextFilter extends OncePerRequestFilter {
@@ -51,16 +48,6 @@ public class PlatformTenantContextFilter extends OncePerRequestFilter {
     private boolean resolvePlatformTenant(HttpServletRequest request, HttpServletResponse response) {
         String rawHeader = request.getHeader(TENANT_HEADER);
         if (rawHeader == null || rawHeader.isBlank()) {
-            var authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (!(authentication != null
-                    && authentication.getPrincipal() instanceof GymMindPrincipal principal
-                    && principal.actor().isPlatformAdmin())) {
-                return true;
-            }
-            var firstActiveTenant = tenants.findAll(Pageable.unpaged()).getContent().stream()
-                    .filter(Tenant::isActive)
-                    .min(java.util.Comparator.comparing(Tenant::getId));
-            firstActiveTenant.ifPresent(tenant -> TenantContextHolder.set(tenant.getId()));
             return true;
         }
 
@@ -73,7 +60,7 @@ public class PlatformTenantContextFilter extends OncePerRequestFilter {
         }
 
         Long tenantId = parseTenantId(rawHeader);
-        if (tenantId == null || tenants.findById(tenantId).filter(Tenant::isActive).isEmpty()) {
+        if (tenantId == null || tenants.findById(tenantId).filter(tenant -> tenant.isActive()).isEmpty()) {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return false;
         }

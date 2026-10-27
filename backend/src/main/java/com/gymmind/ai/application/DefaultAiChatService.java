@@ -94,7 +94,8 @@ public class DefaultAiChatService implements AiChatService {
                 || guard.isBlocked(question)) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
+        if (actor.isPlatformAdmin()) quotas.ensureAiChatAllowed(actor);
+        else quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
 
         QuestionIntent intent = intents.classify(question);
         long started = System.currentTimeMillis();

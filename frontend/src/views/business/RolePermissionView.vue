@@ -47,8 +47,9 @@ const roleNames: Record<string, string> = {
 const roleOrder = ['PLATFORM_ADMIN', 'GYM_ADMIN', 'COACH', 'MEMBER']
 const roleMenuBoundaries: Record<string, Set<string>> = {
   GYM_ADMIN: new Set([
-    'menu:dashboard', 'menu:assistant', 'menu:knowledge', 'menu:courses',
-    'menu:ai-config', 'menu:training', 'menu:analytics', 'menu:admin', 'menu:tenant-settings', 'menu:role-permissions', 'menu:profile'
+    'menu:dashboard', 'menu:assistant', 'menu:knowledge', 'menu:operations', 'menu:courses',
+    'menu:equipment', 'menu:ai-config', 'menu:training', 'menu:analytics', 'menu:admin',
+    'menu:tenant-settings', 'menu:role-permissions', 'menu:profile'
   ]),
   COACH: new Set(['menu:dashboard', 'menu:assistant', 'menu:knowledge', 'menu:courses', 'menu:training', 'menu:profile']),
   MEMBER: new Set(['menu:dashboard', 'menu:assistant', 'menu:courses', 'menu:training', 'menu:profile'])

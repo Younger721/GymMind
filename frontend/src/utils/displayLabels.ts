@@ -14,6 +14,8 @@ export const ROLE_LABELS: Record<string, string> = {
 export const DEFAULT_COLUMN_LABELS: Record<string, string> = {
   id: 'ID',
   tenantId: '租户ID',
+  actorId: '用户 ID',
+  result: '结果',
   username: '用户名',
   email: '邮箱',
   displayName: '显示名',

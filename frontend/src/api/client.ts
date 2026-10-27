@@ -33,6 +33,20 @@ function readPlatformContextTenantId(): number | null {
   return Number.isSafeInteger(value) && value > 0 ? value : null
 }
 
+/** 与 axios 拦截器一致：Bearer + 平台管理员顶栏门店 X-Tenant-Id */
+export function buildAuthenticatedHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...(extra ?? {}) }
+  const token = localStorage.getItem('token')
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  const contextTenantId = readPlatformContextTenantId()
+  if (hasPlatformAdminRole() && contextTenantId != null) {
+    headers['X-Tenant-Id'] = String(contextTenantId)
+  }
+  return headers
+}
+
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token')
@@ -49,8 +63,7 @@ apiClient.interceptors.request.use(
         return config
       }
       const contextTenantId = readPlatformContextTenantId()
-      const tenantId = localStorage.getItem('tenantId')
-      if (hasPlatformAdminRole() && !tenantId && contextTenantId != null) {
+      if (hasPlatformAdminRole() && contextTenantId != null) {
         config.headers['X-Tenant-Id'] = String(contextTenantId)
       } else {
         delete config.headers['X-Tenant-Id']
@@ -79,6 +92,28 @@ function isOnLoginPage(): boolean {
     || router.currentRoute.value.path === '/register'
 }
 
+/** 并行 401/403 时只弹一次「请重新登录」，避免首页多接口同时失败刷屏 */
+let sessionExpiredNoticeShown = false
+
+export function resetSessionExpiredNotice() {
+  sessionExpiredNoticeShown = false
+}
+
+function handleSessionExpired() {
+  if (sessionExpiredNoticeShown || isOnLoginPage()) {
+    return
+  }
+  sessionExpiredNoticeShown = true
+  localStorage.removeItem('token')
+  localStorage.removeItem('refreshToken')
+  ElMessage.error('登录已过期，请重新登录')
+  router.push('/login')
+}
+
+function shouldSuppressAuthErrorToast(): boolean {
+  return sessionExpiredNoticeShown || isOnLoginPage()
+}
+
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response.data,
   (error) => {
@@ -96,21 +131,27 @@ apiClient.interceptors.response.use(
               // 登录/注册失败：优先展示后端中文 message
               ElMessage.error(message || '账号或密码错误')
             } else {
-              localStorage.removeItem('token')
-              localStorage.removeItem('refreshToken')
-              if (!isOnLoginPage()) {
-                ElMessage.error('登录已过期，请重新登录')
-                router.push('/login')
-              }
+              handleSessionExpired()
             }
             break
           case 403:
             if (data && typeof data === 'object' && 'code' in data
               && (data as { code?: string }).code === 'TENANT_CONTEXT_REQUIRED') {
-              ElMessage.warning('请先选择租户')
-            } else {
-              ElMessage.error('没有权限执行此操作')
+              if (!shouldSuppressAuthErrorToast()) {
+                ElMessage.warning('请先选择租户')
+              }
+              break
             }
+            if (data && typeof data === 'object' && 'code' in data
+              && (data as { code?: string }).code === 'UNAUTHENTICATED') {
+              handleSessionExpired()
+              break
+            }
+            // 未登录/登出后 Spring 常返回 403，与 401 一并收敛，避免重复 Toast
+            if (shouldSuppressAuthErrorToast() || !localStorage.getItem('token')) {
+              break
+            }
+            ElMessage.error('没有权限执行此操作')
             break
           case 404:
             // 业务级资源不存在：未映射的接口在本后端会落到 500 INTERNAL_ERROR，

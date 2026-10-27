@@ -1,0 +1,15 @@
+﻿[q01_platform_admin_equipment] platform_admin :: 平台要求店管理员如何记录跑步机季度点检？
+[q02_gym_a_admin_equipment] gym_a_admin :: 史密斯架安全销每日点检要求是什么？
+powershell : 尝试除以零。
+所在位置 C:\Users\lenovo\AppData\Local\Temp\ps-script-3f9a89a4-941e-48a1-822c-a3816e8cbc1c.ps1:90 字符: 1
++ powershell -NoProfile -ExecutionPolicy Bypass -File "D:\java\project\ ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (尝试除以零。:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+所在位置 D:\java\project\full-project\GymMind\scripts\rag-eval\run-eval.ps1:116 字符: 44
++ ...      if ($top.Count -eq 0) { 0 } else { $relevantInTop / $top.Count }
++                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : RuntimeException
+ 

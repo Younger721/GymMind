@@ -4,6 +4,7 @@ import com.gymmind.ai.domain.ContextBudgeter;
 import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.ai.domain.HybridRetriever;
 import com.gymmind.ai.domain.RankedChunk;
+import com.gymmind.ai.domain.RrfFusion;
 import com.gymmind.ai.domain.RerankGateway;
 import com.gymmind.ai.domain.EmbeddingGateway;
 import com.gymmind.ai.harness.AiProgressEvent;
@@ -167,10 +168,14 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                     chunkDetails(result.vectorHits(), authorizedChunkIds, searchableDocuments, "向量召回"));
         }
 
-        List<ContextSegment> fused = filterSearchable(actor, result, searchableDocuments);
+        // RRF 必须只在「可引用」chunk 上融合；否则 ES/Milvus 里已删文档的高分噪声会占满 Top-K，融合后权限过滤会整批变 0。
+        List<ContextSegment> fused = fuseAuthorized(result, authorizedChunkIds,
+                searchProperties.recallTopK(), searchProperties.fusionTopK());
+        fused = enrichSearchableSegments(fused, result, searchableDocuments);
         emit(reporter, "fusion", AiProgressEvent.Status.COMPLETED, "结果融合完成", fused.size(),
                 segmentDetails(fused, result.chunksById(), searchableDocuments, "融合候选"));
         fused = filterLexicalEvidence(query, fused);
+        List<ContextSegment> rerankInput = fused;
         emit(reporter, "rerank", AiProgressEvent.Status.RUNNING, "重排序中", fused.size());
         if (rerank != null && !fused.isEmpty()) {
             try {
@@ -189,6 +194,12 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         } else {
             fused = localRerank(query, fused);
         }
+        if (fused.isEmpty() && !rerankInput.isEmpty()) {
+            fused = localRerank(query, rerankInput);
+        }
+        if (fused.isEmpty() && !rerankInput.isEmpty()) {
+            fused = rerankInput;
+        }
 
         // Structured price evidence is appended after lexical/reranker stages so
         // a short promotion notice cannot be discarded for having a weak vector.
@@ -198,10 +209,105 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                 segmentDetails(fused, result.chunksById(), searchableDocuments, "重排序结果"));
         emit(reporter, "citation_prepare", AiProgressEvent.Status.RUNNING, "引用整理中", null);
         List<ContextSegment> selected = ContextBudgeter.select(fused, searchProperties.contextBudgetChars());
+        selected = retainAnswerableSegments(query, selected);
         emit(reporter, "citation_prepare", AiProgressEvent.Status.COMPLETED, "引用整理完成", selected.size(),
                 segmentDetails(selected, result.chunksById(), searchableDocuments, "引用片段"));
         return selected;
     }
+
+    /** 去掉与问句几乎无关的片段，避免误引用运营手册等向量噪声。 */
+    private static List<ContextSegment> retainAnswerableSegments(String query, List<ContextSegment> selected) {
+        if (selected == null || selected.isEmpty()) {
+            return List.of();
+        }
+        if (isPriceQuery(query)) {
+            return selected;
+        }
+        List<ContextSegment> relevant = selected.stream()
+                .filter(segment -> segment != null && segmentMatchesQuery(query, segment.text()))
+                .toList();
+        // 过滤错选 FAQ 后若为空，保留原候选，避免重排误杀后上下文全丢。
+        return relevant.isEmpty() ? selected : relevant;
+    }
+
+    private static boolean segmentMatchesQuery(String query, String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        if ("PRICE_RESULT".equals(text) || text.startsWith("结构化知识依据")) {
+            return true;
+        }
+        if (isQuestionList(text)) {
+            return false;
+        }
+        if (faqMismatchForHowToQuery(query, text)) {
+            return false;
+        }
+        if (isHowToQuery(query)) {
+            List<String> intents = primaryIntentTerms(query);
+            if (!intents.isEmpty()) {
+                return intents.stream().anyMatch(text::contains);
+            }
+        }
+        List<String> mandatory = mandatoryContentTerms(query);
+        if (!mandatory.isEmpty()) {
+            return mandatory.stream().allMatch(text::contains);
+        }
+        List<String> terms = queryTerms(query);
+        if (terms.isEmpty()) {
+            return true;
+        }
+        int matches = matchedTermCount(text, terms);
+        int minimumMatches = terms.size() > 8 ? 2 : 1;
+        return matches >= minimumMatches;
+    }
+
+    /**
+     * 从问句拆出实体词（如「训练区」「运动鞋」），片段须全部包含，避免只命中「训练区」却误引消防/运营条文。
+     */
+    private static List<String> mandatoryContentTerms(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        String normalized = query.replaceAll("[？?。，,.!！\\s]+", "");
+        normalized = normalized.replaceAll("(有什么|是什么|怎么样|如何|怎么|哪些|多少|是否|能否|可以吗|注意什么|要什么)", "");
+        if (!normalized.contains("对")) {
+            return List.of();
+        }
+        Set<String> terms = new LinkedHashSet<>();
+        for (String part : normalized.split("对")) {
+            String token = stripGenericQuestionSuffix(part.trim());
+            if (token.isBlank()) {
+                continue;
+            }
+            if (!token.codePoints().allMatch(value -> value >= 0x4E00 && value <= 0x9FFF)) {
+                continue;
+            }
+            if (token.length() >= 2 && !GENERIC_QUESTION_TERMS.contains(token)) {
+                terms.add(token);
+            }
+        }
+        if (terms.size() < 2 || terms.stream().anyMatch(term -> term.length() > 8)) {
+            return List.of();
+        }
+        return List.copyOf(terms);
+    }
+
+    private static String stripGenericQuestionSuffix(String token) {
+        if (token == null || token.isBlank()) {
+            return "";
+        }
+        String value = token;
+        for (String suffix : GENERIC_QUESTION_TERMS) {
+            if (value.endsWith(suffix) && value.length() > suffix.length()) {
+                value = value.substring(0, value.length() - suffix.length());
+            }
+        }
+        return value.trim();
+    }
+
+    private static final Set<String> GENERIC_QUESTION_TERMS = Set.of(
+            "要求", "规定", "制度", "流程", "注意", "事项", "说明", "介绍", "情况", "问题", "内容", "标准", "规范");
 
     private List<ContextSegment> addStructuredPriceContext(CurrentActor actor, String query,
                                                             List<ContextSegment> existing,
@@ -630,14 +736,41 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
         progress.accept(new AiProgressEvent("knowledge_search", stage, status, message, resultCount, details));
     }
 
-    private List<ContextSegment> filterSearchable(CurrentActor actor, HybridRetriever.Result result) {
-        return filterSearchable(actor, result, searchableDocuments(actor, result));
+    /** 在通过权限与 index_generation 校验的 chunk 子集上做 RRF。 */
+    private static List<ContextSegment> fuseAuthorized(HybridRetriever.Result result, Set<String> authorizedChunkIds,
+                                                     int recallTopK, int fusionTopK) {
+        List<IndexedChunk> keyword = result.keywordHits().stream()
+                .filter(chunk -> authorizedChunkIds.contains(chunk.id())).toList();
+        List<IndexedChunk> vector = result.vectorHits().stream()
+                .filter(chunk -> authorizedChunkIds.contains(chunk.id())).toList();
+        if (keyword.isEmpty() && vector.isEmpty()) {
+            return List.of();
+        }
+        List<RankedChunk> keywordRanked = toRanked(keyword, recallTopK);
+        List<RankedChunk> vectorRanked = toRanked(vector, recallTopK);
+        return RrfFusion.merge(keywordRanked, vectorRanked, fusionTopK).stream()
+                .map(entry -> result.chunksById().get(entry.id()))
+                .filter(Objects::nonNull)
+                .map(chunk -> new ContextSegment(chunk.id(),
+                        chunk.documentId() == null ? chunk.id() : chunk.documentId().toString(), chunk.text()))
+                .toList();
     }
 
-    private List<ContextSegment> filterSearchable(CurrentActor actor, HybridRetriever.Result result,
-                                                  Map<Long, KnowledgeDocument> searchable) {
-        if (documents == null) return result.segments();
-        return result.segments().stream().filter(segment -> {
+    private static List<RankedChunk> toRanked(List<IndexedChunk> chunks, int limit) {
+        List<RankedChunk> ranked = new ArrayList<>();
+        int count = Math.min(limit, chunks.size());
+        for (int i = 0; i < count; i++) {
+            ranked.add(new RankedChunk(chunks.get(i).id(), i + 1));
+        }
+        return ranked;
+    }
+
+    private List<ContextSegment> enrichSearchableSegments(List<ContextSegment> segments, HybridRetriever.Result result,
+                                                          Map<Long, KnowledgeDocument> searchable) {
+        if (documents == null) {
+            return segments;
+        }
+        return segments.stream().filter(segment -> {
             IndexedChunk chunk = result.chunksById().get(segment.id());
             return chunk == null || chunk.documentId() == null || searchable.containsKey(chunk.documentId());
         }).map(segment -> {
@@ -648,6 +781,14 @@ public class DefaultKnowledgeSearchService implements KnowledgeSearchService {
                     document.fileName(), document.knowledgeVersion(), document.knowledgeType().name(),
                     document.knowledgeKey(), document.effectiveFrom(), document.effectiveTo(), false);
         }).toList();
+    }
+
+    private List<ContextSegment> filterSearchable(CurrentActor actor, HybridRetriever.Result result) {
+        Map<Long, KnowledgeDocument> searchable = searchableDocuments(actor, result);
+        Set<String> authorized = authorizedChunkIds(result, searchable);
+        List<ContextSegment> fused = fuseAuthorized(result, authorized, searchProperties.recallTopK(),
+                searchProperties.fusionTopK());
+        return enrichSearchableSegments(fused, result, searchable);
     }
 
     private Map<Long, KnowledgeDocument> searchableDocuments(CurrentActor actor, HybridRetriever.Result result) {

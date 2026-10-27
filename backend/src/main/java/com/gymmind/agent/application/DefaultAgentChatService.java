@@ -75,7 +75,8 @@ public class DefaultAgentChatService implements AgentChatService {
                 || question == null || question.isBlank() || guard.isBlocked(question)) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED);
         }
-        quotas.ensureAiChatAllowed(tenantId);
+        if (actor.isPlatformAdmin()) quotas.ensureAiChatAllowed(actor);
+        else quotas.ensureAiChatAllowed(tenantId);
 
         TenantAgent agent = agents.findByTenantIdAndId(tenantId, agentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));

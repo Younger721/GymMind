@@ -14,6 +14,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -26,6 +27,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String AUTHORIZATION = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
+    /** OnlyOffice 拉取/回调会带 Document Server JWT，不能当作用户登录 JWT 解析 */
+    private static final AntPathRequestMatcher ONLYOFFICE_CONTENT =
+            new AntPathRequestMatcher("/api/v1/knowledge/documents/*/content", "GET");
+    private static final AntPathRequestMatcher ONLYOFFICE_CALLBACK =
+            new AntPathRequestMatcher("/api/v1/knowledge/documents/*/onlyoffice/callback", "POST");
 
     private final JwtService jwtService;
     private final PrincipalLoader principalLoader;
@@ -38,6 +44,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.jwtService = Objects.requireNonNull(jwtService, "jwtService");
         this.principalLoader = Objects.requireNonNull(principalLoader, "principalLoader");
         this.authenticationEntryPoint = Objects.requireNonNull(authenticationEntryPoint, "authenticationEntryPoint");
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return ONLYOFFICE_CONTENT.matches(request) || ONLYOFFICE_CALLBACK.matches(request);
     }
 
     @Override

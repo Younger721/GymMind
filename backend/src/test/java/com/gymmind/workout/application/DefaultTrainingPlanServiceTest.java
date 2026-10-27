@@ -121,6 +121,63 @@ class DefaultTrainingPlanServiceTest {
     }
 
     @Test
+    void schedulesMemberWorkoutPlanByWorkoutPlanId() {
+        var memberPlans = mock(SpringDataMemberWorkoutPlanRepository.class);
+        var planRepo = mock(com.gymmind.workout.domain.repository.WorkoutPlanRepository.class);
+        var schedules = mock(SpringDataMemberWorkoutScheduleRepository.class);
+        var members = mock(MemberRepository.class);
+        var member = mock(com.gymmind.member.domain.model.Member.class);
+        when(member.getId()).thenReturn(21L);
+        when(members.findByTenantIdAndUserId(11L, 9L)).thenReturn(Optional.of(member));
+        var plan = com.gymmind.workout.domain.model.WorkoutPlan.create(
+                11L, 21L, null, "排月入门", "增肌力量",
+                java.time.LocalDate.now(), java.time.LocalDate.now().plusMonths(1), "说明");
+        when(planRepo.findByTenantIdAndId(11L, 5L)).thenReturn(Optional.of(plan));
+        when(schedules.save(any())).thenAnswer(i -> i.getArgument(0));
+        var service = new DefaultTrainingPlanService(mock(SpringDataWorkoutPlanTemplateRepository.class),
+                mock(SpringDataWorkoutPlanTemplateItemRepository.class), memberPlans, schedules, members,
+                mock(ExerciseRepository.class), planRepo, mock(com.gymmind.workout.domain.repository.WorkoutPlanItemRepository.class));
+
+        var scheduled = (com.gymmind.workout.domain.model.MemberWorkoutSchedule) service.schedule(
+                memberActor(), 5L, java.time.LocalDate.of(2026, 10, 14));
+
+        assertThat(scheduled.getWorkoutPlanId()).isEqualTo(5L);
+        assertThat(scheduled.getMemberPlanId()).isNull();
+        verifyNoInteractions(memberPlans);
+    }
+
+    @Test
+    void calendarReturnsWorkoutPlanNameForSchedule() {
+        var schedules = mock(SpringDataMemberWorkoutScheduleRepository.class);
+        var planRepo = mock(com.gymmind.workout.domain.repository.WorkoutPlanRepository.class);
+        var members = mock(MemberRepository.class);
+        var member = mock(com.gymmind.member.domain.model.Member.class);
+        when(member.getId()).thenReturn(21L);
+        when(members.findByTenantIdAndUserId(11L, 9L)).thenReturn(Optional.of(member));
+        var schedule = com.gymmind.workout.domain.model.MemberWorkoutSchedule.forWorkoutPlan(
+                11L, 5L, 21L, java.time.LocalDate.of(2026, 10, 8));
+        when(schedules.findAllByTenantIdAndMemberIdAndScheduledDateBetween(
+                11L, 21L, java.time.LocalDate.of(2026, 10, 1), java.time.LocalDate.of(2026, 10, 31)))
+                .thenReturn(List.of(schedule));
+        var plan = com.gymmind.workout.domain.model.WorkoutPlan.create(
+                11L, 21L, null, "胸部基础力量", "增肌",
+                java.time.LocalDate.now(), java.time.LocalDate.now().plusMonths(1), "说明");
+        when(planRepo.findByTenantIdAndId(11L, 5L)).thenReturn(Optional.of(plan));
+        var service = new DefaultTrainingPlanService(mock(SpringDataWorkoutPlanTemplateRepository.class),
+                mock(SpringDataWorkoutPlanTemplateItemRepository.class), mock(SpringDataMemberWorkoutPlanRepository.class),
+                schedules, members, mock(ExerciseRepository.class), planRepo,
+                mock(com.gymmind.workout.domain.repository.WorkoutPlanItemRepository.class));
+
+        var views = service.calendar(memberActor(), java.time.LocalDate.of(2026, 10, 1),
+                java.time.LocalDate.of(2026, 10, 31));
+
+        assertThat(views).hasSize(1);
+        assertThat(views.get(0).planName()).isEqualTo("胸部基础力量");
+        assertThat(views.get(0).goal()).isEqualTo("增肌");
+        assertThat(views.get(0).workoutPlanId()).isEqualTo(5L);
+    }
+
+    @Test
     void legacyScheduleUsesMappedPersonalPlan() {
         var memberPlans = mock(SpringDataMemberWorkoutPlanRepository.class);
         var plans = mock(com.gymmind.workout.domain.repository.WorkoutPlanRepository.class);

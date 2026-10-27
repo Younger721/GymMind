@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="GymMindApplication (dev)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="gymmind-backend" />
+    <option name="ACTIVE_PROFILES" value="dev" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="com.gymmind.GymMindApplication" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

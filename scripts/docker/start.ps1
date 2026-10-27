@@ -133,6 +133,7 @@ $redisPort = Get-EnvValue $envMap "REDIS_HOST_PORT" "6379"
 $esPort = Get-EnvValue $envMap "ES_HOST_PORT" "9202"
 $minioApiPort = Get-EnvValue $envMap "MINIO_API_PORT" "9000"
 $minioConsolePort = Get-EnvValue $envMap "MINIO_CONSOLE_PORT" "9001"
+$onlyofficePort = Get-EnvValue $envMap "ONLYOFFICE_HOST_PORT" "8088"
 $milvusPort = Get-EnvValue $envMap "MILVUS_PORT" "19530"
 $mysqlHost = Get-EnvValue $envMap "MYSQL_HOST" "localhost"
 $mysqlPortLocal = Get-EnvValue $envMap "MYSQL_PORT" "3306"
@@ -154,7 +155,7 @@ if ($useDockerMysql) {
     $composeArgs += @("--profile", "mysql")
 }
 $upCode = Invoke-Compose $composeArgs
-$expectedServices = if ($useDockerMysql) { 6 } else { 5 }
+$expectedServices = if ($useDockerMysql) { 7 } else { 6 }
 if ($upCode -ne 0 -and (Test-ComposeRunning $expectedServices)) {
     Write-WarnMsg "docker compose exit code was $upCode, but core containers are running."
     $upCode = 0
@@ -212,6 +213,7 @@ if (-not (Wait-Tcp "Redis" "127.0.0.1" $redisPort 90)) { $allOk = $false }
 if (-not (Wait-Http "Elasticsearch" "http://127.0.0.1:${esPort}/_cluster/health" 240)) { $allOk = $false }
 if (-not (Wait-Http "MinIO" "http://127.0.0.1:${minioApiPort}/minio/health/live" 120)) { $allOk = $false }
 if (-not (Wait-Http "Milvus" "http://127.0.0.1:9091/healthz" 300)) { $allOk = $false }
+if (-not (Wait-Http "OnlyOffice" "http://127.0.0.1:${onlyofficePort}/welcome/" 360)) { $allOk = $false }
 
 if ($useDockerMysql) {
     $mysqlDockerPort = Get-EnvValue $envMap "MYSQL_HOST_PORT" "3307"
@@ -236,6 +238,7 @@ Write-Host "  Elasticsearch:   http://localhost:${esPort}"
 Write-Host "  Milvus:          localhost:${milvusPort}"
 Write-Host "  MinIO API:       http://localhost:${minioApiPort}"
 Write-Host "  MinIO Console:   http://localhost:${minioConsolePort}"
+Write-Host "  OnlyOffice:      http://localhost:${onlyofficePort}"
 if ($useDockerMysql) {
     $mysqlDockerPort = Get-EnvValue $envMap "MYSQL_HOST_PORT" "3307"
     Write-Host "  MySQL (Docker):  localhost:${mysqlDockerPort}"

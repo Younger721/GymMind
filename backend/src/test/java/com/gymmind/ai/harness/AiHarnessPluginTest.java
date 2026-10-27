@@ -55,6 +55,21 @@ class AiHarnessPluginTest {
         CurrentActor platform = new CurrentActor(9L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0L, "platform");
 
         assertThat(new AiRoleProfileResolver().resolve(platform).enabledPlugins())
-                .contains("knowledge_search");
+                .contains("knowledge_search", "platform_ai_admin_metrics");
+    }
+
+    @Test
+    void platformRoleProfileStaysOnPlatformToolsWhenTenantSelected() {
+        CurrentActor platform = new CurrentActor(9L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of("analytics:read"), 0L, "platform");
+        TenantContextHolder.set(11L);
+        try {
+            var profile = new AiRoleProfileResolver().resolve(platform);
+            assertThat(profile.enabledPlugins()).contains("knowledge_search", "platform_ai_admin_metrics");
+            assertThat(profile.enabledPlugins()).doesNotContain("gym_operations_metrics", "member_churn_risk_list");
+            assertThat(profile.quickPrompts()).contains("当前门店本月 AI 配额和用量是多少？");
+            assertThat(profile.quickPrompts()).doesNotContain("上个月来了多少会员？");
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 }

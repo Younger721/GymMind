@@ -1,7 +1,13 @@
 <template>
   <div class="shell">
     <aside class="sidebar">
-      <router-link to="/dashboard" class="brand">GymMind</router-link>
+      <router-link to="/dashboard" class="brand">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span class="brand-text">
+          <strong>GymMind</strong>
+          <span class="brand-sub">AI PLATFORM</span>
+        </span>
+      </router-link>
 
       <nav v-for="group in menuGroups" :key="group.title" class="menu-group">
         <div class="group-title">{{ group.title }}</div>
@@ -12,14 +18,26 @@
           class="menu-link"
           :class="{ active: isActive(item.path) }"
         >
-          {{ item.label }}
+          {{ itemTitle(item) }}
         </router-link>
       </nav>
+
+      <div class="sidebar-footer">
+        <div class="sync-box">
+          <span class="gm-pill gm-pill--ok">
+            <span class="gm-pill-dot" />
+            Cluster Sync
+          </span>
+          <span class="sync-state">READY</span>
+        </div>
+      </div>
     </aside>
 
     <div class="main">
       <header class="topbar">
-        <span class="page-hint">{{ currentTitle }}</span>
+        <div class="topbar-left">
+          <span class="page-hint">{{ currentTitle }}</span>
+        </div>
         <div class="user-area">
           <el-select
             v-if="authStore.isPlatformAdmin"
@@ -55,7 +73,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
-import { hasMenuPermission, MENU_CATALOG } from '@/utils/menuPermissions'
+import { hasMenuPermission, MENU_CATALOG, MENU_CODES, type MenuCatalogEntry } from '@/utils/menuPermissions'
 import { tenancyApi } from '@/api/tenancy'
 
 const route = useRoute()
@@ -79,9 +97,14 @@ const menuGroups = computed(() => {
 
 const flatItems = computed(() => menuGroups.value.flatMap(g => g.items))
 
+function itemTitle(item: MenuCatalogEntry) {
+  if (!authStore.isPlatformAdmin && item.code === MENU_CODES.TENANT_SETTINGS) return '额度使用'
+  return item.label
+}
+
 const currentTitle = computed(() => {
   const hit = flatItems.value.find(i => isActive(i.path))
-  return hit?.label ?? 'GymMind'
+  return hit ? itemTitle(hit) : 'GymMind'
 })
 
 function isActive(path: string) {
@@ -110,8 +133,7 @@ async function loadTenants() {
     }
     tenantsLoaded.value = true
   } catch {
-    // Keep the selector available so an invalid or disabled saved context can
-    // still be cleared and the list can be retried.
+    // 保留选择器以便重试加载门店列表
   }
 }
 
@@ -144,65 +166,125 @@ onMounted(() => {
 }
 
 .sidebar {
-  width: 220px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
-  background: var(--surface);
+  background: var(--surface-muted);
   border-right: 1px solid var(--border);
-  padding: 16px 12px;
+  padding: 16px 12px 12px;
   position: sticky;
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .brand {
-  display: block;
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  padding: 6px 8px 18px;
+  margin-bottom: 4px;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #052e16;
+  background: linear-gradient(145deg, var(--primary), #16a34a);
+  box-shadow: 0 4px 16px var(--primary-glow);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brand-text strong {
+  font-size: 15px;
   font-weight: 700;
   color: var(--text);
-  text-decoration: none;
-  padding: 4px 8px 16px;
   letter-spacing: -0.02em;
 }
 
-.brand:hover {
+.brand-sub {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+.brand:hover .brand-text strong {
   color: var(--primary);
-  text-decoration: none;
 }
 
 .menu-group {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .group-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0 8px 6px;
+  letter-spacing: 0.08em;
+  padding: 0 10px 8px;
 }
 
 .menu-link {
   display: block;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
   transition: background 0.15s, color 0.15s;
 }
 
 .menu-link:hover {
-  background: var(--bg);
+  background: var(--surface-hover);
   color: var(--text);
   text-decoration: none;
 }
 
 .menu-link.active {
-  background: var(--primary-soft);
+  background: var(--primary);
+  color: #052e16;
+  font-weight: 600;
+  box-shadow: 0 4px 14px var(--primary-glow);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 8px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.sync-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.sync-state {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   color: var(--primary);
 }
 
@@ -214,27 +296,37 @@ onMounted(() => {
 }
 
 .topbar {
-  height: 52px;
-  padding: 0 24px;
+  height: var(--topbar-height);
+  padding: 0 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--surface);
+  background: rgba(15, 22, 32, 0.85);
+  backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
 .page-hint {
   font-size: 14px;
   font-weight: 600;
+  color: var(--text);
 }
 
 .user-area {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .tenant-context-select {
@@ -252,10 +344,10 @@ onMounted(() => {
 
 .content {
   flex: 1;
-  max-width: 1100px;
+  max-width: var(--content-max);
   width: 100%;
   margin: 0 auto;
-  padding: 24px 24px 40px;
+  padding: 28px 28px 48px;
 }
 
 @media (max-width: 900px) {
@@ -276,6 +368,10 @@ onMounted(() => {
   .brand {
     width: 100%;
     padding-bottom: 8px;
+  }
+
+  .sidebar-footer {
+    display: none;
   }
 
   .menu-group {

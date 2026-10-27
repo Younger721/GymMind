@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi, type LoginRequest, type RegisterRequest } from '@/api/auth'
+import { resetSessionExpiredNotice } from '@/api/client'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 
@@ -16,6 +17,7 @@ function persistAuth(
   roles: string[],
   permissions: string[]
 ) {
+  resetSessionExpiredNotice()
   localStorage.setItem('token', accessToken)
   localStorage.setItem('refreshToken', refreshToken)
   localStorage.setItem('userId', String(userId))

@@ -66,5 +66,19 @@ export const knowledgeApi = {
 
   setPublication(id: number, published: boolean) {
     return apiClient.patch(`/v1/knowledge/documents/${id}/publication`, null, { params: { published } })
+  },
+
+  getEditorConfig(id: number) {
+    return apiClient.get<any, ApiResponse<{
+      documentServerUrl: string
+      token: string
+      config: Record<string, unknown>
+      documentId: number
+      fileName: string
+    }>>(`/v1/knowledge/documents/${id}/editor-config`)
   }
+}
+
+export function isDocxFileName(fileName: string) {
+  return fileName.toLowerCase().endsWith('.docx')
 }

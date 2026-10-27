@@ -52,21 +52,36 @@
       </div>
       <p class="meta">目标：{{ draftPlan.goal }} · {{ draftPlan.startDate }} 至 {{ draftPlan.endDate }}</p>
       <p v-if="draftPlan.description" class="desc">{{ draftPlan.description }}</p>
-      <el-table :data="draftPlan.items" stripe size="small">
-        <el-table-column prop="dayOfWeek" label="星期" width="70" />
-        <el-table-column prop="exerciseName" label="动作" min-width="120" />
-        <el-table-column prop="sets" label="组" width="55" />
-        <el-table-column prop="reps" label="次" width="55" />
-        <el-table-column prop="restSeconds" label="休息(秒)" width="90" />
+      <el-table
+        :data="draftPlan.items"
+        stripe
+        class="plan-table"
+        :span-method="planSpanMethod"
+      >
+        <el-table-column prop="dayOfWeek" label="日期" width="108" align="center">
+          <template #default="{ row }">
+            <span class="day-label">{{ formatDayOfWeek(row.dayOfWeek) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="exerciseName" label="动作" min-width="160" />
+        <el-table-column prop="sets" label="组" width="72" align="center" />
+        <el-table-column prop="reps" label="次" width="72" align="center" />
+        <el-table-column prop="restSeconds" label="休息(秒)" width="100" align="center" />
       </el-table>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { workoutPlanDraftApi, type WorkoutPlanDraft } from '@/api/workoutPlanDraft'
+import { dayOfWeekRowSpans, formatDayOfWeek } from '@/utils/dayOfWeek'
+
+type TableSpanArgs = {
+  rowIndex: number
+  columnIndex: number
+}
 
 const goal = ref('增肌')
 const sessionsPerWeek = ref(3)
@@ -77,6 +92,19 @@ const loading = ref(false)
 const saving = ref(false)
 const draftPlan = ref<WorkoutPlanDraft | null>(null)
 const historySummary = ref('')
+
+const planDayRowSpans = computed(() => dayOfWeekRowSpans(draftPlan.value?.items ?? []))
+
+function planSpanMethod({ rowIndex, columnIndex }: TableSpanArgs) {
+  if (columnIndex !== 0) {
+    return { rowspan: 1, colspan: 1 }
+  }
+  const rowspan = planDayRowSpans.value[rowIndex] ?? 1
+  if (rowspan === 0) {
+    return { rowspan: 0, colspan: 0 }
+  }
+  return { rowspan, colspan: 1 }
+}
 
 const generate = async () => {
   if (!goal.value) {
@@ -139,7 +167,8 @@ const saveDraft = async () => {
 .history h3,
 .result h3 {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .result-head {
@@ -153,7 +182,34 @@ const saveDraft = async () => {
 .meta,
 .desc {
   color: var(--text-secondary, #666);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.desc {
+  margin-bottom: 16px;
+}
+
+.result {
+  margin-top: 4px;
+}
+
+.plan-table :deep(.el-table__cell) {
+  font-size: 15px;
+  padding: 12px 0;
+}
+
+.plan-table :deep(th.el-table__cell) {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.day-label {
+  font-weight: 600;
+  color: var(--text-primary, inherit);
+  white-space: nowrap;
 }
 
 .history {

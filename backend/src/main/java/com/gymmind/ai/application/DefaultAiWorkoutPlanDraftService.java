@@ -107,7 +107,8 @@ public class DefaultAiWorkoutPlanDraftService implements AiWorkoutPlanDraftServi
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         Long memberId = resolveTarget(actor, tenantId, requestedMemberId);
-        quotas.ensureAiChatAllowed(tenantId);
+        if (actor.isPlatformAdmin()) quotas.ensureAiChatAllowed(actor);
+        else quotas.ensureAiChatAllowed(tenantId);
 
         WorkoutHistorySummary historySummary = null;
         if (includeHistory && history != null) {

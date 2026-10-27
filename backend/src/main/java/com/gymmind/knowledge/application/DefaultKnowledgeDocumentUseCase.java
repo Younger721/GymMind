@@ -14,6 +14,7 @@ import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import com.gymmind.tenancy.application.TenantQuotaService;
 import com.gymmind.tenancy.application.TenantQuotaServices;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,14 +38,14 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
     private final KnowledgeIndexingService indexing;
     private final KnowledgeIngestWorker ingestWorker;
     private final TenantQuotaService quotas;
-    private final DocumentParserRegistry parser = DocumentParserRegistry.standard();
+    private final DocumentParserRegistry parser;
     private final ChunkStrategySelector strategySelector;
     private final UserAccountRepository users;
     private final KnowledgeChunkArtifactService chunkArtifacts;
     private final KnowledgeChunkRepository chunks;
 
     public DefaultKnowledgeDocumentUseCase(KnowledgeDocumentRepository repository, KnowledgeObjectStore store) {
-        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null, null);
+        this(repository, store, null, null, TenantQuotaServices.unboundedForLegacyConstruction(), null, null, null, null, null);
     }
 
     public DefaultKnowledgeDocumentUseCase(
@@ -53,7 +54,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             KnowledgeIndexingService indexing,
             KnowledgeIngestWorker ingestWorker,
             TenantQuotaService quotas) {
-        this(repository, store, indexing, ingestWorker, quotas, null, null, null, null);
+        this(repository, store, indexing, ingestWorker, quotas, null, null, null, null, null);
     }
 
     @Autowired
@@ -68,12 +69,14 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             KnowledgeChunkArtifactService chunkArtifacts,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            KnowledgeChunkRepository chunks) {
+            KnowledgeChunkRepository chunks,
+            DocumentParserRegistry parser) {
         this.repository = repository;
         this.store = store;
         this.indexing = indexing;
         this.ingestWorker = ingestWorker;
         this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
+        this.parser = parser == null ? DocumentParserRegistry.standard() : parser;
         this.strategySelector = new ChunkStrategySelector(chatModel);
         this.users = users;
         this.chunkArtifacts = chunkArtifacts;
@@ -214,6 +217,9 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             chunkArtifacts.deleteArtifact(document.chunkArtifactKey());
         }
         store.delete(document.objectKey());
+        if (document.normalizedMarkdownKey() != null && !document.normalizedMarkdownKey().isBlank()) {
+            store.delete(document.normalizedMarkdownKey());
+        }
         return view(repository.save(document));
     }
 
@@ -221,8 +227,10 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
     public List<KnowledgeDocumentView> list(CurrentActor actor) {
         requireRead(actor);
         if (actor.isPlatformAdmin()) {
+            Long contextTenantId = ActorAccess.requireTenantId(actor);
             return repository.findAllDocuments().stream()
                     .filter(document -> document.status() != DocumentStatus.DELETED)
+                    .filter(document -> matchesPlatformTenantContext(document.tenantId(), contextTenantId))
                     .map(this::view)
                     .toList();
         }
@@ -248,6 +256,68 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
     }
 
     @Override
+    public byte[] readBinaryContent(CurrentActor actor, Long id) {
+        requireRead(actor);
+        KnowledgeDocument document = get(actor, id);
+        byte[] bytes = store.read(document.objectKey());
+        if (bytes == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        return bytes;
+    }
+
+    @Override
+    @Transactional
+    public KnowledgeDocumentView replaceBinaryContent(CurrentActor actor, Long id, byte[] content) {
+        if (ActorAccess.isSuperAdmin(actor)) {
+            ActorAccess.requireTenantId(actor);
+        } else {
+            write(actor);
+        }
+        if (content == null || content.length == 0) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        KnowledgeDocument document = getForUpdate(actor, id);
+        if (ActorAccess.isSuperAdmin(actor)) {
+            Long contextTenantId = ActorAccess.requireTenantId(actor);
+            if (document.tenantId() != null && !contextTenantId.equals(document.tenantId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+        }
+        if (!document.isDocx()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED);
+        }
+        if (document.status() == DocumentStatus.PARSING
+                || document.status() == DocumentStatus.CHUNKED
+                || document.status() == DocumentStatus.INDEXING) {
+            throw new BusinessException(ErrorCode.CONFLICT);
+        }
+        purgeIngestArtifacts(document);
+        if (indexing != null) {
+            indexing.deleteDocument(document.tenantId(), document.id());
+        }
+        store.put(document.objectKey(), content, document.contentType());
+        document.markContentReplaced();
+        KnowledgeDocument saved = repository.save(document);
+        if (ingestWorker != null) {
+            ingestWorker.enqueue(saved.tenantId(), saved.id());
+        }
+        return view(saved);
+    }
+
+    private void purgeIngestArtifacts(KnowledgeDocument document) {
+        if (chunkArtifacts != null && document.chunkArtifactKey() != null && !document.chunkArtifactKey().isBlank()) {
+            chunkArtifacts.deleteArtifact(document.chunkArtifactKey());
+        }
+        if (document.chunkArtifactKey() != null && !document.chunkArtifactKey().isBlank()) {
+            store.delete(document.chunkArtifactKey());
+        }
+        if (document.normalizedMarkdownKey() != null && !document.normalizedMarkdownKey().isBlank()) {
+            store.delete(document.normalizedMarkdownKey());
+        }
+    }
+
+    @Override
     public boolean canRead(CurrentActor actor, Long id) {
         if (actor == null || id == null) {
             return false;
@@ -266,6 +336,7 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (ActorAccess.isSuperAdmin(actor)) {
+            ActorAccess.requireTenantId(actor);
             return;
         }
         if (actor.tenantId() == null) {
@@ -288,8 +359,10 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
         if (actor.isPlatformAdmin()) {
+            Long tenantId = ActorAccess.requireTenantId(actor);
             return repository.findById(id)
                     .filter(document -> document.status() != DocumentStatus.DELETED)
+                    .filter(document -> document.tenantId() == null || tenantId.equals(document.tenantId()))
                     .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND));
         }
         Long tenantId = ActorAccess.requireTenantId(actor);
@@ -366,5 +439,13 @@ public class DefaultKnowledgeDocumentUseCase implements KnowledgeDocumentUseCase
         Set<RoleCode> result = new LinkedHashSet<>(requested);
         if (!allowed.containsAll(result)) throw new BusinessException(ErrorCode.FORBIDDEN);
         return result;
+    }
+
+    /** 平台管理员选中门店上下文时，仅展示该门店文档与平台公共文档（tenantId 为空）。 */
+    private static boolean matchesPlatformTenantContext(Long documentTenantId, Long contextTenantId) {
+        if (contextTenantId == null) {
+            return true;
+        }
+        return documentTenantId == null || contextTenantId.equals(documentTenantId);
     }
 }

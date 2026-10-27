@@ -2,6 +2,7 @@ package com.gymmind.knowledge.api;
 
 import com.gymmind.knowledge.application.KnowledgeDocumentUseCase;
 import com.gymmind.knowledge.application.KnowledgeDocumentView;
+import com.gymmind.knowledge.application.KnowledgeOnlyOfficeService;
 import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
 import com.gymmind.shared.security.CurrentActor;
@@ -28,7 +29,8 @@ class KnowledgeDocumentControllerTest {
         public Optional<CurrentActor> current() { return Optional.of(actor); }
         public CurrentActor requireCurrent() { return actor; }
     };
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new KnowledgeDocumentController(useCase, actors)).build();
+    private final KnowledgeOnlyOfficeService onlyOffice = mock(KnowledgeOnlyOfficeService.class);
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new KnowledgeDocumentController(useCase, actors, onlyOffice)).build();
 
     @Test
     void uploadsMultipartDocumentAndReturnsAccepted() throws Exception {

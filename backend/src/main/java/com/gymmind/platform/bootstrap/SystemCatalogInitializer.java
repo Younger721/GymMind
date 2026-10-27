@@ -145,8 +145,11 @@ public class SystemCatalogInitializer implements ApplicationRunner {
         if (!menuConfigurationExists && configuredMenus.isEmpty()) {
             configuredMenus.addAll(PermissionCatalog.defaultMenus(role.getCode()));
         }
-        // Keep the tenant administrator's configuration entry available after
-        // splitting it from the shared assistant menu, including old installs.
+        // 已配置过部分菜单的旧库补齐后来新增的默认菜单，例如器械管理、课程中心
+        if (!configuredMenus.isEmpty()) {
+            configuredMenus.addAll(PermissionCatalog.defaultMenus(role.getCode()));
+        }
+        // 健身房管理员始终保留 AI 配置入口
         if (role.getCode() == RoleCode.GYM_ADMIN) {
             configuredMenus.add(PermissionCatalog.AI_CONFIG_MENU);
         }

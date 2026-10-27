@@ -9,6 +9,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GymOperationsMetricsToolTest {
+
+    @Test
+    void platformAdminDoesNotUseStoreOpsTool() {
+        var tool = new GymOperationsMetricsTool(null);
+        var platform = new com.gymmind.shared.security.CurrentActor(1L, null,
+                java.util.Set.of(com.gymmind.iam.domain.model.RoleCode.PLATFORM_ADMIN),
+                java.util.Set.of("analytics:read"), 0L, "t");
+        com.gymmind.shared.security.TenantContextHolder.set(7L);
+        try {
+            assertThat(tool.supports(platform)).isFalse();
+        } finally {
+            com.gymmind.shared.security.TenantContextHolder.clear();
+        }
+    }
+
     @Test
     void recognizesGymOperationsQuestions() {
         assertThat(GymOperationsMetricsTool.matchesQuestion("上个月来了多少会员？")).isTrue();

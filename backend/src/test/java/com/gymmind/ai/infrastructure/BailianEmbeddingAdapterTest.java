@@ -35,7 +35,7 @@ class BailianEmbeddingAdapterTest {
         server.expect(requestTo("https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(content().json("{\"model\":\"qwen3.7-text-embedding\",\"input\":[\"hello\"]}"))
+                .andExpect(content().json("{\"model\":\"qwen3.7-text-embedding-flash\",\"input\":[\"hello\"]}"))
                 .andRespond(withSuccess("{\"data\":[{\"embedding\":" + vector + "}]}", MediaType.APPLICATION_JSON));
 
         var result = new BailianEmbeddingAdapter(builder, dashScopeWithKey()).embed(java.util.List.of("hello"));
@@ -54,10 +54,10 @@ class BailianEmbeddingAdapterTest {
                 .collect(Collectors.joining(",", "[", "]"));
         var firstBatch = IntStream.range(0, 20).mapToObj(i -> "doc-" + i).toList();
         var secondBatch = java.util.List.of("doc-20");
-        String firstRequest = "{\"model\":\"qwen3.7-text-embedding\",\"input\":["
+        String firstRequest = "{\"model\":\"qwen3.7-text-embedding-flash\",\"input\":["
                 + firstBatch.stream().map(value -> "\"" + value + "\"").collect(Collectors.joining(","))
                 + "]}";
-        String secondRequest = "{\"model\":\"qwen3.7-text-embedding\",\"input\":[\"doc-20\"]}";
+        String secondRequest = "{\"model\":\"qwen3.7-text-embedding-flash\",\"input\":[\"doc-20\"]}";
 
         server.expect(requestTo("https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"))
                 .andExpect(content().json(firstRequest))

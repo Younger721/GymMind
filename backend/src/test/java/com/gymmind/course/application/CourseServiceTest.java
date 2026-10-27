@@ -25,58 +25,54 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.never;
 
 class CourseServiceTest {
 
     @Test
-    void platformAdminListsCoursesAcrossTenantsWithoutContext() {
+    void platformAdminMustSelectTenantBeforeListingCourses() {
         CourseRepository courses = mock(CourseRepository.class);
         CoachRepository coaches = mock(CoachRepository.class);
-        Course first = futureCourse(11L, 3L, "Yoga");
-        Course second = futureCourse(22L, 8L, "Run");
-        when(courses.findAll()).thenReturn(java.util.List.of(first, second));
         CourseService service = new DefaultCourseService(courses, coaches, mock(AuditRecorder.class));
 
-        var result = service.list(platformActor(), null, null, null, null, false);
-
-        assertThat(result).hasSize(2);
-        verify(courses).findAll();
+        assertThatThrownBy(() -> service.list(platformActor(), null, null, null, null, false))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.TENANT_CONTEXT_REQUIRED);
+        verifyNoInteractions(courses);
     }
 
     @Test
-    void platformAdminReadsCourseDetailsAcrossTenantsWithoutContext() {
+    void platformAdminReadsCourseDetailsOnlyInSelectedTenant() {
         CourseRepository courses = mock(CourseRepository.class);
         CoachRepository coaches = mock(CoachRepository.class);
-        Course course = mock(Course.class);
-        when(course.getId()).thenReturn(42L);
-        when(course.getTenantId()).thenReturn(22L);
-        when(course.getCoachId()).thenReturn(8L);
-        when(course.getTitle()).thenReturn("Run");
-        when(course.getType()).thenReturn("GROUP");
-        when(course.getStartsAt()).thenReturn(Instant.now().plusSeconds(3600));
-        when(course.getEndsAt()).thenReturn(Instant.now().plusSeconds(7200));
-        when(course.getCapacity()).thenReturn(10);
-        when(course.getLocation()).thenReturn("Studio");
-        when(course.getStatus()).thenReturn(com.gymmind.course.domain.model.CourseStatus.SCHEDULED);
-        when(courses.findAll()).thenReturn(java.util.List.of(course));
+        Course course = futureCourse(11L, 8L, "Run");
+        when(courses.findByTenantIdAndId(11L, 42L)).thenReturn(Optional.of(course));
         CourseService service = new DefaultCourseService(courses, coaches, mock(AuditRecorder.class));
 
-        assertThat(service.find(platformActor(), 42L).tenantId()).isEqualTo(22L);
-        verify(courses).findAll();
+        TenantContextHolder.set(11L);
+        try {
+            assertThat(service.find(platformActor(), 42L).tenantId()).isEqualTo(11L);
+            verify(courses).findByTenantIdAndId(11L, 42L);
+            verify(courses, never()).findById(42L);
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 
     @Test
-    void platformAdminListsAllCoursesEvenWhenTenantContextIsSelected() {
+    void platformAdminListsOnlySelectedTenantsCourses() {
         CourseRepository courses = mock(CourseRepository.class);
         CoachRepository coaches = mock(CoachRepository.class);
-        when(courses.findAll()).thenReturn(java.util.List.of(
-                futureCourse(11L, 3L, "Yoga"), futureCourse(22L, 8L, "Run")));
+        when(courses.findAllByTenantId(11L)).thenReturn(java.util.List.of(futureCourse(11L, 3L, "Yoga")));
         TenantContextHolder.set(11L);
         try {
             CourseService service = new DefaultCourseService(courses, coaches, mock(AuditRecorder.class));
 
-            assertThat(service.list(platformActor(), null, null, null, null, false)).hasSize(2);
-            verify(courses).findAll();
+            assertThat(service.list(platformActor(), null, null, null, null, false))
+                    .extracting(CourseView::tenantId).containsExactly(11L);
+            verify(courses).findAllByTenantId(11L);
+            verify(courses, never()).findAll();
         } finally {
             TenantContextHolder.clear();
         }
@@ -178,22 +174,14 @@ class CourseServiceTest {
     }
 
     @Test
-    void platformAdminCanUpdateAndCancelCourseAcrossTenantsWithoutContext() {
+    void platformAdminCannotUpdateOrCancelTenantCourses() {
         CourseRepository courses = mock(CourseRepository.class);
-        CoachRepository coaches = mock(CoachRepository.class);
-        Course course = futureCourse(22L, 8L, "Run");
-        when(courses.findByTenantIdAndId(22L, 42L)).thenReturn(Optional.of(course));
-        when(courses.findById(42L)).thenReturn(Optional.of(course));
-        when(courses.save(any(Course.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        CourseService service = new DefaultCourseService(courses, coaches, mock(AuditRecorder.class));
+        CourseService service = new DefaultCourseService(courses, mock(CoachRepository.class), mock(AuditRecorder.class));
 
-        service.update(platformActor(), 42L, "Updated Run", "GROUP", course.getStartsAt(),
-                course.getEndsAt(), 10, "Studio");
-        service.cancel(platformActor(), 42L);
-
-        assertThat(course.getTitle()).isEqualTo("Updated Run");
-        assertThat(course.getStatus()).isEqualTo(com.gymmind.course.domain.model.CourseStatus.CANCELLED);
-        verify(courses, org.mockito.Mockito.atLeastOnce()).findById(42L);
+        assertThatThrownBy(() -> service.update(platformActor(), 42L, "Updated Run", "GROUP", Instant.now().plusSeconds(3600),
+                Instant.now().plusSeconds(7200), 10, "Studio")).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.cancel(platformActor(), 42L)).isInstanceOf(BusinessException.class);
+        verifyNoInteractions(courses);
     }
 
     @Test

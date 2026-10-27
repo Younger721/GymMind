@@ -2,9 +2,10 @@
   <div class="knowledge">
     <div class="head">
       <div>
+        <p class="eyebrow">RAG · KNOWLEDGE</p>
         <h2 class="simple-page-title">知识库</h2>
         <p class="simple-page-desc">
-          {{ authStore.isPlatformAdmin ? '先上传平台基础文档，所有租户的 AI 助手都可使用' : '上传文档后自动解析，数据仅在本健身房内可见' }}
+          {{ authStore.isPlatformAdmin ? platformListHint : '上传文档后自动解析，数据仅在本健身房内可见' }}
         </p>
       </div>
       <el-upload
@@ -21,7 +22,6 @@
         <el-select v-model="uploadKnowledgeType" placeholder="知识类型" style="width: 150px; margin-right: 8px" @click.stop>
           <el-option label="普通公告" value="GENERAL_NOTICE" /><el-option label="基础价格" value="BASE_PRICE" /><el-option label="促销规则" value="PROMOTION_RULE" />
         </el-select>
-        <el-input v-model="uploadProduct" placeholder="适用卡种" style="width: 130px; margin-right: 8px" @click.stop />
         <el-select v-if="uploadKnowledgeType !== 'GENERAL_NOTICE'" v-model="replaceDocumentId" clearable filterable placeholder="替换旧文档（可选）" style="width: 220px; margin-right: 8px" @click.stop>
           <el-option v-for="row in replacementCandidates" :key="row.id" :label="`${row.fileName} v${row.knowledgeVersion || 1}`" :value="row.id" />
         </el-select>
@@ -70,8 +70,16 @@
           {{ visibilityText(row.visibility) }}
         </template>
       </el-table-column>
-      <el-table-column v-if="canManage" label="操作" width="220" fixed="right">
+      <el-table-column v-if="canManage" label="操作" width="280" fixed="right">
         <template #default="{ row }">
+          <el-button
+            v-if="isDocxFileName(row.fileName) && (row.status === 'READY' || row.status === 'FAILED')"
+            link
+            type="primary"
+            @click="openDocEditor(row.id)"
+          >
+            在线编辑
+          </el-button>
           <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
           <el-button v-if="row.status === 'READY'" link type="success" @click="togglePublication(row)">{{ row.published ? '撤回' : '发布' }}</el-button>
           <el-button link type="danger" @click="remove(row.id)">删除</el-button>
@@ -108,11 +116,13 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
-import { knowledgeApi, type KnowledgeDocumentView } from '@/api/knowledge'
+import { knowledgeApi, isDocxFileName, type KnowledgeDocumentView } from '@/api/knowledge'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { hasMenuPermission, MENU_CODES } from '@/utils/menuPermissions'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const documents = ref<KnowledgeDocumentView[]>([])
 const loading = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | undefined
@@ -124,7 +134,6 @@ const audienceRoleLabels: Record<string, string> = { PLATFORM_ADMIN: '平台管�
 const audienceRoleOptions = computed(() => (authStore.isPlatformAdmin ? allAudienceRoles : tenantAudienceRoles).map(value => ({ value, label: audienceRoleLabels[value] })))
 const uploadAudienceRoles = ref<string[]>(authStore.isPlatformAdmin ? [...allAudienceRoles] : [...tenantAudienceRoles])
 const uploadKnowledgeType = ref('GENERAL_NOTICE')
-const uploadProduct = ref('')
 const uploadPrice = ref<number | undefined>()
 const uploadDiscount = ref<number | undefined>()
 const uploadDiscountType = ref('PERCENT')
@@ -136,7 +145,6 @@ const replaceDocumentId = ref<number | undefined>()
 const replacementCandidates = computed(() => documents.value.filter(row =>
   row.status !== 'DELETED'
   && row.knowledgeType === uploadKnowledgeType.value
-  && (!uploadProduct.value || row.applicableProduct?.trim().toLowerCase() === uploadProduct.value.trim().toLowerCase())
 ))
 const saving = ref(false)
 const editVisible = ref(false)
@@ -150,6 +158,13 @@ const editForm = reactive({
 const canManage = computed(() => authStore.isPlatformAdmin
   || (authStore.roles.includes('GYM_ADMIN')
     && hasMenuPermission(MENU_CODES.KNOWLEDGE)))
+
+const platformListHint = computed(() => {
+  const tenantId = authStore.platformContextTenantId
+  return tenantId == null
+    ? '先上传平台基础文档，所有租户的 AI 助手都可使用'
+    : `当前查看门店 ID ${tenantId} 的资料与平台公共文档；切换顶部门店可更换范围`
+})
 
 /** 入库流水线未结束的状态，需轮询列表直至就绪或失败 */
 const ingestInProgressStatuses = ['UPLOADING', 'PARSING', 'CHUNKED', 'INDEXING'] as const
@@ -173,7 +188,7 @@ const handleUpload = async (options: UploadRequestOptions) => {
   uploading.value = true
   try {
     await knowledgeApi.uploadDocument(options.file as File, 'TENANT', uploadCategory.value, uploadAudienceRoles.value, {
-      knowledgeType: uploadKnowledgeType.value, applicableProduct: uploadProduct.value || undefined,
+      knowledgeType: uploadKnowledgeType.value,
       replaceDocumentId: replaceDocumentId.value,
       priceAmount: uploadPrice.value,
       discountType: uploadKnowledgeType.value === 'PROMOTION_RULE' ? uploadDiscountType.value : undefined,
@@ -193,6 +208,10 @@ const handleUpload = async (options: UploadRequestOptions) => {
 const localDateTime = (value?: Date) => value
   ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}T${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}:${String(value.getSeconds()).padStart(2, '0')}`
   : undefined
+
+const openDocEditor = (id: number) => {
+  router.push(`/knowledge/${id}/edit`)
+}
 
 const openEdit = (row: KnowledgeDocumentView) => {
   editForm.id = row.id
@@ -300,6 +319,14 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 </script>
 
 <style scoped>
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--primary);
+}
+
 .head {
   display: flex;
   justify-content: space-between;

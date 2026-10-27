@@ -9,9 +9,10 @@ const menuSource = fs.readFileSync(path.join(root, 'src/utils/menuPermissions.ts
 const routerSource = fs.readFileSync(path.join(root, 'src/router/index.ts'), 'utf8')
 const assistantSource = fs.readFileSync(path.join(root, 'src/views/AssistantView.vue'), 'utf8')
 
-test('platform console is hidden from the sidebar and direct access redirects home', () => {
+test('platform console is in the sidebar and opens the quota page', () => {
   const visibleCodes = menuSource.match(/const VISIBLE_MENU_CODES[\s\S]*?\n\]\)/)?.[0] ?? ''
-  assert.doesNotMatch(visibleCodes, /MENU_CODES\.PLATFORM/)
-  assert.match(routerSource, /path: 'platform', name: 'platform', redirect: '\/dashboard'/)
+  assert.match(visibleCodes, /MENU_CODES\.PLATFORM/)
+  assert.match(routerSource, /path: 'platform', name: 'platform', component: \(\) => import\('@\/views\/business\/PlatformView\.vue'\)/)
+  assert.match(routerSource, /menuPermission: MENU_CODES\.PLATFORM/)
   assert.doesNotMatch(assistantSource, /'\/platform'/)
 })

@@ -39,7 +39,12 @@
         <BizCrudPanel title="系统角色" :loader="loadRoles" />
       </el-tab-pane>
       <el-tab-pane label="操作审计" name="audit">
-        <BizCrudPanel title="操作日志" :loader="loadAuditOps" />
+        <BizCrudPanel
+          title="操作日志"
+          :loader="loadAuditOps"
+          :column-keys="auditColumns"
+          :column-labels="auditLabels"
+        />
       </el-tab-pane>
       <el-tab-pane label="AI 用量" name="ai-usage">
         <BizCrudPanel title="AI 调用记录" :loader="loadAiUsage" />
@@ -70,9 +75,16 @@ import BizCrudPanel from '@/components/business/BizCrudPanel.vue'
 import { usersApi } from '@/api/users'
 import { auditApi } from '@/api/audit'
 import { tenancyApi } from '@/api/tenancy'
+import {
+  OPERATION_AUDIT_COLUMN_KEYS,
+  OPERATION_AUDIT_COLUMN_LABELS
+} from '@/utils/auditLogDisplay'
 // The shared utility is also consumed directly by the Node regression test.
 // @ts-ignore declaration is unnecessary for this small ESM display helper.
 import { toDisplayRole } from '@/utils/roleLabels.mjs'
+
+const auditColumns = [...OPERATION_AUDIT_COLUMN_KEYS]
+const auditLabels = OPERATION_AUDIT_COLUMN_LABELS
 
 const tab = ref('users')
 const authStore = useAuthStore()

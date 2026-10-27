@@ -34,6 +34,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class UserInvitationServiceTest {
@@ -131,17 +133,17 @@ class UserInvitationServiceTest {
     }
 
     @Test
-    void platformAdminCanIssueInvitationForSelectedTenant() {
+    void platformAdminCannotIssueInvitationForSelectedTenant() {
         CurrentActor platform = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN),
                 Set.of("platform:tenant:write"), 0L, "platform-token");
         when(users.findByNormalizedEmail("member@example.com")).thenReturn(Optional.empty());
         when(invitations.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         TenantContextHolder.set(10L);
 
-        UserInvitationService.InvitationIssued issued = service.invite(platform,
-                new InviteUserCommand("member@example.com", RoleCode.MEMBER));
-
-        assertThat(issued.tenantId()).isEqualTo(10L);
-        assertThat(issued.role()).isEqualTo(RoleCode.MEMBER);
+        assertThatThrownBy(() -> service.invite(platform,
+                new InviteUserCommand("member@example.com", RoleCode.MEMBER)))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(ErrorCode.FORBIDDEN);
+        verify(invitations, never()).save(any());
     }
 }

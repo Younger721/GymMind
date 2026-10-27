@@ -75,32 +75,28 @@
     </template>
 
     <template v-else>
-      <h2 class="simple-page-title">租户设置</h2>
-      <p class="simple-page-desc">门店设置、AI 服务配置与当前资源使用情况</p>
+      <h2 class="simple-page-title">额度使用</h2>
+      <p class="simple-page-desc">查看本月已用和总额度</p>
 
-      <el-tabs v-model="tab">
-        <el-tab-pane label="门店设置" name="settings">
-          <div class="simple-card form-box">
-            <el-form label-width="120px">
-              <el-form-item label="预约功能"><el-switch v-model="settingsForm.reservationEnabled" /></el-form-item>
-              <el-form-item label="签到功能"><el-switch v-model="settingsForm.checkInEnabled" /></el-form-item>
-              <el-form-item label="时区"><el-input v-model="settingsForm.timezone" placeholder="Asia/Shanghai" /></el-form-item>
-              <el-button v-if="canWrite" type="primary" :loading="loading" @click="saveSettings">保存设置</el-button>
-            </el-form>
+      <div class="simple-card quota-panel">
+        <div class="panel-head">
+          <p class="panel-desc">额度由平台管理员分配。</p>
+          <el-button v-if="canReadQuota" :loading="loading" @click="loadQuota">刷新</el-button>
+        </div>
+        <div v-if="quota" class="summary-grid quota-grid">
+          <div class="summary-card">
+            <span>AI 调用</span>
+            <strong>{{ formatNumber(quota.usedAiCallsThisMonth) }} / {{ formatNumber(quota.maxAiCallsPerMonth) }}</strong>
+            <small>本月已用 / 总额度</small>
           </div>
-        </el-tab-pane>
-        <el-tab-pane v-if="authStore.roles.includes('GYM_ADMIN')" label="AI 服务" name="ai">
-          <HarnessConfigPanel />
-        </el-tab-pane>
-        <el-tab-pane label="额度与使用量" name="quota">
-          <div class="simple-card">
-            <p class="panel-desc">额度由平台管理员设置，租户管理员只能查看当前使用范围。</p>
-            <el-button v-if="canReadQuota" type="primary" :loading="loading" @click="loadQuota">刷新额度</el-button>
-            <JsonBlock v-if="quota" :data="quota" />
+          <div class="summary-card">
+            <span>Token</span>
+            <strong>{{ formatNumber(quota.usedAiTokensThisMonth) }} / {{ formatNumber(quota.maxAiTokensPerMonth) }}</strong>
+            <small>本月已用 / 总额度</small>
           </div>
-        </el-tab-pane>
-      </el-tabs>
-      <JsonBlock v-if="saveResult" :data="saveResult" />
+        </div>
+        <el-empty v-else-if="!loading" description="暂无额度数据" />
+      </div>
     </template>
   </div>
 </template>
@@ -108,8 +104,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import JsonBlock from '@/components/business/JsonBlock.vue'
-import HarnessConfigPanel from '@/components/business/HarnessConfigPanel.vue'
+import type { TenantQuotaView } from '@/api/agent'
 import { tenancyApi } from '@/api/tenancy'
 import { useAuthStore } from '@/stores/auth'
 import { hasPermission } from '@/utils/permissions'
@@ -125,7 +120,6 @@ interface TenantRow {
 }
 
 const authStore = useAuthStore()
-const tab = ref('settings')
 const loading = ref(false)
 const submitting = ref(false)
 const tenants = ref<TenantRow[]>([])
@@ -137,11 +131,12 @@ const editForm = reactive({ code: '', name: '' })
 const activeCount = computed(() => tenants.value.filter(item => item.status === 'ACTIVE').length)
 const disabledCount = computed(() => tenants.value.filter(item => item.status === 'DISABLED').length)
 
-const canWrite = computed(() => hasPermission('tenant:settings:write'))
 const canReadQuota = computed(() => hasPermission('tenant:quota:read'))
-const quota = ref<unknown>(null)
-const saveResult = ref<unknown>(null)
-const settingsForm = reactive({ reservationEnabled: true, checkInEnabled: true, timezone: 'Asia/Shanghai' })
+const quota = ref<TenantQuotaView | null>(null)
+
+function formatNumber(value: number | null | undefined) {
+  return Number(value ?? 0).toLocaleString('zh-CN')
+}
 
 function formatDate(value: string | null | undefined) {
   if (!value) return '—'
@@ -228,30 +223,25 @@ async function activateTenant(row: TenantRow) {
 }
 
 async function loadQuota() {
-  loading.value = true
-  try { quota.value = await tenancyApi.getMyQuota() } finally { loading.value = false }
-}
-
-async function loadSettings() {
+  if (!canReadQuota.value) return
   loading.value = true
   try {
-    const res = await tenancyApi.getSettings()
-    const data = (res as { data?: typeof settingsForm }).data
-    if (data) Object.assign(settingsForm, data)
-    saveResult.value = res
+    const res = await tenancyApi.getMyQuota()
+    quota.value = (res as { data?: TenantQuotaView }).data ?? null
   } finally { loading.value = false }
 }
 
-async function saveSettings() {
-  loading.value = true
-  try { saveResult.value = await tenancyApi.updateSettings({ ...settingsForm }) } finally { loading.value = false }
-}
-
-onMounted(() => { if (authStore.isPlatformAdmin) void loadTenants(); else void loadSettings() })
+onMounted(async () => {
+  if (authStore.isPlatformAdmin) {
+    await loadTenants()
+    return
+  }
+  await loadQuota()
+})
 </script>
 
 <style scoped>
-.form-box { margin-top: 16px; }
+.quota-panel { margin-top: 16px; }
 .tenant-panel { margin-top: 16px; }
 .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .panel-title { margin: 0; font-size: 16px; }
@@ -259,8 +249,10 @@ onMounted(() => { if (authStore.isPlatformAdmin) void loadTenants(); else void l
 .panel-actions { display: flex; gap: 8px; }
 .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
 .summary-card { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.quota-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .summary-card span { display: block; color: var(--text-muted); font-size: 13px; }
-.summary-card strong { display: block; margin-top: 8px; font-size: 24px; }
+.summary-card strong { display: block; margin-top: 8px; font-size: 24px; font-variant-numeric: tabular-nums; }
+.summary-card small { display: block; margin-top: 6px; color: var(--text-muted); font-size: 12px; }
 .field-hint { margin-top: 4px; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
 @media (max-width: 640px) { .summary-grid { grid-template-columns: 1fr; } }
 </style>

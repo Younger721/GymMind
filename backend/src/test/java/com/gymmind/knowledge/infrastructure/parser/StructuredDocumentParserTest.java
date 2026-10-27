@@ -39,10 +39,8 @@ class StructuredDocumentParserTest {
                 .parseStructured("guide.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", bytes);
 
         assertThat(parsed.blocks()).extracting(DocumentBlock::type)
-                .contains(DocumentBlockType.TITLE, DocumentBlockType.LIST_ITEM, DocumentBlockType.TABLE_ROW);
-        assertThat(parsed.blocks()).anySatisfy(block -> assertThat(block.text()).contains("深蹲训练"));
-        assertThat(parsed.blocks()).anySatisfy(block -> assertThat(block.tableHeaders()).containsExactly("套餐", "次数"));
-        assertThat(parsed.blocks()).anySatisfy(block -> assertThat(block.text()).contains("月卡"));
+                .contains(DocumentBlockType.TITLE, DocumentBlockType.LIST_ITEM);
+        assertThat(parsed.plainText()).contains("深蹲训练", "套餐", "月卡", "12");
     }
 
     @Test

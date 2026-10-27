@@ -62,7 +62,8 @@ public class DefaultAiAnalysisService {
     }
 
     private AiAnalysisResult complete(CurrentActor actor, String prompt, String fallback) {
-        quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
+        if (actor.isPlatformAdmin()) quotas.ensureAiChatAllowed(actor);
+        else quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
         long started = System.currentTimeMillis();
         try {
             ChatModelCallResult call = model.completeWithUsage(prompt, List.of());

@@ -2,6 +2,7 @@ package com.gymmind.knowledge.application;
 
 import com.gymmind.knowledge.domain.model.DocumentStatus;
 import com.gymmind.knowledge.domain.model.KnowledgeDocument;
+import com.gymmind.knowledge.infrastructure.parser.normalize.DocumentMarkdownNormalizer;
 import com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService;
 import com.gymmind.shared.async.PersistentJobQueue;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,7 @@ public class KnowledgeIngestWorker {
     private final KnowledgeChunkArtifactService artifacts;
     private final KnowledgeIngestSettings settings;
     private final KnowledgeIngestJobProperties jobProperties;
+    private final DocumentMarkdownNormalizer markdownNormalizer;
     private final Clock clock;
 
     public KnowledgeIngestWorker(
@@ -35,7 +37,7 @@ public class KnowledgeIngestWorker {
             KnowledgeObjectStore store,
             KnowledgeIndexingService indexing,
             Clock clock) {
-        this(jobs, documents, store, indexing, null, KnowledgeIngestSettings.disabled(), defaultJobProperties(), clock);
+        this(jobs, documents, store, indexing, null, KnowledgeIngestSettings.disabled(), defaultJobProperties(), null, clock);
     }
 
     public KnowledgeIngestWorker(
@@ -46,7 +48,7 @@ public class KnowledgeIngestWorker {
             KnowledgeChunkArtifactService artifacts,
             KnowledgeIngestSettings settings,
             Clock clock) {
-        this(jobs, documents, store, indexing, artifacts, settings, defaultJobProperties(), clock);
+        this(jobs, documents, store, indexing, artifacts, settings, defaultJobProperties(), null, clock);
     }
 
     @Autowired
@@ -58,6 +60,7 @@ public class KnowledgeIngestWorker {
             KnowledgeChunkArtifactService artifacts,
             KnowledgeIngestSettings settings,
             KnowledgeIngestJobProperties jobProperties,
+            DocumentMarkdownNormalizer markdownNormalizer,
             Clock clock) {
         this.jobs = jobs;
         this.documents = documents;
@@ -66,6 +69,7 @@ public class KnowledgeIngestWorker {
         this.artifacts = artifacts;
         this.settings = settings == null ? KnowledgeIngestSettings.disabled() : settings;
         this.jobProperties = jobProperties == null ? defaultJobProperties() : jobProperties;
+        this.markdownNormalizer = markdownNormalizer;
         this.clock = clock;
     }
 
@@ -127,8 +131,10 @@ public class KnowledgeIngestWorker {
         documents.save(document);
         byte[] bytes = requireSourceBytes(document);
         document.updateChunkStrategy(document.chunkStrategy(), document.chunkStrategyVersion());
+        var prepared = KnowledgeIngestContentPreparer.prepare(document, bytes, store, markdownNormalizer);
+        assignNormalizedKey(document, prepared.normalizedMarkdownKey());
         var published = indexing.publishIndex(document.tenantId(), document.id(), document.ownerUserId(),
-                document.fileName(), document.contentType(), bytes,
+                prepared.fileName(), prepared.contentType(), prepared.bytes(),
                 document.chunkStrategy(), document.chunkStrategyVersion(), document.knowledgeKey(),
                 document.knowledgeVersion(), document.visibility(), document.effectiveAudienceRoles());
         if (!published.success()) {
@@ -160,8 +166,10 @@ public class KnowledgeIngestWorker {
         documents.save(document);
         byte[] bytes = requireSourceBytes(document);
         document.updateChunkStrategy(document.chunkStrategy(), document.chunkStrategyVersion());
+        var prepared = KnowledgeIngestContentPreparer.prepare(document, bytes, store, markdownNormalizer);
+        assignNormalizedKey(document, prepared.normalizedMarkdownKey());
         List<com.gymmind.knowledge.infrastructure.parser.Chunk> chunks = indexing.chunkFromBytes(
-                document.id(), document.fileName(), document.contentType(), bytes,
+                document.id(), prepared.fileName(), prepared.contentType(), prepared.bytes(),
                 document.chunkStrategy(), document.chunkStrategyVersion());
         String artifactKey = artifacts.writeArtifact(document, chunks);
         document.assignChunkArtifactKey(artifactKey);
@@ -225,6 +233,13 @@ public class KnowledgeIngestWorker {
             throw new IllegalStateException("knowledge object is unavailable");
         }
         return bytes;
+    }
+
+    private void assignNormalizedKey(KnowledgeDocument document, String normalizedMarkdownKey) {
+        if (normalizedMarkdownKey != null && !normalizedMarkdownKey.isBlank()) {
+            document.assignNormalizedMarkdownKey(normalizedMarkdownKey);
+            documents.save(document);
+        }
     }
 
     private void handleFailure(com.gymmind.shared.async.PersistentJob job, RuntimeException ex, Instant now) {

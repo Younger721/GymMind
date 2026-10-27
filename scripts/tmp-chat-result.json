@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "code": "OK",
+  "message": "操作成功",
+  "data": {
+    "answer": "店管理员须在2小时内通过平台上报事件摘要。并在72小时内提交完整《训练区事件记录表》扫描件。",
+    "sources": [
+      "5d853c7952784f0e8f1e97986dd199900f133ffcd0ceb27d9921c6cb7debe242"
+    ],
+    "citations": [
+      {
+        "chunkId": "5d853c7952784f0e8f1e97986dd199900f133ffcd0ceb27d9921c6cb7debe242",
+        "documentId": "14",
+        "excerpt": "发生训练区重伤或监管抽查不合格事件，店管理员须在 2 小时内通过平台上报事件摘要，并在 72 小时内提交完整《训练区事件记录表》扫描件。",
+        "documentName": "平台管理员门店运营与合规发布手册.docx",
+        "documentVersion": 1,
+        "knowledgeType": "GENERAL_NOTICE",
+        "knowledgeKey": null,
+        "effectiveFrom": null,
+        "effectiveTo": null
+      }
+    ]
+  },
+  "traceId": "1fe67378-d8f6-435e-a674-c3b5ca71302c"
+}

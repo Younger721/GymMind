@@ -1,7 +1,10 @@
 package com.gymmind.knowledge.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.gymmind.knowledge.application.KnowledgeDocumentUseCase;
 import com.gymmind.knowledge.application.KnowledgeDocumentView;
+import com.gymmind.knowledge.application.KnowledgeOnlyOfficeEditorView;
+import com.gymmind.knowledge.application.KnowledgeOnlyOfficeService;
 import com.gymmind.knowledge.application.UpdateKnowledgeDocumentCommand;
 import com.gymmind.knowledge.application.UploadKnowledgeDocumentCommand;
 import com.gymmind.knowledge.domain.model.DocumentVisibility;
@@ -9,13 +12,16 @@ import com.gymmind.iam.domain.model.RoleCode;
 import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.security.CurrentActorProvider;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import com.gymmind.knowledge.domain.model.KnowledgeType;
@@ -26,10 +32,15 @@ import com.gymmind.knowledge.domain.model.KnowledgeType;
 public class KnowledgeDocumentController {
     private final KnowledgeDocumentUseCase useCase;
     private final CurrentActorProvider actors;
+    private final KnowledgeOnlyOfficeService onlyOffice;
 
-    public KnowledgeDocumentController(KnowledgeDocumentUseCase useCase, CurrentActorProvider actors) {
+    public KnowledgeDocumentController(
+            KnowledgeDocumentUseCase useCase,
+            CurrentActorProvider actors,
+            KnowledgeOnlyOfficeService onlyOffice) {
         this.useCase = useCase;
         this.actors = actors;
+        this.onlyOffice = onlyOffice;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -83,5 +94,34 @@ public class KnowledgeDocumentController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long id) {
         useCase.delete(actors.requireCurrent(), id);
+    }
+
+    @GetMapping("/{id}/editor-config")
+    public ApiResponse<KnowledgeOnlyOfficeEditorView> editorConfig(@PathVariable Long id) {
+        return ApiResponse.success(onlyOffice.buildEditorConfig(actors.requireCurrent(), id));
+    }
+
+    /** OnlyOffice Document Server 拉取原 docx（query token 鉴权） */
+    @GetMapping("/{id}/content")
+    public ResponseEntity<byte[]> content(
+            @PathVariable Long id,
+            @RequestParam String token,
+            @RequestParam long userId) {
+        byte[] bytes = onlyOffice.readContentForOnlyOffice(id, userId, token);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .body(bytes);
+    }
+
+    /** OnlyOffice 保存回调 */
+    @PostMapping("/{id}/onlyoffice/callback")
+    public Map<String, Object> onlyOfficeCallback(
+            @PathVariable Long id,
+            @RequestParam long userId,
+            @RequestParam String session,
+            @RequestBody JsonNode body) {
+        return onlyOffice.handleCallback(id, userId, session, body);
     }
 }

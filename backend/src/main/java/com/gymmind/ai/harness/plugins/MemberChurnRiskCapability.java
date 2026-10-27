@@ -57,10 +57,10 @@ public class MemberChurnRiskCapability implements AiCapability {
 
     @Override
     public boolean supports(CurrentActor actor) {
-        return actor != null
-                && actor.roles().contains(RoleCode.GYM_ADMIN)
-                && ActorAccess.tenantId(actor) != null
-                && actor.hasPermission("analytics:read");
+        if (actor == null || !actor.hasPermission("analytics:read")) {
+            return false;
+        }
+        return actor.roles().contains(RoleCode.GYM_ADMIN) && ActorAccess.tenantId(actor) != null;
     }
 
     @Override

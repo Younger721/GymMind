@@ -10,8 +10,10 @@ import com.gymmind.shared.api.ApiResponse;
 import com.gymmind.shared.api.TraceIdFilter;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActorProvider;
 import com.gymmind.shared.security.CurrentActor;
+import com.gymmind.shared.security.TenantContextHolder;
 import org.slf4j.MDC;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -47,7 +49,7 @@ public class AiHarnessController {
         return ApiResponse.success(service.getConfig(actors.requireCurrent()));
     }
 
-    /** 租户管理员更新本店 Harness 配置 */
+    /** 仅平台管理员可更新 Harness 配置 */
     @PutMapping("/config")
     public ApiResponse<HarnessConfigView> updateConfig(@Valid @RequestBody ConfigRequest request) {
         return ApiResponse.success(service.updateConfig(
@@ -68,6 +70,8 @@ public class AiHarnessController {
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public org.springframework.http.ResponseEntity<SseEmitter> chatStream(@Valid @RequestBody ChatRequest request) {
         CurrentActor actor = actors.requireCurrent();
+        // SSE 在异步线程执行，Filter 的 finally 会先清掉 TenantContextHolder，此处显式传递顶栏门店上下文
+        Long scopedTenantId = ActorAccess.tenantId(actor);
         SseEmitter emitter = new SseEmitter(300_000L);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newSingleThreadExecutor(task -> {
             Thread thread = new Thread(task, "ai-harness-stream");
@@ -81,6 +85,9 @@ public class AiHarnessController {
         });
         executor.execute(() -> {
             try {
+                if (scopedTenantId != null) {
+                    TenantContextHolder.set(scopedTenantId);
+                }
                 AiChatView result = service.chat(actor, request.sessionId(), request.question(), request.plugins(), request.history(),
                         token -> sendToken(emitter, token),
                         progress -> sendProgress(emitter, progress));
@@ -93,6 +100,8 @@ public class AiHarnessController {
                     // 客户端已断开连接
                 }
                 emitter.complete();
+            } finally {
+                TenantContextHolder.clear();
             }
         });
         return org.springframework.http.ResponseEntity.status(HttpStatus.OK)

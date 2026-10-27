@@ -47,6 +47,9 @@ public class KnowledgeDocument {
     /** 两阶段入库：切片 JSON 在 MinIO 中的 object key */
     @Column(name = "chunk_artifact_key", length = 512)
     private String chunkArtifactKey;
+    /** DOCX/HTML/PDF 规范化后的 Markdown 在 MinIO 中的 object key */
+    @Column(name = "normalized_markdown_key", length = 512)
+    private String normalizedMarkdownKey;
     /** 当前可读索引 generation 指针，与 ES/Milvus chunk.indexGeneration 对齐 */
     @Column(name = "index_generation", length = 128)
     private String indexGeneration;
@@ -114,6 +117,13 @@ public class KnowledgeDocument {
         chunkArtifactKey = key.trim();
     }
 
+    public void assignNormalizedMarkdownKey(String key) {
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("normalized markdown key required");
+        }
+        normalizedMarkdownKey = key.trim();
+    }
+
     public void assignIndexGeneration(String generation) {
         if (generation == null || generation.isBlank()) {
             throw new IllegalArgumentException("index generation required");
@@ -179,6 +189,24 @@ public class KnowledgeDocument {
     }
     public void publish() { if (status != DocumentStatus.READY) throw new IllegalStateException("only ready document can publish"); published = true; }
     public void unpublish() { published = false; }
+
+    /** 在线编辑保存后：撤回发布并重置为待解析，清空切片/索引指针 */
+    public void markContentReplaced() {
+        if (status == DocumentStatus.DELETED) {
+            throw new IllegalStateException("deleted document cannot be edited");
+        }
+        published = false;
+        status = DocumentStatus.UPLOADING;
+        chunkArtifactKey = null;
+        normalizedMarkdownKey = null;
+        indexGeneration = null;
+    }
+
+    public boolean isDocx() {
+        String name = fileName == null ? "" : fileName.toLowerCase();
+        String type = contentType == null ? "" : contentType.toLowerCase();
+        return name.endsWith(".docx") || type.contains("wordprocessingml");
+    }
     private void require(DocumentStatus expected) { if (status != expected) throw new IllegalStateException("invalid status transition"); }
     private static String safeFileName(String raw) {
         String normalized = raw.trim().replace('\\', '/');
@@ -214,5 +242,6 @@ public class KnowledgeDocument {
     public String chunkStrategy(){return chunkStrategy == null || chunkStrategy.isBlank() ? "GENERAL" : chunkStrategy;}
     public int chunkStrategyVersion(){return chunkStrategyVersion == null || chunkStrategyVersion <= 0 ? 1 : chunkStrategyVersion;}
     public String chunkArtifactKey(){return chunkArtifactKey;}
+    public String normalizedMarkdownKey(){return normalizedMarkdownKey;}
     public String indexGeneration(){return indexGeneration;}
 }

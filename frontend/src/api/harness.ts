@@ -1,4 +1,4 @@
-import apiClient from './client'
+import apiClient, { buildAuthenticatedHeaders } from './client'
 import type { ApiResponse } from '@/types/api'
 import { consumeSseStream } from '@/utils/sseStream'
 
@@ -77,7 +77,15 @@ export const harnessApi = {
   async stream(body: { sessionId: string; question: string; plugins?: string[]; history?: Array<{ role: string; content: string }> }, onToken: (token: string) => void, onDone?: (result: HarnessChatResponse) => void, onProgress?: (event: HarnessProgressEvent) => void) {
     const controller = new AbortController()
     const timeout = window.setTimeout(() => controller.abort(), 120000)
-    const response = await fetch('/api/v1/ai/harness/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', Authorization: `Bearer ${localStorage.getItem('token') || ''}` }, body: JSON.stringify(body), signal: controller.signal })
+    const response = await fetch('/api/v1/ai/harness/chat/stream', {
+      method: 'POST',
+      headers: buildAuthenticatedHeaders({
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream'
+      }),
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
     if (!response.ok || !response.body) throw new Error('stream failed')
     try {
       await consumeSseStream(response.body.getReader(), ({ type: eventType, data }) => {

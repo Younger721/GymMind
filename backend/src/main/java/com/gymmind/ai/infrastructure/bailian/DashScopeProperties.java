@@ -12,8 +12,8 @@ public class DashScopeProperties {
 
     private String apiKey = "";
     private String baseUrl = DEFAULT_BASE_URL;
-    private String chatModel = "qwen3.7-plus";
-    private String embeddingModel = "qwen3.7-text-embedding";
+    private String chatModel = "qwen3.8-flash";
+    private String embeddingModel = "qwen3.7-text-embedding-flash";
     private String rerankModel = "qwen3.7-text-rerank";
 
     public String apiKeyForChat() {
@@ -53,7 +53,7 @@ public class DashScopeProperties {
     }
 
     public void setChatModel(String chatModel) {
-        this.chatModel = defaultIfBlank(trimToEmpty(chatModel), "qwen3.7-plus");
+        this.chatModel = defaultIfBlank(trimToEmpty(chatModel), "qwen3.8-flash");
     }
 
     public String getEmbeddingModel() {
@@ -61,7 +61,7 @@ public class DashScopeProperties {
     }
 
     public void setEmbeddingModel(String embeddingModel) {
-        this.embeddingModel = defaultIfBlank(trimToEmpty(embeddingModel), "qwen3.7-text-embedding");
+        this.embeddingModel = defaultIfBlank(trimToEmpty(embeddingModel), "qwen3.7-text-embedding-flash");
     }
 
     public String getRerankModel() {

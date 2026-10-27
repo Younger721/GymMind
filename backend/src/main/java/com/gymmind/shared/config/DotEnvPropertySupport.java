@@ -1,5 +1,8 @@
 package com.gymmind.shared.config;
 
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.PropertySource;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -75,5 +78,18 @@ public final class DotEnvPropertySupport {
 
     public static boolean isNonBlank(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /** 仅看 OS/IDE 的 {@code systemEnvironment}；空字符串视为未设置，便于 .env 补全。 */
+    public static boolean hasNonBlankSystemEnvironmentValue(ConfigurableEnvironment environment, String key) {
+        if (environment == null || key == null || key.isBlank()) {
+            return false;
+        }
+        PropertySource<?> systemEnvironment = environment.getPropertySources().get("systemEnvironment");
+        if (systemEnvironment == null) {
+            return false;
+        }
+        Object raw = systemEnvironment.getProperty(key);
+        return raw != null && !raw.toString().isBlank();
     }
 }

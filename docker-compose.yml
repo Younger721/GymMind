@@ -110,6 +110,22 @@ services:
       retries: 30
       start_period: 60s
 
+  # OnlyOffice Document Server — 知识库 DOCX 在线编辑（容器内通过 host.docker.internal 访问宿主机后端）
+  onlyoffice:
+    build:
+      context: ./docker/onlyoffice
+      dockerfile: Dockerfile
+    image: gymmind-onlyoffice:8.2.2
+    container_name: gymmind-onlyoffice
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: ${ONLYOFFICE_JWT_SECRET:-GymMindOnlyOfficeDevSecretChangeMe32}
+    ports:
+      - "${ONLYOFFICE_HOST_PORT:-8088}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   # 可选：容器内 MySQL（默认关闭，本机已有 MySQL 时使用 USE_DOCKER_MYSQL=0）
   mysql:
     profiles: ["mysql"]

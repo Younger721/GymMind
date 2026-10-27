@@ -29,20 +29,6 @@
       <el-table-column v-if="authStore.isPlatformAdmin" prop="tenantId" label="租户ID" width="90" />
       <el-table-column prop="name" label="名称" min-width="140" />
       <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip />
-      <el-table-column label="知识库" width="90">
-        <template #default="{ row }">
-          <el-tag :type="row.knowledgeEnabled ? 'success' : 'info'" size="small">
-            {{ row.knowledgeEnabled ? '启用' : '关闭' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="工具" min-width="160">
-        <template #default="{ row }">
-          <el-tag v-for="tool in row.enabledTools" :key="tool" size="small" style="margin-right: 4px">
-            {{ tool }}
-          </el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="systemPrompt" label="系统提示词" min-width="300" show-overflow-tooltip />
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
@@ -77,7 +63,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { agentApi, type AgentView, type TenantQuotaView } from '@/api/agent'
 import { useAuthStore } from '@/stores/auth'
-import { hasOperationPermission } from '@/utils/permissions'
+import { hasPermission } from '@/utils/permissions'
+import { MENU_CODES } from '@/utils/menuPermissions'
 import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
@@ -93,7 +80,10 @@ const form = reactive({
 })
 // The page itself is the permission boundary. Once visible, all page actions
 // are available; the backend still enforces tenant scope for writes.
-const canWrite = computed(() => !authStore.isPlatformAdmin && hasOperationPermission('agent:write'))
+const canWrite = computed(() =>
+  !authStore.isPlatformAdmin
+  && authStore.roles.includes('GYM_ADMIN')
+  && hasPermission(MENU_CODES.AI_CONFIG))
 const editableAgentId = computed(() => agents.value
   .filter(agent => agent.status === 'ACTIVE')
   .slice()

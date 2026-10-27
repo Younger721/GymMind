@@ -18,15 +18,10 @@ if errorlevel 1 (
 
 echo.
 echo [2/3] Backend (Spring Boot)...
-if not exist "%~dp0.env" (
-    echo [ERROR] Missing .env file.
+call "%~dp0scripts\load-root-env.bat"
+if errorlevel 1 (
     pause
     exit /b 1
-)
-
-rem 空值不覆盖：避免 .env 里占位空行冲掉系统已配置的 DASHSCOPE_API_KEY 等
-for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%~dp0.env") do (
-    if not "%%~B"=="" set "%%A=%%~B"
 )
 
 if not defined JAVA_HOME set "JAVA_HOME=D:\java\jdk-17.0.14"

@@ -13,6 +13,8 @@ public interface TenantQuotaService {
 
     void ensureAiChatAllowed(Long tenantId);
 
+    void ensureAiChatAllowed(CurrentActor actor);
+
     void ensureAiModuleEnabled(Long tenantId);
 
     void ensureKnowledgeModuleEnabled(Long tenantId);

@@ -44,7 +44,7 @@ const router = createRouter({
         { path: 'audit', name: 'audit', component: () => import('@/views/business/AuditLogView.vue'), meta: { menuPermission: MENU_CODES.AUDIT } },
         { path: 'ai-usage', name: 'ai-usage', component: () => import('@/views/business/AiUsageView.vue'), meta: { menuPermission: MENU_CODES.AI_USAGE } },
         { path: 'tenant-settings', name: 'tenant-settings', component: () => import('@/views/business/TenantSettingsView.vue'), meta: { menuPermission: MENU_CODES.TENANT_SETTINGS } },
-        { path: 'platform', name: 'platform', redirect: '/dashboard' },
+        { path: 'platform', name: 'platform', component: () => import('@/views/business/PlatformView.vue'), meta: { menuPermission: MENU_CODES.PLATFORM } },
         { path: 'role-permissions', name: 'role-permissions', component: () => import('@/views/business/RolePermissionView.vue'), meta: { menuPermission: MENU_CODES.ROLE_PERMISSIONS } },
         { path: 'profile', name: 'profile', component: () => import('@/views/ProfileView.vue'), meta: { menuPermission: MENU_CODES.PROFILE } },
         { path: 'plan-generator', redirect: '/assistant', meta: { menuPermission: MENU_CODES.ASSISTANT } },

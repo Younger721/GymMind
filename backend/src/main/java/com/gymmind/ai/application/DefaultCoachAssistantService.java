@@ -69,7 +69,8 @@ public class DefaultCoachAssistantService {
                     LocalDate.now().minusWeeks(8), LocalDate.now(), 30);
             prompt += "\n请只使用以下已完成训练记录作为参考，不要编造记录：\n" + summary.promptText();
         }
-        quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
+        if (actor.isPlatformAdmin()) quotas.ensureAiChatAllowed(actor);
+        else quotas.ensureAiChatAllowed(ActorAccess.tenantId(actor));
         ChatModelCallResult call;
         try {
             long started = System.currentTimeMillis();

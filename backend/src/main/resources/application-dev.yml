@@ -49,6 +49,17 @@ gymmind:
       max-attempts: ${GYMMIND_KNOWLEDGE_INGEST_MAX_ATTEMPTS:5}
       retry-base-seconds: ${GYMMIND_KNOWLEDGE_INGEST_RETRY_BASE_SECONDS:30}
       lease-minutes: ${GYMMIND_KNOWLEDGE_INGEST_LEASE_MINUTES:5}
+      markdown-normalization:
+        enabled: ${GYMMIND_KNOWLEDGE_MD_NORMALIZATION:true}
+    onlyoffice:
+      enabled: ${GYMMIND_KNOWLEDGE_ONLYOFFICE_ENABLED:true}
+      document-server-url: ${GYMMIND_ONLYOFFICE_DOCUMENT_SERVER_URL:http://127.0.0.1:8088}
+      internal-api-base-url: ${GYMMIND_ONLYOFFICE_INTERNAL_API_BASE_URL:http://host.docker.internal:8080}
+      jwt-secret: ${ONLYOFFICE_JWT_SECRET:GymMindOnlyOfficeDevSecretChangeMe32}
+      callback-allowed-hosts: ${GYMMIND_ONLYOFFICE_CALLBACK_ALLOWED_HOSTS:onlyoffice}
+      callback-allowed-ports: ${GYMMIND_ONLYOFFICE_CALLBACK_ALLOWED_PORTS:80}
+      callback-max-bytes: ${GYMMIND_ONLYOFFICE_CALLBACK_MAX_BYTES:26214400}
+      download-token-ttl: ${GYMMIND_ONLYOFFICE_DOWNLOAD_TOKEN_TTL:PT15M}
   ai:
     harness:
       platform-default-plugins: basic_chat,knowledge_search

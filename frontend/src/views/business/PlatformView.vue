@@ -22,35 +22,9 @@
           create-permission="platform:tenant:write"
         />
       </el-tab-pane>
-      <el-tab-pane label="门店设置" name="settings">
-        <div class="simple-card">
-          <el-form inline>
-            <el-form-item label="选择门店">
-              <el-select v-model="selectedTenantId" placeholder="请选择门店" style="width: 280px">
-                <el-option v-for="tenant in tenants" :key="tenant.id" :label="`${tenant.name}（ID: ${tenant.id}）`" :value="Number(tenant.id)" />
-              </el-select>
-            </el-form-item>
-          </el-form>
-          <el-form v-if="selectedTenantId && settingsReady" label-width="120px" style="max-width: 560px">
-            <el-form-item label="预约功能">{{ settingsForm.reservationEnabled ? '启用' : '停用' }}</el-form-item>
-            <el-form-item label="签到功能">{{ settingsForm.checkInEnabled ? '启用' : '停用' }}</el-form-item>
-            <el-form-item label="时区">{{ settingsForm.timezone }}</el-form-item>
-          </el-form>
-          <el-empty v-if="!selectedTenantId" description="请选择门店后管理设置" />
-          <el-empty v-else-if="settingsLoading" description="正在加载门店设置" />
-          <el-empty v-else-if="!settingsReady" description="门店设置加载失败，请切换门店后重试" />
-        </div>
-      </el-tab-pane>
       <el-tab-pane label="管理员账号" name="admins">
         <div class="simple-card">
-          <el-form inline>
-            <el-form-item label="选择租户">
-              <el-select v-model="selectedTenantId" placeholder="请选择租户" style="width: 280px">
-                <el-option v-for="tenant in tenants" :key="tenant.id" :label="`${tenant.name}（ID: ${tenant.id}）`" :value="Number(tenant.id)" />
-              </el-select>
-            </el-form-item>
-            <el-button :disabled="!selectedTenantId" :loading="adminsLoading" @click="loadAdministrators">刷新</el-button>
-          </el-form>
+          <el-button :disabled="!selectedTenantId" :loading="adminsLoading" @click="loadAdministrators">刷新</el-button>
           <el-table v-if="selectedTenantId" :data="administrators" v-loading="adminsLoading" row-key="id">
             <el-table-column prop="displayName" label="姓名" />
             <el-table-column prop="username" label="用户名" />
@@ -63,7 +37,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <el-empty v-if="!selectedTenantId" description="请选择租户" />
+          <el-empty v-if="!selectedTenantId" description="请先在顶部选择租户" />
         </div>
       </el-tab-pane>
       <el-tab-pane label="平台 AI 服务" name="harness">
@@ -71,22 +45,21 @@
       </el-tab-pane>
       <el-tab-pane label="配额与模块" name="quota">
         <div class="simple-card">
-          <el-form inline>
-            <el-form-item label="租户ID">
-              <el-input v-model="quotaTenantId" style="width: 120px" />
-            </el-form-item>
-            <el-button :loading="loading" @click="loadQuota">查询</el-button>
-            <el-button type="primary" :loading="loading" @click="saveQuota">更新配额</el-button>
-          </el-form>
-          <el-form label-width="140px" style="margin-top: 12px">
+          <el-button :disabled="!selectedTenantId" :loading="loading" @click="loadQuota">刷新</el-button>
+          <el-empty v-if="!selectedTenantId" description="请先在顶部选择租户" />
+          <div v-if="selectedTenantId && quotaUsage" class="quota-usage">
+            <span>本月 AI 调用 {{ formatNumber(quotaUsage.usedAiCallsThisMonth) }} / {{ formatNumber(quotaUsage.maxAiCallsPerMonth) }}</span>
+            <span>本月 Token {{ formatNumber(quotaUsage.usedAiTokensThisMonth) }} / {{ formatNumber(quotaUsage.maxAiTokensPerMonth) }}</span>
+          </div>
+          <el-form v-if="selectedTenantId" label-width="140px" class="quota-form">
             <el-form-item label="最大 Agent"><el-input :model-value="'1'" disabled /></el-form-item>
             <el-form-item label="月 AI 调用上限"><el-input v-model="quotaForm.maxAiCallsPerMonth" /></el-form-item>
-            <el-form-item label="月 token 配额"><el-input v-model="quotaForm.maxAiTokensPerMonth" /></el-form-item>
+            <el-form-item label="月 Token 配额"><el-input v-model="quotaForm.maxAiTokensPerMonth" /></el-form-item>
             <el-form-item label="知识库文档上限"><el-input v-model="quotaForm.maxKnowledgeDocuments" /></el-form-item>
             <el-form-item label="启用 AI 模块"><el-switch v-model="quotaForm.aiModuleEnabled" /></el-form-item>
             <el-form-item label="启用知识库"><el-switch v-model="quotaForm.knowledgeModuleEnabled" /></el-form-item>
+            <el-button type="primary" :disabled="!selectedTenantId" :loading="loading" @click="saveQuota">保存额度</el-button>
           </el-form>
-          <JsonBlock v-if="quotaResult" :data="quotaResult" />
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -101,15 +74,18 @@ import HarnessConfigPanel from '@/components/business/HarnessConfigPanel.vue'
 import JsonBlock from '@/components/business/JsonBlock.vue'
 import { tenancyApi } from '@/api/tenancy'
 import { useAuthStore } from '@/stores/auth'
-import { isTenantRequestCurrent } from '@/utils/tenantContext'
 import { buildTenantCreatePayload, isTenantCreateFormValid } from '@/utils/tenantCreate.mjs'
 
 const tab = ref('stats')
 const loading = ref(false)
 const authStore = useAuthStore()
 const stats = ref<unknown>(null)
-const quotaTenantId = ref('')
-const quotaResult = ref<unknown>(null)
+const quotaUsage = ref<{ usedAiCallsThisMonth: number; maxAiCallsPerMonth: number; usedAiTokensThisMonth: number; maxAiTokensPerMonth: number } | null>(null)
+
+function formatNumber(value: number | null | undefined) {
+  return Number(value ?? 0).toLocaleString('zh-CN')
+}
+
 const quotaForm = reactive({
   maxAgents: '1',
   maxAiCallsPerMonth: '1000',
@@ -118,18 +94,7 @@ const quotaForm = reactive({
   aiModuleEnabled: true,
   knowledgeModuleEnabled: true
 })
-const tenants = ref<Record<string, any>[]>([])
-const selectedTenantId = computed<number | null>({
-  get: () => authStore.platformContextTenantId,
-  set: value => authStore.setPlatformContextTenantId(value)
-})
-const settingsForm = reactive({ reservationEnabled: true, checkInEnabled: true, timezone: 'Asia/Shanghai' })
-const settingsLoading = ref(false)
-const settingsLoadedForTenantId = ref<number | null>(null)
-let settingsRequestVersion = 0
-const settingsReady = computed(() => selectedTenantId.value != null
-  && settingsLoadedForTenantId.value === selectedTenantId.value
-  && !settingsLoading.value)
+const selectedTenantId = computed(() => authStore.platformContextTenantId)
 const administrators = ref<Record<string, any>[]>([])
 const adminsLoading = ref(false)
 
@@ -154,51 +119,15 @@ async function loadStats() {
   }
 }
 
-async function loadTenants() {
-  const response = await tenancyApi.listTenants()
-  const data = (response as any)?.data
-  tenants.value = Array.isArray(data?.content) ? data.content : Array.isArray(data) ? data : []
-  return response
-}
-
-async function loadTenantSettings(tenantId = selectedTenantId.value) {
-  const requestVersion = ++settingsRequestVersion
-  settingsLoadedForTenantId.value = null
-  Object.assign(settingsForm, { reservationEnabled: true, checkInEnabled: true, timezone: 'Asia/Shanghai' })
-  if (!tenantId) {
-    settingsLoading.value = false
-    return
-  }
-  settingsLoading.value = true
-  try {
-    const response = await tenancyApi.getTenantSettings(tenantId)
-    const data = (response as any)?.data
-    if (isTenantRequestCurrent(tenantId, selectedTenantId.value, requestVersion, settingsRequestVersion) && data) {
-      Object.assign(settingsForm, data)
-      settingsLoadedForTenantId.value = tenantId
-    }
-  } catch {
-    // The form stays disabled until a successful load for the current tenant.
-  } finally {
-    if (requestVersion === settingsRequestVersion) settingsLoading.value = false
-  }
-}
-
-async function saveTenantSettings() {
-  const targetTenantId = selectedTenantId.value
-  if (!targetTenantId || settingsLoadedForTenantId.value !== targetTenantId || settingsLoading.value) return
-  settingsLoading.value = true
-  try {
-    await tenancyApi.updateTenantSettings(targetTenantId, { ...settingsForm })
-    ElMessage.success('门店设置已保存')
-  } finally {
-    if (selectedTenantId.value === targetTenantId) settingsLoading.value = false
-  }
+function loadTenants() {
+  return tenancyApi.listTenants()
 }
 
 watch(() => selectedTenantId.value, tenantId => {
-  void loadTenantSettings(tenantId)
-  if (tenantId) void loadAdministrators()
+  quotaUsage.value = null
+  if (!tenantId) return
+  void loadAdministrators()
+  void loadQuota()
 }, { immediate: true })
 
 async function loadAdministrators() {
@@ -252,19 +181,24 @@ async function createTenant(p: Record<string, string>) {
 }
 
 async function loadQuota() {
-  if (!quotaTenantId.value) return ElMessage.warning('请输入租户 ID')
+  const tenantId = selectedTenantId.value
+  if (!tenantId) return
   loading.value = true
   try {
-    const response = await tenancyApi.getTenantQuota(Number(quotaTenantId.value))
-    quotaResult.value = response
+    const response = await tenancyApi.getTenantQuota(tenantId)
     const data = (response as { data?: Record<string, unknown> }).data
-    if (data) {
-      quotaForm.maxAgents = '1'
-      quotaForm.maxAiCallsPerMonth = String(data.maxAiCallsPerMonth ?? quotaForm.maxAiCallsPerMonth)
-      quotaForm.maxAiTokensPerMonth = String(data.maxAiTokensPerMonth ?? quotaForm.maxAiTokensPerMonth)
-      quotaForm.maxKnowledgeDocuments = String(data.maxKnowledgeDocuments ?? quotaForm.maxKnowledgeDocuments)
-      quotaForm.aiModuleEnabled = Boolean(data.aiModuleEnabled ?? quotaForm.aiModuleEnabled)
-      quotaForm.knowledgeModuleEnabled = Boolean(data.knowledgeModuleEnabled ?? quotaForm.knowledgeModuleEnabled)
+    if (!data) return
+    quotaForm.maxAgents = '1'
+    quotaForm.maxAiCallsPerMonth = String(data.maxAiCallsPerMonth ?? quotaForm.maxAiCallsPerMonth)
+    quotaForm.maxAiTokensPerMonth = String(data.maxAiTokensPerMonth ?? quotaForm.maxAiTokensPerMonth)
+    quotaForm.maxKnowledgeDocuments = String(data.maxKnowledgeDocuments ?? quotaForm.maxKnowledgeDocuments)
+    quotaForm.aiModuleEnabled = Boolean(data.aiModuleEnabled ?? quotaForm.aiModuleEnabled)
+    quotaForm.knowledgeModuleEnabled = Boolean(data.knowledgeModuleEnabled ?? quotaForm.knowledgeModuleEnabled)
+    quotaUsage.value = {
+      usedAiCallsThisMonth: Number(data.usedAiCallsThisMonth ?? 0),
+      maxAiCallsPerMonth: Number(data.maxAiCallsPerMonth ?? 0),
+      usedAiTokensThisMonth: Number(data.usedAiTokensThisMonth ?? 0),
+      maxAiTokensPerMonth: Number(data.maxAiTokensPerMonth ?? 0)
     }
   } finally {
     loading.value = false
@@ -272,22 +206,29 @@ async function loadQuota() {
 }
 
 async function saveQuota() {
-  if (!quotaTenantId.value) return ElMessage.warning('请输入租户 ID')
+  const tenantId = selectedTenantId.value
+  if (!tenantId) return ElMessage.warning('请先在顶部选择租户')
+  const payload = {
+    maxAgents: 1,
+    maxAiCallsPerMonth: Number(quotaForm.maxAiCallsPerMonth),
+    maxAiTokensPerMonth: Number(quotaForm.maxAiTokensPerMonth),
+    maxKnowledgeDocuments: Number(quotaForm.maxKnowledgeDocuments),
+    aiModuleEnabled: quotaForm.aiModuleEnabled,
+    knowledgeModuleEnabled: quotaForm.knowledgeModuleEnabled
+  }
+  if ([payload.maxAgents, payload.maxAiCallsPerMonth, payload.maxAiTokensPerMonth, payload.maxKnowledgeDocuments].some(value => !Number.isInteger(value) || value < 1)) {
+    return ElMessage.warning('额度必须是大于 0 的整数')
+  }
   loading.value = true
   try {
-    quotaResult.value = await tenancyApi.updateTenantQuota(Number(quotaTenantId.value), {
-      maxAgents: 1,
-      maxAiCallsPerMonth: Number(quotaForm.maxAiCallsPerMonth),
-      maxAiTokensPerMonth: Number(quotaForm.maxAiTokensPerMonth),
-      maxKnowledgeDocuments: Number(quotaForm.maxKnowledgeDocuments),
-      aiModuleEnabled: quotaForm.aiModuleEnabled,
-      knowledgeModuleEnabled: quotaForm.knowledgeModuleEnabled
-    })
-    ElMessage.success('已更新')
+    await tenancyApi.updateTenantQuota(tenantId, payload)
+    ElMessage.success('额度已保存')
+    await loadQuota()
   } finally {
     loading.value = false
   }
 }
+
 </script>
 
 <style scoped>
@@ -300,5 +241,18 @@ async function saveQuota() {
   margin: 0 0 12px;
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.quota-usage {
+  display: flex;
+  gap: 24px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.quota-form {
+  max-width: 520px;
+  margin-top: 12px;
 }
 </style>

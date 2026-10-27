@@ -17,4 +17,10 @@ public interface KnowledgeDocumentUseCase {
     boolean canRead(CurrentActor actor, Long id);
 
     List<KnowledgeDocumentView> list(CurrentActor actor);
+
+    /** 读取 MinIO 原文件字节（需管理权限） */
+    byte[] readBinaryContent(CurrentActor actor, Long id);
+
+    /** OnlyOffice 保存后覆盖原文件并触发重解析 */
+    KnowledgeDocumentView replaceBinaryContent(CurrentActor actor, Long id, byte[] content);
 }

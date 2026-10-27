@@ -39,18 +39,18 @@ class KnowledgeDocumentUseCaseTest {
     private final CurrentActor otherTenant = new CurrentActor(13L, 8L, Set.of(RoleCode.GYM_ADMIN), Set.of("knowledge:write"), 0, "t3");
 
     @Test
-    void platformUploadRemainsUploadingUntilAsyncIngestCompletes() {
+    void platformAdminCannotUploadKnowledgeDocuments() {
         var indexing = mock(com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService.class);
         var worker = mock(KnowledgeIngestWorker.class);
         var asyncUseCase = new DefaultKnowledgeDocumentUseCase(repository, objectStore, indexing, worker,
                 com.gymmind.tenancy.application.TenantQuotaServices.unboundedForLegacyConstruction());
         var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
 
-        KnowledgeDocumentView view = asyncUseCase.upload(platformAdmin,
-                new UploadKnowledgeDocumentCommand("platform.txt", "text/plain", "platform".getBytes(), DocumentVisibility.TENANT));
-
-        assertThat(view.status()).isEqualTo(DocumentStatus.UPLOADING);
-        verify(worker).enqueue(null, view.id());
+        assertThatThrownBy(() -> asyncUseCase.upload(platformAdmin,
+                new UploadKnowledgeDocumentCommand("platform.txt", "text/plain", "platform".getBytes(), DocumentVisibility.TENANT)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verify(worker, org.mockito.Mockito.never()).enqueue(any(), any());
     }
 
     @Test
@@ -105,12 +105,12 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
-    void platformDocumentDefaultsToAllAudienceRoles() {
+    void platformAdminCannotCreatePlatformKnowledgeDocuments() {
         var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
-        KnowledgeDocumentView view = useCase.upload(platformAdmin,
-                new UploadKnowledgeDocumentCommand("platform.txt", "text/plain", "platform".getBytes(), DocumentVisibility.TENANT));
-
-        assertThat(view.audienceRoles()).containsExactly(RoleCode.COACH, RoleCode.GYM_ADMIN, RoleCode.MEMBER, RoleCode.PLATFORM_ADMIN);
+        assertThatThrownBy(() -> useCase.upload(platformAdmin,
+                new UploadKnowledgeDocumentCommand("platform.txt", "text/plain", "platform".getBytes(), DocumentVisibility.TENANT)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
     }
 
     @Test
@@ -132,16 +132,14 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
-    void platformAdminListsAllDocumentsWithoutTenantContext() {
+    void platformAdminMustSelectTenantBeforeListingDocuments() {
         useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
         var otherTenantAdmin = new CurrentActor(13L, 8L, Set.of(RoleCode.GYM_ADMIN), Set.of("knowledge:write"), 0, "t3");
         useCase.upload(otherTenantAdmin, new UploadKnowledgeDocumentCommand("other.md", "text/markdown", "# other".getBytes(), DocumentVisibility.TENANT));
         var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
-        var platformDocument = useCase.upload(platformAdmin, new UploadKnowledgeDocumentCommand("platform.md", "text/markdown", "# platform".getBytes(), DocumentVisibility.TENANT));
-
-        assertThat(useCase.list(platformAdmin)).hasSize(3);
-        assertThat(platformDocument.tenantId()).isNull();
-        assertThat(platformDocument.objectKey()).startsWith("platform/knowledge/");
+        assertThatThrownBy(() -> useCase.list(platformAdmin))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.TENANT_CONTEXT_REQUIRED));
         assertThat(TenantContextHolder.get()).isNull();
     }
 
@@ -150,13 +148,12 @@ class KnowledgeDocumentUseCaseTest {
         useCase.upload(admin, new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
         useCase.upload(otherTenant, new UploadKnowledgeDocumentCommand("other.md", "text/markdown", "# other".getBytes(), DocumentVisibility.TENANT));
         var platformAdmin = new CurrentActor(1L, null, Set.of(RoleCode.PLATFORM_ADMIN), Set.of(), 0, "platform");
-        useCase.upload(platformAdmin, new UploadKnowledgeDocumentCommand("platform.md", "text/markdown", "# platform".getBytes(), DocumentVisibility.TENANT));
 
         TenantContextHolder.set(7L);
         try {
             assertThat(useCase.list(platformAdmin))
                     .extracting(KnowledgeDocumentView::fileName)
-                    .containsExactlyInAnyOrder("guide.md", "platform.md");
+                    .containsExactly("guide.md");
         } finally {
             TenantContextHolder.clear();
         }
@@ -181,7 +178,7 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
-    void platformAdminCannotReplaceTenantDocumentContent() {
+    void platformAdminReplacesDocumentInSelectedTenant() {
         KnowledgeDocumentView document = useCase.upload(admin,
                 new UploadKnowledgeDocumentCommand("guide.docx",
                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -190,7 +187,15 @@ class KnowledgeDocumentUseCaseTest {
 
         assertThatThrownBy(() -> useCase.replaceBinaryContent(platformAdmin, document.id(), "changed".getBytes()))
                 .isInstanceOfSatisfying(BusinessException.class,
-                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+                        exception -> assertThat(exception.errorCode()).isEqualTo(ErrorCode.TENANT_CONTEXT_REQUIRED));
+
+        TenantContextHolder.set(7L);
+        try {
+            assertThat(useCase.replaceBinaryContent(platformAdmin, document.id(), "changed".getBytes()).fileName())
+                    .isEqualTo("guide.docx");
+        } finally {
+            TenantContextHolder.clear();
+        }
     }
 
     @Test
@@ -281,6 +286,31 @@ class KnowledgeDocumentUseCaseTest {
     }
 
     @Test
+    void replaceBinaryContentRequeuesIngestAndResetsStatus() {
+        var indexing = mock(com.gymmind.knowledge.infrastructure.search.KnowledgeIndexingService.class);
+        var worker = mock(KnowledgeIngestWorker.class);
+        var asyncUseCase = new DefaultKnowledgeDocumentUseCase(repository, objectStore, indexing, worker,
+                com.gymmind.tenancy.application.TenantQuotaServices.unboundedForLegacyConstruction());
+        KnowledgeDocumentView uploaded = asyncUseCase.upload(admin,
+                new UploadKnowledgeDocumentCommand("guide.docx",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "docx".getBytes(), DocumentVisibility.TENANT));
+        KnowledgeDocument ready = repository.findById(uploaded.id()).orElseThrow();
+        ready.markParsing();
+        ready.markReady();
+        ready.publish();
+        repository.save(ready);
+
+        reset(worker);
+        KnowledgeDocumentView replaced = asyncUseCase.replaceBinaryContent(admin, uploaded.id(), "updated".getBytes());
+
+        assertThat(replaced.status()).isEqualTo(DocumentStatus.UPLOADING);
+        assertThat(replaced.published()).isFalse();
+        verify(indexing).deleteDocument(7L, uploaded.id());
+        verify(worker).enqueue(7L, uploaded.id());
+    }
+
+    @Test
     void deleteRejectsCrossTenantAccess() {
         KnowledgeDocumentView view = useCase.upload(admin,
                 new UploadKnowledgeDocumentCommand("guide.md", "text/markdown", "# guide".getBytes(), DocumentVisibility.TENANT));
@@ -293,8 +323,18 @@ class KnowledgeDocumentUseCaseTest {
 
     private static final class RecordingObjectStore implements KnowledgeObjectStore {
         private final java.util.List<String> keys = new java.util.ArrayList<>();
-        public void put(String key, byte[] content, String contentType) { keys.add(key); }
-        public void delete(String key) { keys.remove(key); }
+        private final java.util.Map<String, byte[]> blobs = new java.util.HashMap<>();
+        public void put(String key, byte[] content, String contentType) {
+            keys.add(key);
+            blobs.put(key, content);
+        }
+        public byte[] read(String key) {
+            return blobs.get(key);
+        }
+        public void delete(String key) {
+            keys.remove(key);
+            blobs.remove(key);
+        }
     }
 
     private static final class InMemoryKnowledgeDocumentRepository implements KnowledgeDocumentRepository {

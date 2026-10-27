@@ -51,6 +51,11 @@ public final class TenantQuotaServices {
         }
 
         @Override
+        public void ensureAiChatAllowed(CurrentActor actor) {
+            // Compatibility constructors do not assemble quota persistence.
+        }
+
+        @Override
         public void ensureKnowledgeUploadAllowed(Long tenantId) {
             // Compatibility constructors do not assemble quota persistence.
         }

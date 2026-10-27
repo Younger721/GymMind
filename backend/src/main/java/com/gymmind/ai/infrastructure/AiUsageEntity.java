@@ -12,7 +12,7 @@ import java.util.Objects;
 @Entity
 @Table(name = "ai_usage_record")
 class AiUsageEntity extends AuditableEntity {
-    @Column(name = "tenant_id", nullable = false, updatable = false)
+    @Column(name = "tenant_id", updatable = false)
     private Long tenantId;
     @Column(name = "user_id", updatable = false)
     private Long userId;

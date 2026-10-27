@@ -82,13 +82,10 @@ class TenantSettingsControllerTest {
             mockMvc.perform(put("/api/v1/tenant/settings")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"reservationEnabled\":false,\"checkInEnabled\":true,\"timezone\":\"Asia/Shanghai\"}"))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.tenantId").value(10));
+                    .andExpect(status().isForbidden());
 
             verify(service).getCurrent(platformAdmin());
-            verify(service).updateCurrent(platformAdmin(),
-                    new com.gymmind.tenancy.application.command.UpdateTenantSettingsCommand(
-                            false, true, "Asia/Shanghai"));
+            verify(service, never()).updateCurrent(any(), any());
         } finally {
             TenantContextHolder.clear();
         }

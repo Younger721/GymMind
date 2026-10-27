@@ -1,7 +1,13 @@
 <template>
   <div class="auth-page">
     <div class="auth-card simple-card">
-      <h1>GymMind</h1>
+      <div class="auth-brand">
+        <span class="auth-mark">G</span>
+        <div>
+          <h1>GymMind</h1>
+          <p class="platform-tag">AI PLATFORM</p>
+        </div>
+      </div>
       <p class="desc">智能健身房管理平台</p>
 
       <el-alert
@@ -83,13 +89,43 @@ const handleLogin = async () => {
 
 .auth-card {
   width: 100%;
-  max-width: 380px;
+  max-width: 400px;
+  padding: 28px;
 }
 
-.auth-card h1 {
+.auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.auth-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 18px;
+  color: #052e16;
+  background: linear-gradient(145deg, var(--primary), #16a34a);
+  box-shadow: 0 6px 20px var(--primary-glow);
+}
+
+.auth-brand h1 {
   margin: 0;
-  font-size: 24px;
-  text-align: center;
+  font-size: 22px;
+  text-align: left;
+}
+
+.platform-tag {
+  margin: 4px 0 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
 }
 
 .desc {

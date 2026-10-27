@@ -15,8 +15,9 @@ import java.math.BigDecimal;
         this.pricing = pricing;
     }
     public AiUsageRecord record(CurrentActor actor, AiUsageCommand c){
-        Long tenantId = ActorAccess.tenantId(actor);
-        if(tenantId==null) throw new IllegalArgumentException("tenant actor required");
+        boolean platformAdmin = actor != null && actor.isPlatformAdmin();
+        Long tenantId = platformAdmin ? null : ActorAccess.tenantId(actor);
+        if (!platformAdmin && tenantId == null) throw new IllegalArgumentException("tenant actor required");
         if (c == null || c.model() == null || c.model().isBlank()
                 || (c.inputTokens() != null && c.inputTokens() < 0)
                 || (c.outputTokens() != null && c.outputTokens() < 0)
