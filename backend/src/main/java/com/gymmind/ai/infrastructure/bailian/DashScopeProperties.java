@@ -15,6 +15,10 @@ public class DashScopeProperties {
     private String chatModel = "qwen3.8-flash";
     private String embeddingModel = "qwen3.7-text-embedding-flash";
     private String rerankModel = "qwen3.7-text-rerank";
+    /** OCR 专用模型（文档/表格/试卷/手写优化），与 qwen-vl-ocr 相比为现役推荐型号 */
+    private String ocrModel = "qwen3.5-ocr";
+    /** OCR 备用模型：主模型免费额度用尽/限流（403/429）时回退一次，两者免费额度池独立 */
+    private String ocrFallbackModel = "qwen3.8-flash";
 
     public String apiKeyForChat() {
         return trimToEmpty(apiKey);
@@ -69,7 +73,23 @@ public class DashScopeProperties {
     }
 
     public void setRerankModel(String rerankModel) {
-        this.rerankModel = defaultIfBlank(trimToEmpty(rerankModel), "qwen3.7-text-rerank");
+        this.rerankModel = rerankModel;
+    }
+
+    public String getOcrModel() {
+        return ocrModel;
+    }
+
+    public void setOcrModel(String ocrModel) {
+        this.ocrModel = defaultIfBlank(trimToEmpty(ocrModel), "qwen3.5-ocr");
+    }
+
+    public String getOcrFallbackModel() {
+        return ocrFallbackModel;
+    }
+
+    public void setOcrFallbackModel(String ocrFallbackModel) {
+        this.ocrFallbackModel = defaultIfBlank(trimToEmpty(ocrFallbackModel), "qwen3.8-flash");
     }
 
     private static String trimToEmpty(String value) {

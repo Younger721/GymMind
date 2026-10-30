@@ -45,6 +45,9 @@ gymmind:
       chat-model: ${DASHSCOPE_CHAT_MODEL:qwen3.8-flash}
       embedding-model: ${DASHSCOPE_EMBEDDING_MODEL:qwen3.7-text-embedding-flash}
       rerank-model: ${DASHSCOPE_RERANK_MODEL:qwen3.7-text-rerank}
+      # OCR 专用模型（文档/表格/试卷/手写优化）+ 免费额度用尽时回退的备用模型（额度池独立）
+      ocr-model: ${DASHSCOPE_OCR_MODEL:qwen3.5-ocr}
+      ocr-fallback-model: ${DASHSCOPE_OCR_FALLBACK_MODEL:qwen3.8-flash}
     # AI 联网搜索工具（function call）：tavily 使用 GitHub 开源 LangChain4j 官方搜索工具，
     # API Key 在 tavily.com 免费注册（1000 次/月）；none 为关闭
     web-search:
@@ -60,5 +63,12 @@ gymmind:
       secret: ${JWT_SECRET:GymMind-local-dev-secret-change-me-please-32bytes}
       access-ttl: PT2H
       refresh-ttl: P7D
+  # OCR 识图（M1 同步链路）：上传图片 → qwen3.5-ocr 识别 → Markdown
+  ocr:
+    enabled: ${OCR_ENABLED:true}
+    max-bytes: ${OCR_MAX_BYTES:10485760}
+    timeout-ms: ${OCR_TIMEOUT_MS:60000}
+    daily-quota-per-tenant: ${OCR_DAILY_QUOTA:200}
+    upload-ttl-hours: ${OCR_UPLOAD_TTL_HOURS:24}
   rate-limit:
     requests-per-minute: ${GYMMIND_RATE_LIMIT_PER_MINUTE:300}

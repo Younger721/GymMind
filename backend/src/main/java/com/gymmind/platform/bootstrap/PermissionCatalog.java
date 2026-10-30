@@ -95,6 +95,7 @@ public final class PermissionCatalog {
             new Entry("audit:read", "Read audit records"),
             new Entry("knowledge:read", "Search knowledge documents"),
             new Entry("knowledge:write", "Manage knowledge documents"),
+            new Entry("ocr:use", "Recognize images with OCR"),
             new Entry("analytics:read", "Read operational analytics"));
 
     private static final List<MenuEntry> MENU_ENTRIES = List.of(
@@ -192,7 +193,7 @@ public final class PermissionCatalog {
         mappings.put("menu:assistant", Set.of("ai:chat", "ai:memory"));
         mappings.put(AI_CONFIG_MENU, Set.of("agent:read", "agent:write", "agent:chat"));
         mappings.put("menu:knowledge", Set.of(
-                "search:read", "search:write", "knowledge:read", "knowledge:write"));
+                "search:read", "search:write", "knowledge:read", "knowledge:write", "ocr:use"));
             mappings.put("menu:operations", Set.of(
                 "member:read", "member:write", "coach:read", "coach:write", "coach:assign",
                 "coach-relation:request", "coach-relation:read", "coach-relation:accept",
@@ -253,7 +254,7 @@ public final class PermissionCatalog {
         Map<RoleCode, Map<String, Set<String>>> mappings = new EnumMap<>(RoleCode.class);
         mappings.put(RoleCode.COACH, roleOperations(
                 Map.entry("menu:assistant", Set.of("ai:chat", "ai:memory")),
-                Map.entry("menu:knowledge", Set.of("knowledge:read", "knowledge:write")),
+                Map.entry("menu:knowledge", Set.of("knowledge:read", "knowledge:write", "ocr:use")),
                 Map.entry("menu:courses", Set.of("course:read", "course:write", "booking:write")),
                 Map.entry("menu:training", Set.of(
                         "exercise:read", "exercise:write", "video:read", "workout:read", "workout:write",
