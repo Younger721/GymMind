@@ -31,7 +31,7 @@ export interface HarnessConfigView {
 export interface HarnessChatResponse {
   answer: string
   sources: string[]
-  citations: Array<{ chunkId?: string; documentId?: string; text?: string; excerpt?: string; documentName?: string; documentVersion?: number; knowledgeType?: string; knowledgeKey?: string; effectiveFrom?: string | null; effectiveTo?: string | null }>
+  citations: Array<{ chunkId?: string; documentId?: string; text?: string; excerpt?: string; documentName?: string; documentVersion?: number; knowledgeType?: string; knowledgeKey?: string; effectiveFrom?: string | null; effectiveTo?: string | null; chunkLabel?: string | null }>
 }
 
 export interface HarnessProgressDetail {

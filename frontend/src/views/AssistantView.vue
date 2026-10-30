@@ -124,7 +124,7 @@ import { aiChatHistoryApi, type ChatSession } from '@/api/aiChatHistory'
 import { marked } from 'marked'
 import { useAuthStore } from '@/stores/auth'
 import { executionStepId, mergeExecutionHistory, projectExecutionGraph, upsertExecutionStep } from '@/utils/aiExecutionGraph'
-interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processActive?: boolean; processExpanded?: boolean; processStepExpanded?: Record<string, boolean>; failed?: boolean }
+interface UiMessage { role: 'user' | 'assistant'; content: string; sources?: Array<{ documentName?: string; excerpt?: string; text?: string; documentVersion?: number; knowledgeType?: string; effectiveFrom?: string | null; effectiveTo?: string | null; chunkLabel?: string | null } | string>; processSteps?: HarnessProgressEvent[]; processActive?: boolean; processExpanded?: boolean; processStepExpanded?: Record<string, boolean>; failed?: boolean }
 
 const authStore = useAuthStore()
 const availablePlugins = ref<HarnessPluginDescriptor[]>([])
@@ -239,7 +239,10 @@ const sourceLabel = (s: NonNullable<UiMessage['sources']>[number]) => {
   if (typeof s === 'string') return s
   const version = s.documentVersion ? ' v' + s.documentVersion : ''
   const dates = s.effectiveFrom || s.effectiveTo ? '（有效期：' + (s.effectiveFrom || '未注明') + ' 至 ' + (s.effectiveTo || '未注明') + '）' : ''
-  return (s.documentName || '知识库片段') + version + dates + (s.excerpt ? '：' + s.excerpt : s.text ? '：' + s.text : '')
+  // 条款切片的面包屑（如「第三章 会员卡管理 · 第12条 退卡规定」）单独展示，正文摘要去掉重复的面包屑前缀
+  const excerpt = (s.excerpt || s.text || '').replace(/^\s*【[^】]*】\s*/, '')
+  const head = [s.documentName || '知识库片段', (s as { chunkLabel?: string }).chunkLabel].filter(Boolean).join(' · ')
+  return head + version + dates + (excerpt ? '：' + excerpt : '')
 }
 const renderMarkdown = (content: string) => {
   const html = String(marked.parse(content, { breaks: true }))

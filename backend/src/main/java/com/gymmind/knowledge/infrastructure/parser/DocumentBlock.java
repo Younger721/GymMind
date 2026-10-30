@@ -23,6 +23,11 @@ public record DocumentBlock(DocumentBlockType type, int level, String text, List
         return new DocumentBlock(DocumentBlockType.TITLE, level, text, List.of());
     }
 
+    /** 规章条款块：level 2 表示“条”，level 3 及以上表示“款/项” */
+    public static DocumentBlock clause(String text, int level) {
+        return new DocumentBlock(DocumentBlockType.CLAUSE, level, text, List.of());
+    }
+
     public static DocumentBlock paragraph(String text) {
         return new DocumentBlock(DocumentBlockType.PARAGRAPH, 0, text, List.of());
     }

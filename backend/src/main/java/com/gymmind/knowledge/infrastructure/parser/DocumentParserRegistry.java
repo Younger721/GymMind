@@ -35,6 +35,10 @@ public final class DocumentParserRegistry {
     }
 
     public ParsedDocument parseStructured(String fileName, String contentType, byte[] bytes) {
+        return RegulationStructureUpgrade.enhance(parseByFormat(fileName, contentType, bytes));
+    }
+
+    private ParsedDocument parseByFormat(String fileName, String contentType, byte[] bytes) {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalArgumentException("document is empty");
         }

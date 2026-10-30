@@ -29,6 +29,19 @@ class ChunkStrategySelectorTest {
     }
 
     @Test
+    void selectsRegulationForPolicyDocuments() {
+        assertThat(selector.select("制度", "membership-policy.txt", "为规范会员管理，特制定本制度。"))
+                .isEqualTo(ChunkStrategy.REGULATION);
+    }
+
+    @Test
+    void selectsRegulationByClausePatternEvenWithoutKeywords() {
+        assertThat(selector.select("其他", "notes.txt",
+                "第一条 会员应遵守场地秩序。\n第二条 违反规定者按章程处理。"))
+                .isEqualTo(ChunkStrategy.REGULATION);
+    }
+
+    @Test
     void fallsBackToGeneralForUnknownContent() {
         assertThat(selector.select("其他", "notes.txt", "今天有一段普通说明"))
                 .isEqualTo(ChunkStrategy.GENERAL);
