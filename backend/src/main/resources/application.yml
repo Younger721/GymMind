@@ -45,6 +45,15 @@ gymmind:
       chat-model: ${DASHSCOPE_CHAT_MODEL:qwen3.8-flash}
       embedding-model: ${DASHSCOPE_EMBEDDING_MODEL:qwen3.7-text-embedding-flash}
       rerank-model: ${DASHSCOPE_RERANK_MODEL:qwen3.7-text-rerank}
+    # AI 联网搜索工具（function call）：tavily 使用 GitHub 开源 LangChain4j 官方搜索工具，
+    # API Key 在 tavily.com 免费注册（1000 次/月）；none 为关闭
+    web-search:
+      provider: ${AI_WEB_SEARCH_PROVIDER:tavily}
+      api-key: ${AI_WEB_SEARCH_API_KEY:}
+      max-results: ${AI_WEB_SEARCH_MAX_RESULTS:5}
+      timeout-ms: ${AI_WEB_SEARCH_TIMEOUT_MS:8000}
+      max-content-chars: ${AI_WEB_SEARCH_MAX_CONTENT_CHARS:6000}
+      max-download-bytes: ${AI_WEB_SEARCH_MAX_DOWNLOAD_BYTES:524288}
   security:
     jwt:
       issuer: GymMind

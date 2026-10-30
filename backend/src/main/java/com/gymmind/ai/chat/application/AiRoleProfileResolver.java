@@ -29,9 +29,18 @@ public class AiRoleProfileResolver {
             "本月有哪些会员会籍快到期？",
             "最近预约到店率怎么样？");
 
+    // 各角色通用联网工具：web_search（联网搜索）+ web_fetch（读取网页 URL 正文）
+    /** 门店运营角色可用插件（含联网工具） */
     private static final List<String> GYM_OPS_PLUGINS = List.of(
             "basic_chat", "knowledge_search", "gym_operations_metrics", "member_churn_risk_list",
-            "course_booking_context", "member_training_context");
+            "course_booking_context", "member_training_context",
+            "web_search", "web_fetch");
+
+    /** 教练/会员通用插件（含联网工具） */
+    private static final List<String> MEMBER_PLUGINS = List.of(
+            "basic_chat", "knowledge_search", "member_training_context", "training_plan_calendar",
+            "course_booking_context",
+            "web_search", "web_fetch");
 
     public AiRoleProfile resolve(CurrentActor actor) {
         RoleCode role = actor.isPlatformAdmin() ? RoleCode.PLATFORM_ADMIN
@@ -45,11 +54,11 @@ public class AiRoleProfileResolver {
             case COACH -> new AiRoleProfile("COACH", "教练工作助手",
                     "你是教练工作助手，可协助当前门店授权范围内的会员训练指导、动作建议和训练计划草案。不得访问未授权会员。",
                     List.of("我负责的会员最近训练得怎么样？", "本周会员约了哪些训练课？", "帮我看会员的训练计划排期", "这个动作有哪些要点和常见错误？", "给会员写一份本周训练建议"),
-                    List.of("basic_chat", "knowledge_search", "member_training_context", "training_plan_calendar", "course_booking_context"), 10);
+                    MEMBER_PLUGINS, 10);
             case MEMBER -> new AiRoleProfile("MEMBER", "我的训练助手",
                     "你是会员私人健身助手，只能使用当前会员自己的训练、课程和偏好数据，提供安全、清晰的健身建议。不要查看或推测其他人的数据。",
                     List.of("我的训练计划是什么？", "我本周还有哪些课？", "深蹲动作有哪些常见错误？", "新手每周训练几次比较合适？", "减脂期饮食要注意什么？"),
-                    List.of("basic_chat", "knowledge_search", "member_training_context", "training_plan_calendar", "course_booking_context"), 10);
+                    MEMBER_PLUGINS, 10);
         };
     }
 

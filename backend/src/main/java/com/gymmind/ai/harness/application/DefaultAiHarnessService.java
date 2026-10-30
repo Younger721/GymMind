@@ -552,6 +552,11 @@ public class DefaultAiHarnessService implements AiHarnessService {
         if (pathPlan.runToolOrchestration() && enabled.contains("platform_ai_admin_metrics")) {
             rules.append("\n【平台 AI 管理回答规则】只能根据 platform_ai_admin_metrics 工具结果回答平台调用量、配额与租户 AI 状态；不得向用户索要 tenantId 代替查库。");
         }
+        if (pathPlan.runToolOrchestration()
+                && (enabled.contains("web_search") || enabled.contains("web_fetch"))) {
+            rules.append("\n【联网信息回答规则】联网搜索与网页内容来自公开互联网，回答时注明来源链接；"
+                    + "不得把联网信息当作门店业务数据；信息可能过时，涉及时效或安全决策时提醒用户自行核实。");
+        }
         if (pathPlan.path() == AnswerPath.HYBRID && pathPlan.runKnowledgeSearch() && pathPlan.runToolOrchestration()) {
             rules.append("\n【混合问题】统计数字以业务工具结果为准，制度与流程以知识库片段为准。");
         }

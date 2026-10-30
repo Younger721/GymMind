@@ -24,6 +24,19 @@ public class AnswerPathRuleEngine {
                     "识别为寒暄，直接回答", RouteConfidence.RULE));
         }
 
+        // 用户消息包含网页链接：交由模型调用 web_fetch/web_search 联网工具
+        if (containsUrl(q)) {
+            return Optional.of(plan(AnswerPath.TOOLS_ONLY, false, true, Set.of(),
+                    "用户消息包含网页链接，交由模型调用联网工具读取或搜索", RouteConfidence.RULE));
+        }
+
+        // 明确的联网搜索意图关键词（normalize 已去空格，故合并为无空格形式）
+        if (containsAny(q, "联网", "上网", "互联网", "搜索引擎", "网上搜索", "网上查", "帮我搜",
+                "搜索一下", "搜一搜", "最新消息", "最新新闻", "websearch", "searchonline")) {
+            return Optional.of(plan(AnswerPath.TOOLS_ONLY, false, true, Set.of(),
+                    "识别为联网搜索需求，交由模型调用联网工具", RouteConfidence.RULE));
+        }
+
         if (RoleCode.PLATFORM_ADMIN.name().equals(roleCode)) {
             if (containsAny(q, "ai使用", "使用情况", "调用量", "ai调用", "配额", "租户ai", "租户状态", "检查租户",
                     "平台ai", "启用了ai", "已启用ai", "活跃租户", "多少租户", "智能体", "token")) {
@@ -59,8 +72,12 @@ public class AnswerPathRuleEngine {
         return Optional.empty();
     }
 
-    private static boolean followUpMetricsQuestion(String q, List<AiChatTurn> history) {
-        if (!containsAny(q, "变化", "对比", "相比", "增减", "多少")) {
+    /** 判断是否包含网页链接（http/https/www 开头） */
+    private static boolean containsUrl(String value) {
+        return value.contains("http://") || value.contains("https://") || value.contains("www.");
+    }
+
+    private static boolean followUpMetricsQuestion(String q, List<AiChatTurn> history) {        if (!containsAny(q, "变化", "对比", "相比", "增减", "多少")) {
             return false;
         }
         if (history == null || history.isEmpty()) {
