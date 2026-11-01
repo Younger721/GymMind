@@ -17,9 +17,16 @@ import java.util.Map;
 @Service
 public class DefaultMcpToolService implements McpToolService {
 
-    private static final McpTool SEARCH = new McpTool("search_articles", "Search tenant article metadata", "search:read");
-    private static final McpTool IMPORT = new McpTool("import_article", "Import a public article URL", "search:write");
-    private static final McpTool KNOWLEDGE = new McpTool("knowledge_search", "Search tenant knowledge base", "knowledge:read");
+    /** 各工具入参 JSON Schema：MCP tools/list 使用，与工具层 String input 约定对齐 */
+    private static final String SEARCH_SCHEMA =
+            "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"检索关键词\"}},\"required\":[\"query\"]}";
+    private static final String IMPORT_SCHEMA =
+            "{\"type\":\"object\",\"properties\":{\"url\":{\"type\":\"string\",\"description\":\"文章 URL\"},"
+                    + "\"title\":{\"type\":\"string\"},\"summary\":{\"type\":\"string\"}},\"required\":[\"url\"]}";
+
+    private static final McpTool SEARCH = new McpTool("search_articles", "按关键词检索本租户已导入的文章元数据", "search:read", SEARCH_SCHEMA);
+    private static final McpTool IMPORT = new McpTool("import_article", "导入一篇公开文章 URL 入库", "search:write", IMPORT_SCHEMA);
+    private static final McpTool KNOWLEDGE = new McpTool("knowledge_search", "检索本租户知识库（价目、规章、健身知识），返回带引用的片段", "knowledge:read", SEARCH_SCHEMA);
 
     private final ArticleSearchService articles;
     private final KnowledgeSearchService knowledge;
