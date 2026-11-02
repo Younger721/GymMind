@@ -44,6 +44,11 @@ export const agentApi = {
     return apiClient.put<any, { data: AgentView }>(`/v1/agents/${id}/prompt`, payload)
   },
 
+  /** 更新 agent 启用的技能清单（内置工具名 + mcp:<server>:<tool> 远程技能） */
+  updateTools(id: number, enabledTools: string[]) {
+    return apiClient.put<any, { data: AgentView }>(`/v1/agents/${id}/tools`, { enabledTools })
+  },
+
   chat(agentId: number, sessionId: string, question: string) {
     return apiClient.post<any, { data: AgentChatResponse }>(`/v1/agents/${agentId}/chat`, {
       sessionId,

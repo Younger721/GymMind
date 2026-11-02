@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -65,6 +66,14 @@ public class AgentController {
                 actors.requireCurrent(), id, request.systemPrompt()));
     }
 
+    /** 更新 agent 启用的技能（内置工具 + mcp:&lt;server&gt;:&lt;tool&gt; 远程技能） */
+    @PutMapping("/{id}/tools")
+    public ApiResponse<AgentView> updateTools(@PathVariable Long id,
+                                              @Valid @RequestBody ToolsRequest request) {
+        return ApiResponse.success(service.updateTools(
+                actors.requireCurrent(), id, request.enabledTools()));
+    }
+
     @PostMapping("/{id}/disable")
     public ApiResponse<AgentView> disable(@PathVariable Long id) {
         return ApiResponse.success(service.disable(actors.requireCurrent(), id));
@@ -91,5 +100,8 @@ public class AgentController {
     }
 
     public record PromptRequest(@NotBlank @Size(max = 4000) String systemPrompt) {
+    }
+
+    public record ToolsRequest(@NotNull List<String> enabledTools) {
     }
 }

@@ -7,11 +7,14 @@ import com.gymmind.audit.application.AuditRecorder;
 import com.gymmind.audit.domain.AuditEvent;
 import com.gymmind.audit.domain.AuditResult;
 import com.gymmind.iam.domain.model.RoleCode;
+import com.gymmind.mcp.application.McpTool;
+import com.gymmind.mcp.application.McpToolService;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
 import com.gymmind.shared.security.CurrentActor;
 import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.tenancy.application.TenantQuotaService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,14 +28,26 @@ public class DefaultAgentManagementService implements AgentManagementService {
     private final TenantAgentRepository agents;
     private final TenantQuotaService quotas;
     private final AuditRecorder audit;
+    /** 工具来源（可选）：进程内 MCP 工具注册表，用于保存时的白名单校验 */
+    private final McpToolService mcpTools;
 
     public DefaultAgentManagementService(
             TenantAgentRepository agents,
             TenantQuotaService quotas,
             AuditRecorder audit) {
+        this(agents, quotas, audit, null);
+    }
+
+    @Autowired
+    public DefaultAgentManagementService(
+            TenantAgentRepository agents,
+            TenantQuotaService quotas,
+            AuditRecorder audit,
+            McpToolService mcpTools) {
         this.agents = agents;
         this.quotas = quotas;
         this.audit = audit;
+        this.mcpTools = mcpTools;
     }
 
     @Override
@@ -93,6 +108,73 @@ public class DefaultAgentManagementService implements AgentManagementService {
         audit.record(new AuditEvent("AGENT_PROMPT_UPDATED", "TENANT_AGENT", saved.getId(), AuditResult.SUCCESS,
                 "agent-service", Map.of("resourceName", saved.getName())));
         return AgentView.from(saved);
+    }
+
+    @Override
+    @Transactional
+    public AgentView updateTools(CurrentActor actor, Long agentId, List<String> enabledTools) {
+        requireManage(actor);
+        String joined = validateAndJoin(actor, enabledTools);
+        TenantAgent agent = getDefaultScoped(actor, agentId);
+        agent.updateEnabledTools(joined);
+        TenantAgent saved = agents.save(agent);
+        audit.record(new AuditEvent("AGENT_TOOLS_UPDATED", "TENANT_AGENT", saved.getId(), AuditResult.SUCCESS,
+                "agent-service", Map.of("resourceName", saved.getName())));
+        return AgentView.from(saved);
+    }
+
+    /**
+     * 技能清单校验与拼装：
+     * <ul>
+     *   <li>内置工具名必须在进程内 MCP 注册表中（Actor 可见的工具）</li>
+     *   <li>{@code mcp:<server>:<tool>} 远程技能只做格式校验——server 暂时不可达也允许保存，
+     *       运行时不可用的技能会被对话链路静默跳过，避免"server 宕机锁死配置" </li>
+     * </ul>
+     */
+    private String validateAndJoin(CurrentActor actor, List<String> enabledTools) {
+        List<String> normalized = enabledTools == null ? List.of() : enabledTools.stream()
+                .filter(tool -> tool != null && !tool.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        java.util.Set<String> builtinAllowed = java.util.Collections.emptySet();
+        if (mcpTools != null) {
+            builtinAllowed = new java.util.LinkedHashSet<>();
+            for (McpTool tool : mcpTools.list(actor)) {
+                builtinAllowed.add(tool.name());
+            }
+        }
+        for (String tool : normalized) {
+            if (tool.startsWith("mcp:")) {
+                if (!isValidRemoteToolName(tool)) {
+                    throw new BusinessException(ErrorCode.VALIDATION_FAILED, "远程技能名不合法: " + tool);
+                }
+            } else if (!builtinAllowed.isEmpty() && !builtinAllowed.contains(tool)) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED, "不支持的内置技能: " + tool);
+            } else if (builtinAllowed.isEmpty() && !tool.matches("[A-Za-z0-9_:-]{1,64}")) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED, "技能名不合法: " + tool);
+            }
+        }
+        String joined = String.join(",", normalized);
+        if (joined.length() > 512) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "技能清单过长（最多 512 字符）");
+        }
+        // 空清单由领域模型回落默认 knowledge_search
+        return joined;
+    }
+
+    /** mcp:&lt;server&gt;:&lt;tool&gt; 格式校验（各段仅允许字母数字下划线连字符） */
+    private static boolean isValidRemoteToolName(String tool) {
+        String[] segments = tool.split(":");
+        if (segments.length < 3) {
+            return false;
+        }
+        for (String segment : segments) {
+            if (!segment.matches("[A-Za-z0-9_-]{1,64}")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

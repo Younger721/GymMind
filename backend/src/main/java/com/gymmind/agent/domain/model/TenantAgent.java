@@ -67,6 +67,11 @@ public class TenantAgent extends TenantScopedEntity {
         this.systemPrompt = requirePrompt(systemPrompt);
     }
 
+    /** 更新启用的技能清单（逗号分隔；空值回落默认 knowledge_search） */
+    public void updateEnabledTools(String enabledTools) {
+        this.enabledTools = normalizeTools(enabledTools);
+    }
+
     public void disable() {
         status = AgentStatus.DISABLED;
     }

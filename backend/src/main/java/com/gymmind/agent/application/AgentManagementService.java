@@ -15,6 +15,9 @@ public interface AgentManagementService {
 
     AgentView updatePrompt(CurrentActor actor, Long agentId, String systemPrompt);
 
+    /** 更新 agent 启用的技能清单（内置工具名 + mcp:&lt;server&gt;:&lt;tool&gt; 远程技能） */
+    AgentView updateTools(CurrentActor actor, Long agentId, java.util.List<String> enabledTools);
+
     AgentView disable(CurrentActor actor, Long agentId);
 
     AgentView activate(CurrentActor actor, Long agentId);
