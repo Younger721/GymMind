@@ -12,6 +12,7 @@ import com.gymmind.ai.domain.ContextSegment;
 import com.gymmind.ai.domain.PromptInjectionGuard;
 import com.gymmind.knowledge.application.KnowledgeSearchCitations;
 import com.gymmind.knowledge.application.KnowledgeSearchService;
+import com.gymmind.mcp.application.McpClientService;
 import com.gymmind.mcp.application.McpToolService;
 import com.gymmind.shared.error.BusinessException;
 import com.gymmind.shared.error.ErrorCode;
@@ -34,6 +35,7 @@ public class DefaultAgentChatService implements AgentChatService {
     private final KnowledgeSearchService knowledgeSearch;
     private final ChatModelGateway model;
     private final McpToolService mcpTools;
+    private final McpClientService mcpClients;
     private final AiMemoryService memory;
     private final DefaultAiUsageService usage;
     private final TenantQuotaService quotas;
@@ -44,7 +46,8 @@ public class DefaultAgentChatService implements AgentChatService {
             KnowledgeSearchService knowledgeSearch,
             ChatModelGateway model,
             McpToolService mcpTools) {
-        this(agents, knowledgeSearch, model, mcpTools, null, null, TenantQuotaServices.unboundedForLegacyConstruction());
+        this(agents, knowledgeSearch, model, mcpTools, null, null,
+                TenantQuotaServices.unboundedForLegacyConstruction(), null);
     }
 
     @Autowired
@@ -55,7 +58,8 @@ public class DefaultAgentChatService implements AgentChatService {
             McpToolService mcpTools,
             AiMemoryService memory,
             DefaultAiUsageService usage,
-            TenantQuotaService quotas) {
+            TenantQuotaService quotas,
+            McpClientService mcpClients) {
         this.agents = agents;
         this.knowledgeSearch = knowledgeSearch;
         this.model = model;
@@ -63,6 +67,7 @@ public class DefaultAgentChatService implements AgentChatService {
         this.memory = memory;
         this.usage = usage;
         this.quotas = quotas == null ? TenantQuotaServices.unboundedForLegacyConstruction() : quotas;
+        this.mcpClients = mcpClients;
     }
 
     @Override
@@ -131,6 +136,25 @@ public class DefaultAgentChatService implements AgentChatService {
                 .toList();
         for (String tool : enabled) {
             if ("knowledge_search".equals(tool)) {
+                continue;
+            }
+            // MCP 远程技能：mcp:<server>:<tool>，经 MCP 客户端调用远程 server
+            if (tool.startsWith("mcp:")) {
+                if (mcpClients == null) {
+                    continue;
+                }
+                String[] segments = tool.split(":");
+                if (segments.length < 3) {
+                    continue;
+                }
+                try {
+                    String result = mcpClients.callTool(segments[1], segments[2], question);
+                    if (result != null && !result.isBlank()) {
+                        context.add(new ContextSegment("tool:" + tool, tool, result));
+                    }
+                } catch (RuntimeException ignored) {
+                    // 远程技能不可用时不阻断对话
+                }
                 continue;
             }
             try {

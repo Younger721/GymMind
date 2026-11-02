@@ -1,8 +1,10 @@
 package com.gymmind.mcp.api;
 
+import com.gymmind.mcp.application.McpClientService;
 import com.gymmind.mcp.application.McpTool;
 import com.gymmind.mcp.application.McpToolService;
 import com.gymmind.shared.api.ApiResponse;
+import com.gymmind.shared.security.ActorAccess;
 import com.gymmind.shared.security.CurrentActorProvider;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
@@ -22,15 +24,24 @@ public class McpController {
 
     private final McpToolService service;
     private final CurrentActorProvider actors;
+    private final McpClientService mcpClients;
 
-    public McpController(McpToolService service, CurrentActorProvider actors) {
+    public McpController(McpToolService service, CurrentActorProvider actors, McpClientService mcpClients) {
         this.service = service;
         this.actors = actors;
+        this.mcpClients = mcpClients;
     }
 
     @GetMapping("/tools")
     public ApiResponse<List<McpTool>> tools() {
         return ApiResponse.success(service.list(actors.requireCurrent()));
+    }
+
+    /** 远程 MCP server 的可用技能清单（AgentManageView 配置 enabledTools 的参考） */
+    @GetMapping("/remote-tools")
+    public ApiResponse<List<com.gymmind.mcp.application.RemoteMcpTool>> remoteTools() {
+        ActorAccess.requireGymAdmin(actors.requireCurrent(), "agent:write");
+        return ApiResponse.success(mcpClients.listRemoteTools());
     }
 
     @PostMapping("/invoke")

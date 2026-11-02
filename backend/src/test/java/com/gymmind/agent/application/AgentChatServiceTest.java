@@ -37,7 +37,7 @@ class AgentChatServiceTest {
         when(agents.findByTenantIdAndId(7L, 3L)).thenReturn(Optional.of(agent));
 
         var service = new DefaultAgentChatService(
-                agents, search, model, mock(McpToolService.class), null, null, mock(TenantQuotaService.class));
+                agents, search, model, mock(McpToolService.class), null, null, mock(TenantQuotaService.class), null);
         var result = service.chat(member(7L), 3L, "s1", "如何练背");
         assertThat(result.answer()).contains("引体向上");
         verify(model).complete(org.mockito.ArgumentMatchers.contains("门店助手"), any());

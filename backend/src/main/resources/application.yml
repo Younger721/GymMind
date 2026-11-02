@@ -63,6 +63,19 @@ gymmind:
       secret: ${JWT_SECRET:GymMind-local-dev-secret-change-me-please-32bytes}
       access-ttl: PT2H
       refresh-ttl: P7D
+  # MCP 客户端：agent 可连接的远程 MCP server（技能动态扩展）
+  # agent 的 enabledTools 里配置 mcp:<server名称>:<工具名> 即启用对应远程技能
+  # 环境变量索引形式：MCP_CLIENT_SERVERS_0_NAME / _URL / _TOKEN / _ENABLED
+  mcp:
+    client:
+      servers: []
+      # 示例：
+      # servers:
+      #   - name: ops
+      #     url: http://localhost:9300/mcp
+      #     token: some-bearer-token
+      #     enabled: true
+      #     timeout-ms: 8000
   # OCR 识图（M1 同步链路）：上传图片 → qwen3.5-ocr 识别 → Markdown
   ocr:
     enabled: ${OCR_ENABLED:true}
